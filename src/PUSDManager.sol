@@ -34,6 +34,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         bool exists;
         TokenStatus status;
         uint8 decimals;
+        uint16 surplusHaircutBps;  // 0..4000, haircut on deposit minting (max 40%)
         string name;
         string chainNamespace;
     }
@@ -43,10 +44,16 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     mapping(address => uint256) private tokenIndex;
     uint256 public tokenCount;
 
-    address public feeCollector;
+    address public treasuryReserve;
     uint256 public baseFee;           // Base fee in basis points (e.g., 5 = 0.05%)
     uint256 public preferredFeeMin;   // Min preferred fee in basis points
     uint256 public preferredFeeMax;   // Max preferred fee in basis points
+
+    // Fee and haircut tracking
+    mapping(address => uint256) public accruedFees;           // Accumulated redemption fees per token
+    mapping(address => uint256) public accruedHaircut;        // Accumulated deposit haircut per token
+    mapping(address => uint256) public sweptFees;             // Total fees swept to treasury per token
+    mapping(address => uint256) public sweptHaircut;          // Total haircut swept to treasury per token
 
     uint256 private constant _NOT_ENTERED = 1;
     uint256 private constant _ENTERED = 2;
@@ -54,12 +61,15 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
     event TokenAdded(address indexed token, string name, string chainNamespace, uint8 decimals);
     event TokenStatusChanged(address indexed token, TokenStatus oldStatus, TokenStatus newStatus);
-    event Deposited(address indexed user, address indexed token, uint256 tokenAmount, uint256 pusdMinted);
+    event Deposited(address indexed user, address indexed token, uint256 tokenAmount, uint256 pusdMinted, uint256 surplusAmount);
     event Redeemed(address indexed user, address indexed token, uint256 pusdBurned, uint256 tokenAmount);
-    event FeeCollectorUpdated(address indexed oldCollector, address indexed newCollector);
+    event TreasuryReserveUpdated(address indexed oldTreasury, address indexed newTreasury);
     event BaseFeeUpdated(uint256 oldFee, uint256 newFee);
     event PreferredFeeRangeUpdated(uint256 oldMin, uint256 oldMax, uint256 newMin, uint256 newMax);
-    event FeeCollected(address indexed token, uint256 amount, uint256 feeType);
+    event Rebalanced(address indexed tokenIn, uint256 amountIn, address indexed tokenOut, uint256 amountOut);
+    event SurplusHaircutUpdated(address indexed token, uint256 oldBps, uint256 newBps);
+    event SurplusAccrued(address indexed token, uint256 feeDelta, uint256 haircutDelta);
+    event SurplusSwept(address indexed token, address indexed treasury, uint256 feeSwept, uint256 haircutSwept);
 
     modifier nonReentrant() {
         require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
@@ -101,6 +111,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             exists: true,
             status: TokenStatus.ENABLED,
             decimals: decimals,
+            surplusHaircutBps: 0,  // Default: no haircut
             name: name,
             chainNamespace: chainNamespace
         });
@@ -123,11 +134,11 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         emit TokenStatusChanged(token, oldStatus, newStatus);
     }
 
-    function setFeeCollector(address newFeeCollector) external onlyRole(ADMIN_ROLE) {
-        require(newFeeCollector != address(0), "PUSDManager: fee collector cannot be zero address");
-        address oldCollector = feeCollector;
-        feeCollector = newFeeCollector;
-        emit FeeCollectorUpdated(oldCollector, newFeeCollector);
+    function setTreasuryReserve(address newTreasuryReserve) external onlyRole(ADMIN_ROLE) {
+        require(newTreasuryReserve != address(0), "PUSDManager: treasury reserve cannot be zero address");
+        address oldTreasury = treasuryReserve;
+        treasuryReserve = newTreasuryReserve;
+        emit TreasuryReserveUpdated(oldTreasury, newTreasuryReserve);
     }
 
     function setBaseFee(uint256 newBaseFee) external onlyRole(ADMIN_ROLE) {
@@ -147,18 +158,130 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         emit PreferredFeeRangeUpdated(oldMin, oldMax, newMin, newMax);
     }
 
+    function setSurplusHaircutBps(address token, uint16 newBps) external onlyRole(ADMIN_ROLE) {
+        TokenInfo storage tokenInfo = supportedTokens[token];
+        require(tokenInfo.exists, "PUSDManager: token not added");
+        require(newBps <= 4000, "PUSDManager: haircut too high"); // Max 40%
+        
+        uint256 oldBps = tokenInfo.surplusHaircutBps;
+        tokenInfo.surplusHaircutBps = newBps;
+        emit SurplusHaircutUpdated(token, oldBps, newBps);
+    }
+
+    /**
+     * @notice Internal function to sweep surplus for a single token
+     * @param token The token address to sweep surplus for
+     * @return True if surplus was swept, false if no surplus or no treasury
+     */
+    function _sweepTokenSurplus(address token) internal returns (bool) {
+        // Skip if no treasury set
+        if (treasuryReserve == address(0)) return false;
+        
+        uint256 feeAmount = accruedFees[token];
+        uint256 haircutAmount = accruedHaircut[token];
+        uint256 totalSurplus = feeAmount + haircutAmount;
+        
+        // Skip if no surplus
+        if (totalSurplus == 0) return false;
+        
+        // Transfer surplus to treasury
+        IERC20(token).safeTransfer(treasuryReserve, totalSurplus);
+        
+        // Update swept totals
+        sweptFees[token] += feeAmount;
+        sweptHaircut[token] += haircutAmount;
+        
+        // Reset accrued amounts
+        accruedFees[token] = 0;
+        accruedHaircut[token] = 0;
+        
+        emit SurplusSwept(token, treasuryReserve, feeAmount, haircutAmount);
+        return true;
+    }
+
+    /**
+     * @notice Sweep surplus for all tokens in a single transaction
+     * @dev Loops through all tokens in tokenList and sweeps any with accumulated surplus
+     */
+    function sweepAllSurplus() external onlyRole(ADMIN_ROLE) nonReentrant {
+        require(treasuryReserve != address(0), "PUSDManager: treasury not set");
+
+        uint256 sweptCount = 0;
+        
+        for (uint256 i = 0; i < tokenCount; i++) {
+            address token = tokenList[i];
+            if (_sweepTokenSurplus(token)) {
+                sweptCount++;
+            }
+        }
+
+        require(sweptCount > 0, "PUSDManager: no surplus to sweep");
+    }
+
+    function rebalance(
+        address tokenIn,
+        uint256 amountIn,
+        address tokenOut,
+        uint256 amountOut
+    ) external onlyRole(ADMIN_ROLE) nonReentrant {
+        require(tokenIn != tokenOut, "PUSDManager: cannot swap same token");
+        require(amountIn > 0, "PUSDManager: amountIn must be greater than 0");
+        require(amountOut > 0, "PUSDManager: amountOut must be greater than 0");
+        
+        TokenInfo memory tokenInInfo = supportedTokens[tokenIn];
+        TokenInfo memory tokenOutInfo = supportedTokens[tokenOut];
+        
+        require(tokenInInfo.exists, "PUSDManager: tokenIn not added");
+        require(tokenOutInfo.exists, "PUSDManager: tokenOut not added");
+        require(tokenInInfo.status != TokenStatus.REMOVED, "PUSDManager: tokenIn is removed");
+        require(tokenOutInfo.status != TokenStatus.REMOVED, "PUSDManager: tokenOut is removed");
+        
+        // Verify amounts are equivalent in PUSD terms (must be exact 1:1)
+        uint256 pusdValueIn = _normalizeDecimalsToPUSD(amountIn, tokenInInfo.decimals);
+        uint256 pusdValueOut = _normalizeDecimalsToPUSD(amountOut, tokenOutInfo.decimals);
+        require(pusdValueIn == pusdValueOut, "PUSDManager: amounts must have equal PUSD value");
+        
+        // Enforce invariant: cannot spend reserved surplus
+        uint256 reservedSurplus = accruedFees[tokenOut] + accruedHaircut[tokenOut];
+        uint256 tokenOutBalance = IERC20(tokenOut).balanceOf(address(this));
+        require(
+            tokenOutBalance >= amountOut + reservedSurplus,
+            "PUSDManager: rebalance would spend reserved surplus"
+        );
+        
+        // Receive tokenIn from admin
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amountIn);
+        
+        // Send tokenOut to admin
+        IERC20(tokenOut).safeTransfer(msg.sender, amountOut);
+        
+        emit Rebalanced(tokenIn, amountIn, tokenOut, amountOut);
+    }
+
     function deposit(address token, uint256 amount) external nonReentrant {
         TokenInfo memory tokenInfo = supportedTokens[token];
         require(tokenInfo.status == TokenStatus.ENABLED, "PUSDManager: token not enabled for deposits");
         require(amount > 0, "PUSDManager: amount must be greater than 0");
 
+        // Calculate surplus (haircut)
+        uint256 surplusTokenAmount = (amount * tokenInfo.surplusHaircutBps) / BASIS_POINTS;
+        uint256 netTokenAmount = amount - surplusTokenAmount;
+
+        // Transfer all tokens to contract (including surplus for gas efficiency)
+        // Surplus stays in contract until swept
         IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
 
-        uint256 pusdAmount = _convertToPUSD(amount, tokenInfo.decimals);
+        // Track accrued haircut
+        if (surplusTokenAmount > 0) {
+            accruedHaircut[token] += surplusTokenAmount;
+            emit SurplusAccrued(token, 0, surplusTokenAmount);
+        }
 
+        // Mint PUSD only for net amount (after haircut)
+        uint256 pusdAmount = _normalizeDecimalsToPUSD(netTokenAmount, tokenInfo.decimals);
         pusd.mint(msg.sender, pusdAmount);
 
-        emit Deposited(msg.sender, token, amount, pusdAmount);
+        emit Deposited(msg.sender, token, amount, pusdAmount, surplusTokenAmount);
     }
 
     function redeem(
@@ -181,7 +304,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         if (isPreferredValid && !hasEmergencyTokens) {
             uint256 requiredAmount = _convertFromPUSD(pusdAmount, preferredInfo.decimals);
             
-            if (IERC20(preferredAsset).balanceOf(address(this)) >= requiredAmount) {
+            if (_getAvailableLiquidity(preferredAsset) >= requiredAmount) {
                 // Preferred asset is available and no emergency tokens, use it
                 // Charge base fee + preferred fee
                 uint256 preferredFee = _calculatePreferredFee(preferredAsset);
@@ -214,8 +337,8 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             TokenInfo memory info = supportedTokens[token];
             if (info.status == TokenStatus.REMOVED) continue;
             
-            uint256 balance = IERC20(token).balanceOf(address(this));
-            uint256 balanceInPUSD = _convertToPUSD(balance, info.decimals);
+            uint256 balance = _getAvailableLiquidity(token);
+            uint256 balanceInPUSD = _normalizeDecimalsToPUSD(balance, info.decimals);
             
             availableLiquidity[i] = balanceInPUSD;
             totalLiquidityPUSD += balanceInPUSD;
@@ -279,7 +402,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         for (uint256 i = 0; i < tokenCount; i++) {
             address token = tokenList[i];
             if (supportedTokens[token].status == TokenStatus.EMERGENCY_REDEEM) {
-                uint256 balance = IERC20(token).balanceOf(address(this));
+                uint256 balance = _getAvailableLiquidity(token);
                 if (balance > 0) {
                     return true;
                 }
@@ -294,10 +417,12 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         uint256[] memory availableLiquidity = new uint256[](tokenCount);
         
         TokenInfo memory preferredInfo = supportedTokens[preferredAsset];
-        uint256 preferredBalance = IERC20(preferredAsset).balanceOf(address(this));
-        uint256 preferredBalanceInPUSD = _convertToPUSD(preferredBalance, preferredInfo.decimals);
+        require(preferredInfo.exists, "PUSDManager: preferred asset not added");
         
-        // Track preferred asset index
+        uint256 preferredBalance = _getAvailableLiquidity(preferredAsset);
+        uint256 preferredBalanceInPUSD = _normalizeDecimalsToPUSD(preferredBalance, preferredInfo.decimals);
+        
+        // Track preferred asset index (safe because we verified existence)
         uint256 preferredIndex = tokenIndex[preferredAsset];
         availableLiquidity[preferredIndex] = preferredBalanceInPUSD;
         totalLiquidityPUSD += preferredBalanceInPUSD;
@@ -310,8 +435,8 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             TokenInfo memory info = supportedTokens[token];
             
             if (info.status == TokenStatus.EMERGENCY_REDEEM) {
-                uint256 balance = IERC20(token).balanceOf(address(this));
-                uint256 balanceInPUSD = _convertToPUSD(balance, info.decimals);
+                uint256 balance = _getAvailableLiquidity(token);
+                uint256 balanceInPUSD = _normalizeDecimalsToPUSD(balance, info.decimals);
                 availableLiquidity[i] = balanceInPUSD;
                 totalLiquidityPUSD += balanceInPUSD;
             }
@@ -374,23 +499,23 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             pusd.burn(msg.sender, pusdAmount);
         }
         
-        // Calculate and collect fee
+        // Calculate fee and keep it in contract for gas efficiency
+        // Fees will be swept later along with surplus (if treasury is set)
         uint256 feeAmount = 0;
-        if (feeBps > 0 && feeCollector != address(0)) {
+        if (feeBps > 0) {
             feeAmount = (tokenAmount * feeBps) / BASIS_POINTS;
-            if (feeAmount > 0) {
-                IERC20(token).safeTransfer(feeCollector, feeAmount);
-                emit FeeCollected(token, feeAmount, feeBps);
-            }
+            // Track accrued fees
+            accruedFees[token] += feeAmount;
+            emit SurplusAccrued(token, feeAmount, 0);
         }
         
-        // Transfer remaining amount to user
+        // Transfer only user amount (fees stay in contract)
         uint256 userAmount = tokenAmount - feeAmount;
         IERC20(token).safeTransfer(msg.sender, userAmount);
         emit Redeemed(msg.sender, token, pusdAmount, userAmount);
     }
 
-    function _convertToPUSD(uint256 amount, uint8 tokenDecimals) internal pure returns (uint256) {
+    function _normalizeDecimalsToPUSD(uint256 amount, uint8 tokenDecimals) internal pure returns (uint256) {
         uint8 pusdDecimals = 6;
         
         if (tokenDecimals == pusdDecimals) {
@@ -400,6 +525,17 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         } else {
             return amount * (10 ** (pusdDecimals - tokenDecimals));
         }
+    }
+
+    /**
+     * @notice Calculate available liquidity for a token (excluding reserved surplus)
+     * @param token The token address
+     * @return Available balance that can be used for redemptions
+     */
+    function _getAvailableLiquidity(address token) internal view returns (uint256) {
+        uint256 balance = IERC20(token).balanceOf(address(this));
+        uint256 reserved = accruedFees[token] + accruedHaircut[token];
+        return balance > reserved ? balance - reserved : 0;
     }
 
     function _convertFromPUSD(uint256 pusdAmount, uint8 tokenDecimals) internal pure returns (uint256) {
@@ -421,8 +557,8 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
         // Calculate token's liquidity as percentage of total
         TokenInfo memory tokenInfo = supportedTokens[token];
-        uint256 tokenBalance = IERC20(token).balanceOf(address(this));
-        uint256 tokenBalanceInPUSD = _convertToPUSD(tokenBalance, tokenInfo.decimals);
+        uint256 tokenBalance = _getAvailableLiquidity(token);
+        uint256 tokenBalanceInPUSD = _normalizeDecimalsToPUSD(tokenBalance, tokenInfo.decimals);
         
         // Calculate total liquidity across all non-REMOVED tokens
         uint256 totalLiquidityPUSD = 0;
@@ -431,8 +567,8 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             TokenInfo memory info = supportedTokens[t];
             if (info.status == TokenStatus.REMOVED) continue;
             
-            uint256 balance = IERC20(t).balanceOf(address(this));
-            totalLiquidityPUSD += _convertToPUSD(balance, info.decimals);
+            uint256 balance = _getAvailableLiquidity(t);
+            totalLiquidityPUSD += _normalizeDecimalsToPUSD(balance, info.decimals);
         }
         
         if (totalLiquidityPUSD == 0) {
@@ -480,6 +616,82 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
     function getTokenInfo(address token) external view returns (TokenInfo memory) {
         return supportedTokens[token];
+    }
+
+    /**
+     * @notice Get accrued fees for a token (not yet swept)
+     * @param token The token address
+     * @return Amount of redemption fees accumulated
+     */
+    function getAccruedFees(address token) external view returns (uint256) {
+        return accruedFees[token];
+    }
+
+    /**
+     * @notice Get accrued haircut for a token (not yet swept)
+     * @param token The token address
+     * @return Amount of deposit haircut accumulated
+     */
+    function getAccruedHaircut(address token) external view returns (uint256) {
+        return accruedHaircut[token];
+    }
+
+    /**
+     * @notice Get total accrued surplus (fees + haircut) for a token
+     * @param token The token address
+     * @return Total surplus that can be swept
+     */
+    function getAccruedSurplus(address token) external view returns (uint256) {
+        return accruedFees[token] + accruedHaircut[token];
+    }
+
+    /**
+     * @notice Get total fees swept to treasury for a token
+     * @param token The token address
+     * @return Total redemption fees swept historically
+     */
+    function getSweptFees(address token) external view returns (uint256) {
+        return sweptFees[token];
+    }
+
+    /**
+     * @notice Get total haircut swept to treasury for a token
+     * @param token The token address
+     * @return Total deposit haircut swept historically
+     */
+    function getSweptHaircut(address token) external view returns (uint256) {
+        return sweptHaircut[token];
+    }
+
+    /**
+     * @notice Get total surplus swept to treasury for a token
+     * @param token The token address
+     * @return Total surplus (fees + haircut) swept historically
+     */
+    function getTotalSwept(address token) external view returns (uint256) {
+        return sweptFees[token] + sweptHaircut[token];
+    }
+
+    /**
+     * @notice Get comprehensive surplus breakdown for a token
+     * @param token The token address
+     * @return accruedFee Current accrued redemption fees
+     * @return accruedHaircutAmount Current accrued deposit haircut
+     * @return sweptFee Total redemption fees swept historically
+     * @return sweptHaircutAmount Total deposit haircut swept historically
+     */
+    function getSurplusBreakdown(address token) external view returns (
+        uint256 accruedFee,
+        uint256 accruedHaircutAmount,
+        uint256 sweptFee,
+        uint256 sweptHaircutAmount
+    ) {
+        return (
+            accruedFees[token],
+            accruedHaircut[token],
+            sweptFees[token],
+            sweptHaircut[token]
+        );
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}

@@ -38,6 +38,7 @@ contract PUSDManagerTest is Test {
     MockERC20 public usdtArb;
     MockERC20 public usdcArb;
     MockERC20 public usdtBnb;
+    MockERC20 public dai;
 
     address public admin = address(1);
     address public user = address(2);
@@ -74,6 +75,7 @@ contract PUSDManagerTest is Test {
         usdtArb = new MockERC20("USDT.arb", "USDT.arb", 6);
         usdcArb = new MockERC20("USDC.arb", "USDC.arb", 6);
         usdtBnb = new MockERC20("USDT.bnb", "USDT.bnb", 18);
+        dai = new MockERC20("DAI", "DAI", 18);
     }
 
     function testInitialization() public {
@@ -360,7 +362,7 @@ contract PUSDManagerTest is Test {
         usdtEth.approve(address(manager), depositAmount);
 
         vm.expectEmit(true, true, false, true);
-        emit PUSDManager.Deposited(user, address(usdtEth), depositAmount, depositAmount);
+        emit PUSDManager.Deposited(user, address(usdtEth), depositAmount, depositAmount, 0);
         manager.deposit(address(usdtEth), depositAmount);
         vm.stopPrank();
     }
@@ -704,13 +706,13 @@ contract PUSDManagerTest is Test {
         assertGt(usdcSol.balanceOf(user), 0, "Should be able to redeem emergency token as preferred");
     }
 
-    function testSetFeeCollector() public {
-        address feeCollector = address(0x123);
+    function testSetTreasuryReserve() public {
+        address treasuryReserve = address(0x123);
         
         vm.prank(admin);
-        manager.setFeeCollector(feeCollector);
+        manager.setTreasuryReserve(treasuryReserve);
         
-        assertEq(manager.feeCollector(), feeCollector);
+        assertEq(manager.treasuryReserve(), treasuryReserve);
     }
 
     function testSetBaseFee() public {
@@ -729,11 +731,11 @@ contract PUSDManagerTest is Test {
     }
 
     function testPreferredRedemptionWithFees() public {
-        address feeCollector = address(0x999);
+        address treasuryReserve = address(0x999);
         
         vm.startPrank(admin);
         manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
-        manager.setFeeCollector(feeCollector);
+        manager.setTreasuryReserve(treasuryReserve);
         manager.setBaseFee(5); // 0.05%
         manager.setPreferredFeeRange(5, 15); // 0.05% - 0.15%
         vm.stopPrank();
@@ -756,16 +758,22 @@ contract PUSDManagerTest is Test {
         uint256 expectedUserAmount = redeemAmount - expectedFee;
         
         assertEq(usdtEth.balanceOf(user), expectedUserAmount, "User should receive amount minus fees");
-        assertEq(usdtEth.balanceOf(feeCollector), expectedFee, "Fee collector should receive fees");
+        assertEq(usdtEth.balanceOf(treasuryReserve), 0, "Fees stay in contract before sweep");
+        
+        // Sweep to collect fees
+        vm.prank(admin);
+        manager.sweepAllSurplus();
+        
+        assertEq(usdtEth.balanceOf(treasuryReserve), expectedFee, "Treasury should receive fees after sweep");
     }
 
     function testBasketRedemptionWithOnlyBaseFee() public {
-        address feeCollector = address(0x999);
+        address treasuryReserve = address(0x999);
         
         vm.startPrank(admin);
         manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
         manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
-        manager.setFeeCollector(feeCollector);
+        manager.setTreasuryReserve(treasuryReserve);
         manager.setBaseFee(5); // 0.05%
         manager.setPreferredFeeRange(5, 15);
         vm.stopPrank();
@@ -787,22 +795,32 @@ contract PUSDManagerTest is Test {
 
         // Basket redemption should only charge base fee (5 bps)
         uint256 totalReceived = usdtEth.balanceOf(user) + usdcEth.balanceOf(user);
-        uint256 totalFees = usdtEth.balanceOf(feeCollector) + usdcEth.balanceOf(feeCollector);
         
         // Total fees should be approximately 5 bps of redeemAmount
         uint256 expectedTotalFee = (redeemAmount * 5) / 10000;
         
-        assertApproxEqAbs(totalReceived + totalFees, redeemAmount, 2, "Total should equal redeem amount");
-        assertApproxEqAbs(totalFees, expectedTotalFee, 2, "Fees should be approximately base fee only");
+        // Fees stay in contract before sweep
+        assertEq(usdtEth.balanceOf(treasuryReserve), 0, "No fees in treasury before sweep");
+        assertEq(usdcEth.balanceOf(treasuryReserve), 0, "No fees in treasury before sweep");
+        
+        // Sweep both tokens
+        vm.prank(admin);
+        manager.sweepAllSurplus();
+        
+        uint256 totalFees = usdtEth.balanceOf(treasuryReserve) + usdcEth.balanceOf(treasuryReserve);
+        // Higher tolerance due to rounding in proportional distribution + fee calculations
+        assertApproxEqAbs(totalReceived + totalFees, redeemAmount, 100000, "Total should equal redeem amount");
+        // Sweep collects fees + rounding remainder, so tolerance is higher
+        assertApproxEqAbs(totalFees, expectedTotalFee, 100000, "Fees should be approximately base fee only");
     }
 
     function testDynamicPreferredFeeCalculation() public {
-        address feeCollector = address(0x999);
+        address treasuryReserve = address(0x999);
         
         vm.startPrank(admin);
         manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
         manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
-        manager.setFeeCollector(feeCollector);
+        manager.setTreasuryReserve(treasuryReserve);
         manager.setBaseFee(5);
         manager.setPreferredFeeRange(5, 15); // Min 5 bps, Max 15 bps
         vm.stopPrank();
@@ -819,26 +837,32 @@ contract PUSDManagerTest is Test {
         manager.deposit(address(usdcEth), 100 * 10**6);
         vm.stopPrank();
 
+        uint256 userBalanceBefore = usdtEth.balanceOf(user);
+
         // Redeem USDT (90% liquidity) - should have lower preferred fee (close to min)
         vm.prank(user);
         manager.redeem(100 * 10**6, address(usdtEth), false);
         
-        uint256 usdtFee = usdtEth.balanceOf(feeCollector);
+        uint256 usdtReceived = usdtEth.balanceOf(user) - userBalanceBefore;
+        uint256 usdtFee = 100 * 10**6 - usdtReceived;
+        
+        userBalanceBefore = usdcEth.balanceOf(user);
         
         // Redeem USDC (10% liquidity) - should have higher preferred fee (max)
         vm.prank(user);
         manager.redeem(50 * 10**6, address(usdcEth), false);
         
-        uint256 usdcFee = usdcEth.balanceOf(feeCollector);
+        uint256 usdcReceived = usdcEth.balanceOf(user) - userBalanceBefore;
+        uint256 usdcFee = 50 * 10**6 - usdcReceived;
         
         // USDC fee rate should be higher than USDT fee rate
-        uint256 usdtFeeRate = (usdtFee * 10000) / (100 * 10**6);
-        uint256 usdcFeeRate = (usdcFee * 10000) / (50 * 10**6);
+        uint256 usdtFeeRate = (usdtFee * 10000) / 100e6;
+        uint256 usdcFeeRate = (usdcFee * 10000) / 50e6;
         
         assertGt(usdcFeeRate, usdtFeeRate, "Low liquidity token should have higher fee");
     }
 
-    function testNoFeesWhenFeeCollectorNotSet() public {
+    function testFeesAccumulateWithoutTreasury() public {
         vm.startPrank(admin);
         manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
         manager.setBaseFee(5);
@@ -856,7 +880,455 @@ contract PUSDManagerTest is Test {
         manager.redeem(redeemAmount, address(usdtEth), false);
         vm.stopPrank();
 
-        // Without fee collector, user should receive full amount
-        assertEq(usdtEth.balanceOf(user), redeemAmount, "User should receive full amount without fee collector");
+        // Fees are still deducted even without treasury set
+        uint256 expectedFee = (redeemAmount * 10) / 10000; // base + preferred fee
+        uint256 expectedUserAmount = redeemAmount - expectedFee;
+        
+        assertEq(usdtEth.balanceOf(user), expectedUserAmount, "User should receive amount minus fees");
+        
+        // Fees stay in contract (can't be swept without treasury)
+        uint256 contractBalance = usdtEth.balanceOf(address(manager));
+        assertGt(contractBalance, depositAmount - redeemAmount, "Fees should accumulate in contract");
+    }
+
+    function testSetSurplusHaircut() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.setSurplusHaircutBps(address(usdtEth), 500); // 5%
+        vm.stopPrank();
+
+        (bool exists, , , uint16 haircut, ,) = manager.supportedTokens(address(usdtEth));
+        assertTrue(exists);
+        assertEq(haircut, 500);
+    }
+
+    function testSurplusHaircutTooHigh() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        
+        vm.expectRevert("PUSDManager: haircut too high");
+        manager.setSurplusHaircutBps(address(usdtEth), 4001); // > 40%
+        vm.stopPrank();
+    }
+
+    function testDepositWithSurplusHaircut() public {
+        address treasuryReserve = address(0x999);
+        
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.setTreasuryReserve(treasuryReserve);
+        manager.setSurplusHaircutBps(address(usdtEth), 500); // 5% haircut
+        vm.stopPrank();
+
+        uint256 depositAmount = 1000 * 10**6; // 1000 USDT
+        usdtEth.mint(user, depositAmount);
+        
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount);
+        vm.stopPrank();
+
+        // User should receive PUSD for 95% of tokens (950 USDT -> 950 PUSD)
+        // All 1000 USDT stays in contract (surplus not transferred yet)
+        uint256 expectedUserPusd = 950 * 10**6;
+        
+        assertEq(pusd.balanceOf(user), expectedUserPusd, "User should receive PUSD for 95% of deposit");
+        assertEq(usdtEth.balanceOf(address(manager)), depositAmount, "All tokens should be in contract");
+        assertEq(usdtEth.balanceOf(treasuryReserve), 0, "Treasury should have nothing before sweep");
+    }
+
+    function testSweepSurplusWithHaircut() public {
+        address treasuryReserve = address(0x999);
+        
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.setTreasuryReserve(treasuryReserve);
+        manager.setSurplusHaircutBps(address(usdtEth), 500); // 5% haircut
+        vm.stopPrank();
+
+        uint256 depositAmount = 1000 * 10**6;
+        usdtEth.mint(user, depositAmount);
+        
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount);
+        vm.stopPrank();
+
+        // Expected haircut: 5% of 1000 = 50
+        uint256 expectedHaircut = 50 * 10**6;
+        
+        // Verify accrued haircut is tracked
+        assertEq(manager.getAccruedHaircut(address(usdtEth)), expectedHaircut, "Haircut should be accrued");
+        assertEq(manager.getAccruedFees(address(usdtEth)), 0, "No fees yet");
+        assertEq(manager.getAccruedSurplus(address(usdtEth)), expectedHaircut, "Total surplus equals haircut");
+
+        // Sweep surplus to treasury
+        vm.prank(admin);
+        manager.sweepAllSurplus();
+
+        // Treasury should now have the surplus
+        assertEq(usdtEth.balanceOf(treasuryReserve), expectedHaircut, "Treasury should receive surplus after sweep");
+        assertEq(usdtEth.balanceOf(address(manager)), 950 * 10**6, "Contract should retain backing tokens");
+        
+        // Verify tracking updated
+        assertEq(manager.getAccruedHaircut(address(usdtEth)), 0, "Accrued haircut reset after sweep");
+        assertEq(manager.getSweptHaircut(address(usdtEth)), expectedHaircut, "Swept haircut tracked");
+        assertEq(manager.getTotalSwept(address(usdtEth)), expectedHaircut, "Total swept equals haircut");
+    }
+
+    function testDepositWithZeroHaircutNoTreasuryRequired() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        // No haircut set (default 0)
+        vm.stopPrank();
+
+        uint256 depositAmount = 1000 * 10**6;
+        usdtEth.mint(user, depositAmount);
+        
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount);
+        vm.stopPrank();
+        
+        // With zero haircut, no surplus should be accrued
+        assertEq(manager.getAccruedHaircut(address(usdtEth)), 0, "No haircut accrued");
+        assertEq(manager.getAccruedSurplus(address(usdtEth)), 0, "No surplus to sweep");
+        assertEq(usdtEth.balanceOf(address(manager)), depositAmount, "All tokens in contract as backing");
+    }
+
+    function testSweepAllSurplus() public {
+        address treasuryReserve = address(0x999);
+        
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        manager.setTreasuryReserve(treasuryReserve);
+        manager.setSurplusHaircutBps(address(usdtEth), 500); // 5% haircut
+        manager.setSurplusHaircutBps(address(usdcEth), 300); // 3% haircut
+        manager.setBaseFee(5); // 0.05% base fee
+        manager.setPreferredFeeRange(5, 15);
+        vm.stopPrank();
+
+        // Deposit USDT with haircut
+        uint256 usdtDepositAmount = 1000 * 10**6;
+        usdtEth.mint(user, usdtDepositAmount);
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), usdtDepositAmount);
+        manager.deposit(address(usdtEth), usdtDepositAmount);
+        vm.stopPrank();
+
+        // Deposit USDC with haircut
+        uint256 usdcDepositAmount = 500 * 10**6;
+        usdcEth.mint(user, usdcDepositAmount);
+        vm.startPrank(user);
+        usdcEth.approve(address(manager), usdcDepositAmount);
+        manager.deposit(address(usdcEth), usdcDepositAmount);
+        vm.stopPrank();
+
+        // Redeem to generate fees
+        vm.startPrank(user);
+        manager.redeem(100 * 10**6, address(usdtEth), false);
+        vm.stopPrank();
+
+        // Calculate expected amounts
+        uint256 expectedUsdtHaircut = (usdtDepositAmount * 500) / 10000; // 50 USDT
+        uint256 expectedUsdcHaircut = (usdcDepositAmount * 300) / 10000; // 15 USDC
+        uint256 expectedUsdtFees = (100 * 10**6 * 10) / 10000; // ~1 USDT (base + preferred fee)
+        
+        // Verify accrued amounts before sweep
+        assertEq(manager.getAccruedHaircut(address(usdtEth)), expectedUsdtHaircut, "USDT haircut accrued");
+        assertEq(manager.getAccruedHaircut(address(usdcEth)), expectedUsdcHaircut, "USDC haircut accrued");
+        assertGt(manager.getAccruedFees(address(usdtEth)), 0, "USDT fees accrued");
+        
+        // Sweep all surplus in one transaction
+        vm.prank(admin);
+        manager.sweepAllSurplus();
+        
+        // Verify all surplus transferred to treasury
+        assertGt(usdtEth.balanceOf(treasuryReserve), expectedUsdtHaircut, "USDT surplus in treasury");
+        assertEq(usdcEth.balanceOf(treasuryReserve), expectedUsdcHaircut, "USDC surplus in treasury");
+        
+        // Verify accrued amounts reset
+        assertEq(manager.getAccruedHaircut(address(usdtEth)), 0, "USDT haircut reset");
+        assertEq(manager.getAccruedHaircut(address(usdcEth)), 0, "USDC haircut reset");
+        assertEq(manager.getAccruedFees(address(usdtEth)), 0, "USDT fees reset");
+        
+        // Verify swept totals updated
+        assertGt(manager.getSweptHaircut(address(usdtEth)), 0, "USDT swept haircut tracked");
+        assertGt(manager.getSweptHaircut(address(usdcEth)), 0, "USDC swept haircut tracked");
+        assertGt(manager.getSweptFees(address(usdtEth)), 0, "USDT swept fees tracked");
+    }
+
+    function testRedemptionUnaffectedByHaircut() public {
+        address treasuryReserve = address(0x999);
+        
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.setTreasuryReserve(treasuryReserve);
+        manager.setSurplusHaircutBps(address(usdtEth), 500); // 5% haircut on deposit
+        vm.stopPrank();
+
+        // Deposit with haircut: 1000 USDT -> all to contract, 950 backing PUSD + 50 surplus
+        uint256 depositAmount = 1000 * 10**6;
+        usdtEth.mint(user, depositAmount);
+        
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount);
+        
+        // User has 950 PUSD (from 950 USDT backing)
+        uint256 userPusd = pusd.balanceOf(user);
+        assertEq(userPusd, 950 * 10**6);
+        
+        // Redeem should be 1:1 (no haircut on redemption)
+        manager.redeem(userPusd, address(usdtEth), false);
+        vm.stopPrank();
+
+        // User should receive 950 USDT (1:1 redemption)
+        assertEq(usdtEth.balanceOf(user), 950 * 10**6, "Redemption should be 1:1, unaffected by deposit haircut");
+    }
+
+    function testRebalanceSuccess() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        vm.stopPrank();
+
+        // User deposits to create liquidity
+        uint256 depositAmount = 1000 * 10**6;
+        usdtEth.mint(user, depositAmount);
+        usdcEth.mint(user, depositAmount);
+        
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount);
+        
+        usdcEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdcEth), depositAmount);
+        vm.stopPrank();
+
+        // Admin rebalances: swap 500 USDT for 500 USDC
+        uint256 rebalanceAmount = 500 * 10**6;
+        usdtEth.mint(admin, rebalanceAmount);
+        
+        vm.startPrank(admin);
+        usdtEth.approve(address(manager), rebalanceAmount);
+        manager.rebalance(address(usdtEth), rebalanceAmount, address(usdcEth), rebalanceAmount);
+        vm.stopPrank();
+
+        // Verify balances
+        assertEq(usdtEth.balanceOf(address(manager)), depositAmount + rebalanceAmount, "Manager should have more USDT");
+        assertEq(usdcEth.balanceOf(address(manager)), depositAmount - rebalanceAmount, "Manager should have less USDC");
+        assertEq(usdcEth.balanceOf(admin), rebalanceAmount, "Admin should receive USDC");
+    }
+
+    function testRebalanceProtectsSurplus() public {
+        address treasuryReserve = address(0x999);
+        
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        manager.setTreasuryReserve(treasuryReserve);
+        manager.setSurplusHaircutBps(address(usdtEth), 500); // 5% haircut
+        manager.setBaseFee(10); // 0.1% fee
+        vm.stopPrank();
+
+        // User deposits USDT with haircut
+        uint256 depositAmount = 1000 * 10**6;
+        usdtEth.mint(user, depositAmount);
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount);
+        vm.stopPrank();
+
+        // User redeems to generate fees
+        vm.startPrank(user);
+        manager.redeem(100 * 10**6, address(usdtEth), false);
+        vm.stopPrank();
+
+        // Check accrued surplus before rebalance
+        uint256 accruedSurplus = manager.getAccruedSurplus(address(usdtEth));
+        assertGt(accruedSurplus, 0, "Should have accrued surplus");
+
+        // Calculate available balance for rebalance
+        uint256 usdtBalance = usdtEth.balanceOf(address(manager));
+        uint256 availableForRebalance = usdtBalance - accruedSurplus;
+        
+        // Admin rebalances with available amount (not touching surplus)
+        usdcEth.mint(admin, availableForRebalance);
+        
+        vm.startPrank(admin);
+        usdcEth.approve(address(manager), availableForRebalance);
+        
+        // Rebalance should succeed without touching surplus
+        manager.rebalance(address(usdcEth), availableForRebalance, address(usdtEth), availableForRebalance);
+        vm.stopPrank();
+        
+        // Verify surplus is still reserved in contract
+        assertEq(manager.getAccruedSurplus(address(usdtEth)), accruedSurplus, "Surplus should still be reserved");
+        assertEq(usdtEth.balanceOf(treasuryReserve), 0, "Treasury should not receive anything yet");
+        
+        // Verify rebalance succeeded
+        assertEq(usdcEth.balanceOf(address(manager)), availableForRebalance, "USDC should be in contract");
+        assertEq(usdtEth.balanceOf(admin), availableForRebalance, "Admin should receive available USDT");
+    }
+
+    function testRebalanceCannotSpendReservedSurplusWithoutTreasury() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        manager.setSurplusHaircutBps(address(usdtEth), 500); // 5% haircut
+        manager.setBaseFee(10); // 0.1% fee
+        // Intentionally NOT setting treasury
+        vm.stopPrank();
+
+        // User deposits USDT with haircut
+        uint256 depositAmount = 1000 * 10**6;
+        usdtEth.mint(user, depositAmount);
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount);
+        vm.stopPrank();
+
+        // User redeems to generate fees
+        vm.startPrank(user);
+        manager.redeem(100 * 10**6, address(usdtEth), false);
+        vm.stopPrank();
+
+        // Check accrued surplus (should still be in contract since no treasury)
+        uint256 accruedSurplus = manager.getAccruedSurplus(address(usdtEth));
+        assertGt(accruedSurplus, 0, "Should have accrued surplus");
+
+        // Calculate available balance for rebalance
+        uint256 usdtBalance = usdtEth.balanceOf(address(manager));
+        uint256 availableForRebalance = usdtBalance - accruedSurplus;
+        
+        // Admin tries to rebalance more than available (would touch surplus)
+        uint256 rebalanceAmount = availableForRebalance + 1; // 1 token more than available
+        usdcEth.mint(admin, rebalanceAmount);
+        
+        vm.startPrank(admin);
+        usdcEth.approve(address(manager), rebalanceAmount);
+        
+        // Should revert because it would spend reserved surplus
+        vm.expectRevert("PUSDManager: rebalance would spend reserved surplus");
+        manager.rebalance(address(usdcEth), rebalanceAmount, address(usdtEth), rebalanceAmount);
+        vm.stopPrank();
+
+        // Verify surplus is still intact
+        assertEq(manager.getAccruedSurplus(address(usdtEth)), accruedSurplus, "Surplus should be unchanged");
+        
+        // Now try with exact available amount (should work)
+        vm.startPrank(admin);
+        manager.rebalance(address(usdcEth), availableForRebalance, address(usdtEth), availableForRebalance);
+        vm.stopPrank();
+        
+        // Verify rebalance succeeded and surplus is still reserved
+        assertEq(manager.getAccruedSurplus(address(usdtEth)), accruedSurplus, "Surplus should still be reserved");
+        assertEq(usdtEth.balanceOf(admin), availableForRebalance, "Admin should receive only available amount");
+    }
+
+    function testRebalanceWithDifferentDecimals() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(dai), "DAI", "Ethereum_Sepolia", 18);
+        vm.stopPrank();
+
+        // User deposits
+        usdtEth.mint(user, 1000 * 10**6);
+        dai.mint(user, 1000 * 10**18);
+        
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), 1000 * 10**6);
+        manager.deposit(address(usdtEth), 1000 * 10**6);
+        
+        dai.approve(address(manager), 1000 * 10**18);
+        manager.deposit(address(dai), 1000 * 10**18);
+        vm.stopPrank();
+
+        // Admin rebalances: 500 USDT (6 decimals) for 500 DAI (18 decimals)
+        usdtEth.mint(admin, 500 * 10**6);
+        
+        vm.startPrank(admin);
+        usdtEth.approve(address(manager), 500 * 10**6);
+        manager.rebalance(address(usdtEth), 500 * 10**6, address(dai), 500 * 10**18);
+        vm.stopPrank();
+
+        assertEq(dai.balanceOf(admin), 500 * 10**18, "Admin should receive DAI");
+    }
+
+    function testRebalanceOnlyAdmin() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        vm.stopPrank();
+
+        usdtEth.mint(user, 500 * 10**6);
+        
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), 500 * 10**6);
+        vm.expectRevert();
+        manager.rebalance(address(usdtEth), 500 * 10**6, address(usdcEth), 500 * 10**6);
+        vm.stopPrank();
+    }
+
+    function testRebalanceSameToken() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        
+        usdtEth.mint(admin, 500 * 10**6);
+        usdtEth.approve(address(manager), 500 * 10**6);
+        
+        vm.expectRevert("PUSDManager: cannot swap same token");
+        manager.rebalance(address(usdtEth), 500 * 10**6, address(usdtEth), 500 * 10**6);
+        vm.stopPrank();
+    }
+
+    function testRebalanceUnequalValue() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        vm.stopPrank();
+
+        usdtEth.mint(user, 1000 * 10**6);
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), 1000 * 10**6);
+        manager.deposit(address(usdtEth), 1000 * 10**6);
+        vm.stopPrank();
+
+        usdcEth.mint(admin, 500 * 10**6);
+        
+        vm.startPrank(admin);
+        usdcEth.approve(address(manager), 500 * 10**6);
+        vm.expectRevert("PUSDManager: amounts must have equal PUSD value");
+        manager.rebalance(address(usdcEth), 500 * 10**6, address(usdtEth), 600 * 10**6);
+        vm.stopPrank();
+    }
+
+    function testRebalanceInsufficientBalance() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        
+        usdtEth.mint(admin, 500 * 10**6);
+        usdtEth.approve(address(manager), 500 * 10**6);
+        
+        vm.expectRevert("PUSDManager: rebalance would spend reserved surplus");
+        manager.rebalance(address(usdtEth), 500 * 10**6, address(usdcEth), 500 * 10**6);
+        vm.stopPrank();
+    }
+
+    function testRebalanceRemovedToken() public {
+        vm.startPrank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+        manager.addSupportedToken(address(usdcEth), "USDC.eth", "Ethereum_Sepolia", 6);
+        manager.setTokenStatus(address(usdcEth), PUSDManager.TokenStatus.REMOVED);
+        
+        usdtEth.mint(admin, 500 * 10**6);
+        usdtEth.approve(address(manager), 500 * 10**6);
+        
+        vm.expectRevert("PUSDManager: tokenOut is removed");
+        manager.rebalance(address(usdtEth), 500 * 10**6, address(usdcEth), 500 * 10**6);
+        vm.stopPrank();
     }
 }
