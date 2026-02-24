@@ -7,18 +7,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# Dependencies
 node_modules
 dist
 dist-ssr
 *.local
-.yarn/
-!.yarn/releases
-!.yarn/plugins
-!.yarn/sdks
-!.yarn/versions
-.pnp.*
-yarn.lock
 
 # Editor directories and files
 .vscode/*
@@ -30,10 +22,3 @@ yarn.lock
 *.njsproj
 *.sln
 *.sw?
-
-# Environment
-.env
-.env.local
-.env.development.local
-.env.test.local
-.env.production.local

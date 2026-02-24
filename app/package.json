@@ -1,5 +1,5 @@
 {
-  "name": "my-push-app",
+  "name": "app",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -10,12 +10,10 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@pushchain/ui-kit": "latest",
-    "buffer": "^6.0.3",
-    "process": "^0.11.10",
+    "@pushchain/ui-kit": "^4.0.14",
+    "ethers": "6.16.0",
     "react": "^19.1.1",
-    "react-dom": "^19.1.1",
-    "util": "^0.12.5"
+    "react-dom": "^19.1.1"
   },
   "devDependencies": {
     "@eslint/js": "^9.33.0",
