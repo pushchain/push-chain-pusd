@@ -17,6 +17,13 @@ lib/
 
 .DS_Store
 
+# Research files — only encrypted .enc versions are committed
+contracts/docs/research/*
+!contracts/docs/research/*.enc
+
+# Encryption password hash — local only, never commit
+.research.hash
+
 # Dependencies
 node_modules/
 .yarn/
