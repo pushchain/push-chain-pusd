@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Encrypts all files in contracts/docs/research/ using AES-256-CBC.
+# Encrypts all files in docs/research/ using AES-256-CBC.
 # Encrypted files are saved alongside the originals with a .enc extension.
 # Verifies the entered password matches the hash stored in .research.hash.
 # Intended to be called from the pre-commit hook.
@@ -7,7 +7,7 @@
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-RESEARCH_DIR="$REPO_ROOT/contracts/docs/research"
+RESEARCH_DIR="$REPO_ROOT/docs/research"
 
 if [ ! -d "$RESEARCH_DIR" ]; then
   echo "encrypt-research: research dir not found, skipping."
@@ -33,7 +33,7 @@ fi
 STORED_HASH="$(cat "$HASH_FILE")"
 
 # Prompt for password (stderr so it doesn't pollute stdout)
-echo "🔒 Encrypting files in contracts/docs/research/ ..." >&2
+echo "🔒 Encrypting files in docs/research/ ..." >&2
 read -rsp "Enter encryption password: " PASSWORD </dev/tty
 echo >&2
 

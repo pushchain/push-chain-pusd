@@ -18,8 +18,9 @@ lib/
 .DS_Store
 
 # Research files — only encrypted .enc versions are committed
-contracts/docs/research/*
-!contracts/docs/research/*.enc
+docs/research/*
+!docs/research/*.enc
+!docs/research/README.md
 
 # Encryption password hash — local only, never commit
 .research.hash

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Decrypts all .enc files in contracts/docs/research/ back to plaintext.
+# Decrypts all .enc files in docs/research/ back to plaintext.
 # Verifies the entered password matches the hash stored in .research.hash.
 
 set -euo pipefail
 
 REPO_ROOT="$(git -C "$(dirname "$0")" rev-parse --show-toplevel)"
-RESEARCH_DIR="$REPO_ROOT/contracts/docs/research"
+RESEARCH_DIR="$REPO_ROOT/docs/research"
 
 if [ ! -d "$RESEARCH_DIR" ]; then
   echo "decrypt-research: research dir not found." >&2
@@ -18,7 +18,7 @@ while IFS= read -r -d '' f; do
 done < <(find "$RESEARCH_DIR" -type f -name "*.enc" -print0)
 
 if [ ${#ENC_FILES[@]} -eq 0 ]; then
-  echo "No encrypted files found in contracts/docs/research/." >&2
+  echo "No encrypted files found in docs/research/." >&2
   exit 0
 fi
 

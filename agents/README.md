@@ -1,0 +1,35 @@
+# Agents — Machine-Readable Context
+
+This directory is the entry point for AI coding agents working on the PUSD protocol.
+It contains dense, structured reference material that complements the human-readable
+design docs in [`/docs`](../docs/).
+
+> **Start at the top:** if you are an agent, read [`/llms.txt`](../llms.txt) first
+> for navigation, then [`/docs/design/overview.md`](../docs/design/overview.md) for
+> product context, then the files here for per-contract specifics.
+
+## Files
+
+| File | Purpose |
+|---|---|
+| [repo-map.md](repo-map.md) | One-line description per file across the repo. Use as a navigation index. |
+| [pusd.context.md](pusd.context.md) | `PUSD.sol` — the boring ERC-20 settlement token. |
+| [pusdmanager.context.md](pusdmanager.context.md) | `PUSDManager.sol` — the reserve. Slices `parReserve` + `yieldShareReserve`. |
+| [pusdplus.context.md](pusdplus.context.md) | `PUSDPlus.sol` — the ERC-4626 yield wrapper over PUSD. |
+| [pusdliquidity.context.md](pusdliquidity.context.md) | `PUSDLiquidity.sol` — the strategy engine owned by PUSD+. |
+| [invariants.context.md](invariants.context.md) | Structured invariant list with Foundry stubs for fuzz/formal tooling. |
+
+## How these files differ from /docs
+
+- `/docs` describes intent, rationale, and tradeoffs in prose. For humans.
+- `/agents` lists facts: function signatures, storage slots, role tables, event schemas. For code generation and audit tooling.
+
+Both are kept in sync manually. When they disagree, `/docs` is authoritative for **intent**; `/agents` is authoritative for **mechanics**.
+
+## Authority order
+
+1. Solidity source in `/contracts/src/` — ground truth.
+2. Design docs in `/docs/design/` — authoritative intent.
+3. ADRs in `/docs/design/decisions/` — authoritative decisions.
+4. This directory — machine-readable summary of (1)–(3).
+5. Research notes in `/docs/research/` — historical, superseded by ADR 0003.
