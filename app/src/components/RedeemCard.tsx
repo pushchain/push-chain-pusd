@@ -1,18 +1,21 @@
 /**
- * RedeemCard — burn PUSD and receive a preferred token (or basket).
+ * RedeemCard — advanced redeem flow for /redeem.
  *
- * BUGFIX vs. the old RedeemTab: the contract signature is
+ * Deployment 2 redeem signature:
  *   redeem(uint256 pusdAmount, address preferredAsset, bool allowBasket, address recipient)
- * The old code passed only three args, so every redemption reverted. The
- * new card uses `buildRedeemLeg(... recipient = account)` from lib/cascade.
  *
- * Cascade:
- *   1. approve(PUSDManager, amount)   — PUSD ERC-20 approval
- *   2. redeem(amount, preferred, allowBasket, recipient)
- * Sent in a single `sendTransaction` call with `data: [approveLeg, redeemLeg]`.
+ * This card supports three things beyond the inline ConvertPanel:
+ *   - Custom recipient (defaults to connected account).
+ *   - BASKET MODE toggle — accept proportional draws when preferred liquidity is thin.
+ *   - CROSS-CHAIN PAYOUT — two-step flow:
+ *       step 1: standard redeem on Push Chain, preferred asset delivered to the UEA.
+ *       step 2: Route 2 `sendTransaction({ to: { chain }, funds: { token } })`
+ *               forwards the just-received asset to an external-chain address.
+ *     UX: the user signs the first tx, we wait for confirmation, then
+ *     immediately broadcast the second tx in the same visual "operation".
  */
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePushChain, usePushChainClient } from '@pushchain/ui-kit';
 import { TOKENS, type ReserveToken } from '../contracts/tokens';
 import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
@@ -22,33 +25,52 @@ import {
   type CascadeLeg,
   type HelpersLike,
 } from '../lib/cascade';
+import { isValidAddress, resolveMoveableToken } from '../lib/wallet';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useInvariants } from '../hooks/useInvariants';
 import { explorerTx, formatAmount, truncHash } from '../lib/format';
-import { ConnectedGate, useIsConnected } from './ConnectedGate';
+import { ConnectedGate } from './ConnectedGate';
+import { useIsConnected } from '../hooks/useIsConnected';
 import { TokenPill } from './TokenPill';
+
+type Stage =
+  | { kind: 'idle' }
+  | { kind: 'signing' }
+  | { kind: 'step1-broadcasting'; hash: `0x${string}` }
+  | { kind: 'step1-confirmed'; hash: `0x${string}` }
+  | { kind: 'step2-signing'; prevHash: `0x${string}` }
+  | { kind: 'step2-broadcasting'; prevHash: `0x${string}`; hash: `0x${string}` }
+  | { kind: 'step2-confirmed'; prevHash: `0x${string}`; hash: `0x${string}` }
+  | { kind: 'error'; message: string };
 
 export function RedeemCard() {
   const isConnected = useIsConnected();
   const { pushChainClient } = usePushChainClient();
   const { PushChain } = usePushChain();
+  const invariants = useInvariants();
+
+  const account = (pushChainClient?.universal?.account ?? null) as `0x${string}` | null;
 
   const { balance: pusdBalance, loading: balLoading } = usePUSDBalance();
   const { baseFeeBps, loading: feeLoading } = useProtocolStats();
-  const invariants = useInvariants();
 
   const [selected, setSelected] = useState<ReserveToken>(TOKENS[0]);
   const [amount, setAmount] = useState('');
   const [showSelector, setShowSelector] = useState(false);
   const [allowBasket, setAllowBasket] = useState(false);
 
-  const [submitting, setSubmitting] = useState(false);
-  const [txHash, setTxHash] = useState<`0x${string}` | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  // Cross-chain payout state.
+  const [crossChain, setCrossChain] = useState(false);
+  const [externalRecipient, setExternalRecipient] = useState('');
+  const [pushRecipient, setPushRecipient] = useState<string>('');
 
-  // Parse amount at PUSD decimals (6).
+  const [stage, setStage] = useState<Stage>({ kind: 'idle' });
+
+  useEffect(() => {
+    if (account && !pushRecipient) setPushRecipient(account);
+  }, [account, pushRecipient]);
+
   const parsedAmount = useMemo(() => {
     if (!amount || !PushChain) return 0n;
     const clean = amount.trim();
@@ -60,93 +82,121 @@ export function RedeemCard() {
     }
   }, [amount, PushChain]);
 
-  // Preview: fee = amount * baseFeeBps / 10000
   const feeAmount = useMemo(() => {
     if (parsedAmount === 0n) return 0n;
     return (parsedAmount * BigInt(baseFeeBps)) / 10_000n;
   }, [parsedAmount, baseFeeBps]);
-
   const receiveAmount = parsedAmount - feeAmount;
 
   const amountValid = parsedAmount > 0n;
   const exceedsBalance = parsedAmount > pusdBalance;
   const solventHalt = invariants.state === 'violation';
+  const pushRecipientValid = isValidAddress(pushRecipient);
+  const externalRecipientValid = !crossChain || isValidAddress(externalRecipient);
+  const submitting =
+    stage.kind === 'signing' ||
+    stage.kind === 'step1-broadcasting' ||
+    stage.kind === 'step2-signing' ||
+    stage.kind === 'step2-broadcasting';
 
   const handleRedeem = async () => {
-    if (!pushChainClient || !PushChain) return;
-    if (!amountValid || exceedsBalance || solventHalt) return;
-
-    const account = pushChainClient.universal.account as `0x${string}` | undefined;
-    if (!account) {
-      setError('No universal account available on the connected wallet.');
-      return;
-    }
+    if (!pushChainClient || !PushChain || !account) return;
+    if (!amountValid || exceedsBalance || solventHalt || !pushRecipientValid || !externalRecipientValid) return;
 
     const helpers = PushChain.utils.helpers as unknown as HelpersLike;
+    const ueaTarget = pushRecipient as `0x${string}`;
 
-    setSubmitting(true);
-    setError(null);
-    setTxHash(null);
-    setConfirmed(false);
+    setStage({ kind: 'signing' });
 
     try {
-      const approveLeg = buildApproveLeg(
-        helpers,
-        PUSD_ADDRESS as `0x${string}`,
-        PUSD_MANAGER_ADDRESS as `0x${string}`,
-        parsedAmount,
-      );
-      const redeemLeg = buildRedeemLeg(
-        helpers,
-        PUSD_MANAGER_ADDRESS as `0x${string}`,
-        parsedAmount,
-        selected.address,
-        allowBasket,
-        account,
-      );
+      // --- STEP 1: redeem on Push Chain ---
+      const legs: CascadeLeg[] = [
+        buildApproveLeg(helpers, PUSD_ADDRESS as `0x${string}`, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
+        buildRedeemLeg(
+          helpers,
+          PUSD_MANAGER_ADDRESS as `0x${string}`,
+          parsedAmount,
+          selected.address,
+          allowBasket,
+          ueaTarget,
+        ),
+      ];
 
-      const legs: CascadeLeg[] = [approveLeg, redeemLeg];
-      // SDK types don't yet expose cascade `data: CascadeLeg[]` publicly —
-      // assert the options object once so the call site stays readable.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const txOptions: any = {
+      const step1Options: any = {
         to: '0x0000000000000000000000000000000000000000',
         value: 0n,
         data: legs,
       };
-      const tx = await pushChainClient.universal.sendTransaction(txOptions);
 
-      setTxHash(tx.hash as `0x${string}`);
-      await tx.wait();
-      setConfirmed(true);
+      const tx1 = await pushChainClient.universal.sendTransaction(step1Options);
+      const step1Hash = tx1.hash as `0x${string}`;
+      setStage({ kind: 'step1-broadcasting', hash: step1Hash });
+      await tx1.wait();
+      setStage({ kind: 'step1-confirmed', hash: step1Hash });
+
+      // --- STEP 2 (optional): forward redeemed asset to external chain ---
+      if (crossChain && externalRecipient) {
+        setStage({ kind: 'step2-signing', prevHash: step1Hash });
+
+        const [chainKey, symbolKey] = selected.moveableKey;
+        const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
+        if (!moveable) {
+          throw new Error(
+            `MOVEABLE token for ${symbolKey} on ${chainKey} not found — cross-chain payout unavailable.`,
+          );
+        }
+
+        // Route 2: send from Push Chain to the external chain. The universal
+        // SDK moves the just-redeemed reserve token through the CEA of the
+        // destination chain and delivers it to the external address.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const step2Options: any = {
+          to: { address: externalRecipient as `0x${string}`, chain: chainKey },
+          value: 0n,
+          data: '0x',
+          funds: { amount: receiveAmount, token: moveable },
+        };
+
+        const tx2 = await pushChainClient.universal.sendTransaction(step2Options);
+        const step2Hash = tx2.hash as `0x${string}`;
+        setStage({ kind: 'step2-broadcasting', prevHash: step1Hash, hash: step2Hash });
+        await tx2.wait();
+        setStage({ kind: 'step2-confirmed', prevHash: step1Hash, hash: step2Hash });
+      }
+
       setAmount('');
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'Transaction failed';
-      setError(message);
-    } finally {
-      setSubmitting(false);
+      setStage({
+        kind: 'error',
+        message: err instanceof Error ? err.message : 'Transaction failed',
+      });
     }
   };
 
   const ctaLabel = (() => {
-    if (submitting && !txHash) return 'SIGNING…';
-    if (submitting && txHash) return 'BROADCASTING…';
+    if (stage.kind === 'signing') return 'SIGNING STEP 1…';
+    if (stage.kind === 'step1-broadcasting') return 'STEP 1 BROADCASTING…';
+    if (stage.kind === 'step2-signing') return 'SIGNING STEP 2…';
+    if (stage.kind === 'step2-broadcasting') return 'STEP 2 BROADCASTING…';
     if (solventHalt) return 'SOLVENCY CHECK FAILED — ACTIONS HALTED';
     if (!amountValid) return 'ENTER AN AMOUNT';
     if (exceedsBalance) return 'INSUFFICIENT PUSD';
+    if (!pushRecipientValid) return 'INVALID PUSH RECIPIENT';
+    if (crossChain && !externalRecipientValid) return 'INVALID EXTERNAL RECIPIENT';
+    if (crossChain) return `REDEEM → FORWARD TO ${selected.chainShort} →`;
     return `REDEEM ${formatAmount(parsedAmount, 6, { maxFractionDigits: 2 })} PUSD →`;
   })();
 
-  const ctaDisabled = submitting || !amountValid || exceedsBalance || solventHalt;
+  const ctaDisabled =
+    submitting ||
+    !amountValid ||
+    exceedsBalance ||
+    solventHalt ||
+    !pushRecipientValid ||
+    (crossChain && !externalRecipientValid);
 
-  // Oxblood CTA when opting into a basket drain — visual warning that the
-  // user is accepting proportional draws from all reserves.
-  const ctaVariant = solventHalt
-    ? 'btn--danger'
-    : allowBasket
-      ? 'btn--danger'
-      : 'btn--primary';
-
+  const ctaVariant = solventHalt ? 'btn--danger' : allowBasket ? 'btn--danger' : 'btn--primary';
   const feeRateLabel = feeLoading ? '…' : `(${(baseFeeBps / 100).toFixed(2)}%)`;
 
   return (
@@ -154,12 +204,13 @@ export function RedeemCard() {
       <div className="card-shell__head">
         <div>
           <h1>Redeem PUSD</h1>
-          <p>Burn PUSD and receive your preferred stablecoin from reserves.</p>
+          <p>Burn PUSD and receive reserves. Optionally forward the payout to any supported chain.</p>
         </div>
         <div className="card-shell__aside">
           <div style={{ color: 'var(--c-ink-mute)' }}>PREFERRED OUT</div>
           <strong>{selected.symbol} · {selected.chainShort}</strong>
-          <div>FEE {feeRateLabel}</div>
+          <div style={{ marginTop: 6, color: 'var(--c-ink-mute)' }}>FEE</div>
+          <strong>{feeRateLabel}</strong>
         </div>
       </div>
 
@@ -170,7 +221,6 @@ export function RedeemCard() {
         />
       ) : (
         <>
-          {/* YOU BURN */}
           <div className="input-head" style={{ marginTop: 8 }}>
             <span>YOU BURN</span>
             <button
@@ -195,15 +245,11 @@ export function RedeemCard() {
               onChange={(e) => setAmount(e.target.value)}
               disabled={submitting}
             />
-            <div className="token-pill">
-              <span className="token-pill__symbol">PUSD</span>
-              <span className="token-pill__chain">· PUSH</span>
-            </div>
+            <TokenPill symbol="PUSD" chainShort="PUSH" size="md" />
           </div>
 
           <div className="arrow-divider">↓</div>
 
-          {/* YOU RECEIVE */}
           <div className="input-head">
             <span>YOU RECEIVE</span>
             <span className="meta-sm">PREFERRED · {selected.chainShort}</span>
@@ -224,7 +270,7 @@ export function RedeemCard() {
           </div>
 
           {showSelector && (
-            <div className="selector-panel" role="listbox">
+            <div className="selector-panel" role="listbox" style={{ marginTop: 6 }}>
               {TOKENS.map((t) => {
                 const active = t.address === selected.address;
                 return (
@@ -250,6 +296,33 @@ export function RedeemCard() {
             </div>
           )}
 
+          {/* Recipient */}
+          <div className="input-head" style={{ marginTop: 16 }}>
+            <span>RECIPIENT (PUSH CHAIN)</span>
+            <button
+              type="button"
+              onClick={() => account && setPushRecipient(account)}
+              disabled={!account}
+            >
+              USE MY ADDRESS
+            </button>
+          </div>
+          <div className="input-row">
+            <input
+              type="text"
+              placeholder="0x…"
+              value={pushRecipient}
+              onChange={(e) => setPushRecipient(e.target.value.trim())}
+              disabled={submitting}
+              spellCheck={false}
+            />
+            {pushRecipient && !pushRecipientValid && (
+              <span className="input-row__hint input-row__hint--warn">
+                ✕ Not a valid EVM address.
+              </span>
+            )}
+          </div>
+
           {/* Basket toggle */}
           <div
             className="toggle-row"
@@ -262,6 +335,7 @@ export function RedeemCard() {
                 setAllowBasket((b) => !b);
               }
             }}
+            style={{ marginTop: 14 }}
           >
             <div>
               <div className="toggle-row__label">BASKET MODE {allowBasket ? '[ON]' : '[OFF]'}</div>
@@ -277,7 +351,59 @@ export function RedeemCard() {
             />
           </div>
 
-          {/* Preview block */}
+          {/* Cross-chain payout toggle */}
+          <div
+            className="toggle-row"
+            role="button"
+            tabIndex={0}
+            onClick={() => setCrossChain((c) => !c)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                setCrossChain((c) => !c);
+              }
+            }}
+            style={{ marginTop: 12 }}
+          >
+            <div>
+              <div className="toggle-row__label">
+                RECEIVE ON {selected.chainLabel} {crossChain ? '[ON]' : '[OFF]'}
+              </div>
+              <div className="toggle-row__sub">
+                Two-step flow — redeem on Push Chain, then route the payout to an address on{' '}
+                {selected.chainLabel} via Route 2.
+              </div>
+            </div>
+            <span
+              className="toggle"
+              role="switch"
+              aria-checked={crossChain}
+              data-active={crossChain ? 'true' : 'false'}
+            />
+          </div>
+
+          {crossChain && (
+            <div className="input-row" style={{ marginTop: 12 }}>
+              <div className="input-head" style={{ margin: 0 }}>
+                <span>EXTERNAL RECIPIENT ({selected.chainShort})</span>
+                <span>•</span>
+              </div>
+              <input
+                type="text"
+                placeholder={`Address on ${selected.chainLabel}`}
+                value={externalRecipient}
+                onChange={(e) => setExternalRecipient(e.target.value.trim())}
+                disabled={submitting}
+                spellCheck={false}
+              />
+              {externalRecipient && !isValidAddress(externalRecipient) && (
+                <span className="input-row__hint input-row__hint--warn">
+                  ✕ Not a valid EVM address.
+                </span>
+              )}
+            </div>
+          )}
+
           <div className="summary">
             <div className="summary__row">
               <span>BURN</span>
@@ -295,11 +421,19 @@ export function RedeemCard() {
               <strong className="mono">— pending</strong>
             </div>
             <div className="summary__row summary__row--total">
-              <span>YOU RECEIVE</span>
+              <span>{crossChain ? `DELIVERED TO ${selected.chainShort}` : 'YOU RECEIVE'}</span>
               <strong>
                 {formatAmount(receiveAmount, 6)} {allowBasket ? '(basket)' : selected.symbol}
               </strong>
             </div>
+            {crossChain && (
+              <p className="summary__hint">
+                Step 1: redeem lands on Push Chain (your UEA). Step 2: SDK routes the received{' '}
+                {selected.symbol} via Route 2 to <strong className="mono">
+                  {externalRecipient || '0x…'}
+                </strong> on {selected.chainLabel}.
+              </p>
+            )}
           </div>
 
           <button
@@ -312,24 +446,39 @@ export function RedeemCard() {
             {ctaLabel}
           </button>
 
-          {error && (
-            <div className="feedback feedback--error" style={{ marginTop: 16 }}>
+          {stage.kind === 'error' && (
+            <div className="feedback feedback--error">
               <div className="feedback__title">TRANSACTION FAILED</div>
-              <div className="mono">{error}</div>
+              <div className="mono">{stage.message}</div>
             </div>
           )}
-
-          {txHash && (
-            <div
-              className={`feedback ${confirmed ? 'feedback--success' : ''}`}
-              style={{ marginTop: 16 }}
-            >
+          {(stage.kind === 'step1-broadcasting' || stage.kind === 'step1-confirmed' ||
+            stage.kind === 'step2-signing' || stage.kind === 'step2-broadcasting' ||
+            stage.kind === 'step2-confirmed') && (
+            <div className={`feedback ${stage.kind === 'step2-confirmed' || (stage.kind === 'step1-confirmed' && !crossChain) ? 'feedback--success' : ''}`}>
               <div className="feedback__title">
-                {confirmed ? 'REDEMPTION CONFIRMED' : 'BROADCASTING'}
+                STEP 1 · {stage.kind === 'step1-broadcasting' ? 'BROADCASTING' : 'CONFIRMED'}
               </div>
-              <a className="link-mono" href={explorerTx(txHash)} target="_blank" rel="noreferrer">
-                {truncHash(txHash)} ↗
+              <a
+                className="link-mono"
+                href={explorerTx('prevHash' in stage ? stage.prevHash : stage.hash)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {truncHash('prevHash' in stage ? stage.prevHash : stage.hash)} ↗
               </a>
+              {(stage.kind === 'step2-signing' || stage.kind === 'step2-broadcasting' || stage.kind === 'step2-confirmed') && (
+                <>
+                  <div className="feedback__title" style={{ marginTop: 10 }}>
+                    STEP 2 · {stage.kind === 'step2-signing' ? 'SIGNING…' : stage.kind === 'step2-broadcasting' ? 'BROADCASTING' : 'CONFIRMED'}
+                  </div>
+                  {(stage.kind === 'step2-broadcasting' || stage.kind === 'step2-confirmed') && (
+                    <a className="link-mono" href={explorerTx(stage.hash)} target="_blank" rel="noreferrer">
+                      {truncHash(stage.hash)} ↗
+                    </a>
+                  )}
+                </>
+              )}
             </div>
           )}
         </>

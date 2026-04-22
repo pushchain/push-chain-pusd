@@ -13,15 +13,15 @@ const PushChainProviders = ({ children }: { children: ReactNode }) => {
     <PushUniversalWalletProvider
       config={{
         network: PushUI.CONSTANTS.PUSH_NETWORK.TESTNET,
-        app: {
-          title: 'PUSD',
-          description: 'A par-backed universal stablecoin on Push Chain.',
-        },
         login: {
           email: true,
           google: true,
-          wallet: true,
+          wallet: { enabled: true },
         },
+      }}
+      app={{
+        title: 'PUSD',
+        description: 'A par-backed universal stablecoin on Push Chain.',
       }}
       themeMode={PushUI.CONSTANTS.THEME.LIGHT}
       themeOverrides={{

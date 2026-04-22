@@ -4,6 +4,9 @@
  * Opens the Push wallet modal via `handleConnectToPushWallet()`. Used by
  * `/history` and by the action buttons on `/mint` / `/redeem` when there
  * is no connected account.
+ *
+ * Note: `useIsConnected` lives in `hooks/useIsConnected.ts` so this file
+ * only exports a component (Vite fast-refresh friendliness).
  */
 
 import { PushUI, usePushWalletContext } from '@pushchain/ui-kit';
@@ -43,10 +46,3 @@ export function ConnectedGate({
   );
 }
 
-/**
- * Helper: returns `true` when a universal account is connected.
- */
-export function useIsConnected(): boolean {
-  const { connectionStatus } = usePushWalletContext();
-  return connectionStatus === PushUI.CONSTANTS.CONNECTION.STATUS.CONNECTED;
-}

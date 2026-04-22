@@ -1,44 +1,126 @@
 /**
- * Footer — rule-framed colophon with contract addresses and external links.
+ * Footer — editorial colophon.
  *
- * Addresses come from env vars via contracts/config — never hard-coded.
+ * Layout (from the mockup):
+ *   [ PushUSD logo + tagline prose ] | [ PROTOCOL links ] | [ ELSEWHERE links ]
+ *   --- rule ---
+ *   © MMXXVI · Push USD · All serifs intentional.   | PUSD addr · PUSDManager addr
+ *
+ * Addresses come exclusively from env via contracts/config.
  */
 
-import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS, CHAIN_ID } from '../contracts/config';
+import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
 import { explorerAddress, truncAddr } from '../lib/format';
 
 export function Footer() {
+  const year = new Date().getFullYear();
+
   return (
     <footer className="footer">
-      <div className="footer__inner">
-        <div className="footer__left">
-          <div className="meta" style={{ marginBottom: 4 }}>
-            PUSD · PUSH CHAIN DONUT TESTNET · CHAIN {CHAIN_ID}
+      <div className="container">
+        <div className="footer__grid">
+          <div className="footer__brand">
+            <div className="footer__logo">
+              Push<em>USD</em>
+            </div>
+            <p className="footer__prose">
+              A universal dollar for applications that don&rsquo;t care which chain their
+              users walk in from. Issued on Push Chain. Redeemable against a basket.
+              Upgrade-gated, emergency-aware, audit-first.
+            </p>
           </div>
-          <div className="mono" style={{ fontSize: 11 }}>
-            PUSD{' '}
-            <a className="link-mono" href={explorerAddress(PUSD_ADDRESS)} target="_blank" rel="noreferrer">
-              {truncAddr(PUSD_ADDRESS)}
-            </a>
-            {'  ·  '}
-            MANAGER{' '}
-            <a className="link-mono" href={explorerAddress(PUSD_MANAGER_ADDRESS)} target="_blank" rel="noreferrer">
-              {truncAddr(PUSD_MANAGER_ADDRESS)}
-            </a>
+
+          <div>
+            <div className="footer__col-label">Protocol</div>
+            <ul className="footer__links">
+              <li>
+                <a href={explorerAddress(PUSD_ADDRESS)} target="_blank" rel="noreferrer">
+                  Contracts
+                </a>
+              </li>
+              <li>
+                <a href="/docs">Audit report</a>
+              </li>
+              <li>
+                <a href="/docs">Changelog</a>
+              </li>
+              <li>
+                <a href="/history">Status</a>
+              </li>
+            </ul>
+          </div>
+
+          <div>
+            <div className="footer__col-label">Elsewhere</div>
+            <ul className="footer__links">
+              <li>
+                <a href="https://donut.push.network" target="_blank" rel="noreferrer">
+                  Explorer ↗
+                </a>
+              </li>
+              <li>
+                <a href="https://push.org" target="_blank" rel="noreferrer">
+                  Push ↗
+                </a>
+              </li>
+              <li>
+                <a href="https://github.com/push-protocol" target="_blank" rel="noreferrer">
+                  GitHub ↗
+                </a>
+              </li>
+              <li>
+                <a href="https://docs.push.org" target="_blank" rel="noreferrer">
+                  Docs ↗
+                </a>
+              </li>
+            </ul>
           </div>
         </div>
-        <div className="footer__right">
-          <a className="link-mono" href="https://donut.push.network" target="_blank" rel="noreferrer">
-            EXPLORER ↗
-          </a>
-          <a className="link-mono" href="https://push.org" target="_blank" rel="noreferrer">
-            PUSH ↗
-          </a>
-          <a className="link-mono" href="https://docs.push.org" target="_blank" rel="noreferrer">
-            DOCS ↗
-          </a>
+
+        <div className="footer__row">
+          <span>
+            © MMXX{yearRoman(year - 2020)} · Push USD · <em>All serifs intentional.</em>
+          </span>
+          <span>
+            PUSD{' '}
+            <a
+              className="link-mono"
+              href={explorerAddress(PUSD_ADDRESS)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {truncAddr(PUSD_ADDRESS)}
+            </a>
+            {'   ·   '}
+            PUSDManager{' '}
+            <a
+              className="link-mono"
+              href={explorerAddress(PUSD_MANAGER_ADDRESS)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {truncAddr(PUSD_MANAGER_ADDRESS)}
+            </a>
+          </span>
         </div>
       </div>
     </footer>
   );
+}
+
+/** Small roman-numeral helper so MMXXVI stays brand-correct for years. */
+function yearRoman(offset: number): string {
+  // offset = years since 2020 — we only need the last two-ish digits in roman.
+  const values: Array<[number, string]> = [
+    [40, 'XL'], [10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I'],
+  ];
+  let n = Math.max(0, Math.floor(offset));
+  let out = '';
+  for (const [v, s] of values) {
+    while (n >= v) {
+      out += s;
+      n -= v;
+    }
+  }
+  return out || '0';
 }
