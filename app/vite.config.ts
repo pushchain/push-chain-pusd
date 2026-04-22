@@ -5,6 +5,7 @@ import { defineConfig } from 'vite'
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/push-chain-pusd-prod-deployment/',
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
