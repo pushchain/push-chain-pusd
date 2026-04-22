@@ -63,7 +63,7 @@ export function DispatchFeed() {
           <p className="dispatch__body">
             Awaiting first mint. Be the one who <em>lights the fuse</em>.
           </p>
-          <div className="dispatch__foot">window: ~20,000 blocks</div>
+          <div className="dispatch__foot">window: ~2,000 blocks</div>
         </div>
       </div>
     );

@@ -373,7 +373,7 @@ export default function ReservesPage() {
         <section className="section">
           <div className="section__header">
             <span>§ 04 · DISPATCH</span>
-            <span>LIVE · ~20,000 BLOCK WINDOW</span>
+            <span>LIVE · ~2,000 BLOCK WINDOW</span>
           </div>
           <DispatchFeed />
         </section>

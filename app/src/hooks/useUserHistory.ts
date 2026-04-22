@@ -21,7 +21,8 @@ import { TOKENS, tokenByAddress, type ReserveToken } from '../contracts/tokens';
 import { parseManagerLog, type ManagerEvent } from '../lib/events';
 import { getReadProvider } from '../lib/provider';
 
-const WINDOW_BLOCKS = 10_000n;
+// Donut Testnet RPC caps eth_getLogs range at ~2k blocks per call.
+const WINDOW_BLOCKS = 2_000n;
 const POLL_MS = 30_000;
 
 export type HistoryRow = {

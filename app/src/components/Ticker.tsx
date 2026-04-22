@@ -15,19 +15,22 @@
 import { useMemo } from 'react';
 import { useReserves } from '../hooks/useReserves';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
-import { formatAmount, formatPct } from '../lib/format';
+import { useProtocolStats } from '../hooks/useProtocolStats';
+import { useBlockMeta } from '../hooks/useBlockMeta';
+import { formatAmount, formatBlockNumber, formatPct } from '../lib/format';
 import { deriveInvariantState, normalizeToPUSD } from '../lib/invariants';
 
 export function Ticker() {
   const reserves = useReserves();
   const { totalSupply } = usePUSDBalance();
+  const { baseFeeBps, accruedFeesTotal } = useProtocolStats();
+  const { block, latencyMs } = useBlockMeta();
 
   const invariantState = useMemo(
     () => deriveInvariantState(reserves.totalReserves, totalSupply),
     [reserves.totalReserves, totalSupply],
   );
 
-  // Ratio of reserves (6dp) to supply (6dp).
   const ratioPct = (() => {
     if (totalSupply === 0n) return '—';
     return formatPct(reserves.totalReserves, totalSupply, 1);
@@ -38,11 +41,12 @@ export function Ticker() {
     [reserves.rows],
   );
 
-  // Supply formatted in whole millions with a sub-percent delta placeholder
-  // (24h deltas require an indexer — show a static bullet until we wire it).
   const supplyFormatted = formatAmount(normalizeToPUSD(totalSupply, 6), 6, {
     maxFractionDigits: 0,
   });
+
+  const blockLabel = block === null ? '—' : formatBlockNumber(block);
+  const latencyLabel = latencyMs === null ? '—' : (latencyMs / 1000).toFixed(2);
 
   return (
     <div className="ticker" aria-label="Live protocol ticker">
@@ -51,7 +55,7 @@ export function Ticker() {
           <span>PUSD</span>
           <strong>1.0000</strong>
           <em className={invariantState === 'ok' ? '' : 'down'}>
-            {invariantState === 'ok' ? '▲ peg' : invariantState === 'warning' ? '▲ watch' : '✕ halt'}
+            {invariantState === 'ok' ? '▲ peg' : invariantState === 'warning' ? '△ watch' : '✕ halt'}
           </em>
         </span>
 
@@ -65,6 +69,16 @@ export function Ticker() {
           <strong>{ratioPct}</strong>
         </span>
 
+        <span className="ticker__item">
+          <span>FEE</span>
+          <strong>{(baseFeeBps / 100).toFixed(2)}%</strong>
+        </span>
+
+        <span className="ticker__item">
+          <span>ACCRUED</span>
+          <strong>{formatAmount(accruedFeesTotal, 6, { maxFractionDigits: 0 })}</strong>
+        </span>
+
         {topShares.map((r) => (
           <span className="ticker__item" key={r.address}>
             <span>{r.symbol}·{r.chainShort}</span>
@@ -75,6 +89,12 @@ export function Ticker() {
         <span className="ticker__item">
           <span>ASSETS</span>
           <strong>{reserves.rows.length}</strong>
+        </span>
+
+        <span className="ticker__item">
+          <span>BLOCK</span>
+          <strong>{blockLabel}</strong>
+          <em style={{ color: 'var(--c-ink-mute)' }}>{latencyLabel}s</em>
         </span>
       </div>
     </div>

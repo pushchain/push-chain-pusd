@@ -175,7 +175,11 @@ export function MintCard() {
       {!isConnected ? (
         <ConnectedGate
           title="CONNECT TO MINT"
-          subtitle="Authorize a universal account to deposit from any supported origin chain."
+          subtitle="Authorize a universal account to deposit from any supported origin chain. Mint is 1:1 — no haircut, no rebase, no yield games."
+          links={[
+            { to: '/redeem', label: 'REDEEM →' },
+            { to: '/history', label: 'HISTORY →' },
+          ]}
         />
       ) : (
         <>

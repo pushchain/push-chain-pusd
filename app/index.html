@@ -6,6 +6,21 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content="PUSD — Universal stablecoin on Push Chain. Mint and redeem PUSD across any chain." />
     <title>PUSD — Universal Stablecoin</title>
+    <script>
+      // SPA deep-link rehydration — pairs with public/404.html for static hosts
+      // (GitHub Pages etc.) that can't serve index.html on arbitrary paths.
+      // On Netlify/Vercel this branch never runs because _redirects / vercel.json
+      // already route everything to / before the page loads.
+      (function () {
+        var l = window.location;
+        if (l.search && l.search[1] === '/') {
+          var decoded = l.search.slice(1).split('&').map(function (s) {
+            return s.replace(/~and~/g, '&');
+          }).join('?');
+          window.history.replaceState(null, '', l.pathname.slice(0, -1) + decoded + l.hash);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

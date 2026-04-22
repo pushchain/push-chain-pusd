@@ -1,16 +1,19 @@
 /**
  * EditorialBand — the thin newspaper-style strip at the very top of the page.
  *
- * Left: volume / issue / formatted date.
- * Right: live block number, network label, round-trip latency (seconds).
+ * Left:  VOL · NO · DATE
+ * Right: PUSD peg · circulation · collateral ratio · network chip
  *
- * Treats PUSD like a running publication — every session is an "issue".
- * Issue number is pegged to ISO-year × week so repeat visitors see it tick.
+ * We used to show BLOCK / LATENCY here — accurate but not meaningful to a
+ * user skimming the masthead. The "conditions" on a newspaper front page
+ * are the things a reader wants to glance and trust: supply, peg, ratio.
  */
 
 import { useMemo } from 'react';
-import { useBlockMeta } from '../hooks/useBlockMeta';
-import { formatBlockNumber } from '../lib/format';
+import { useReserves } from '../hooks/useReserves';
+import { usePUSDBalance } from '../hooks/usePUSDBalance';
+import { deriveInvariantState } from '../lib/invariants';
+import { formatAmount, formatPct } from '../lib/format';
 
 function isoWeek(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -31,8 +34,17 @@ function formatDate(d: Date): string {
     .toUpperCase();
 }
 
+function shortNumber(n: bigint): string {
+  // Whole units (already divided out of 6dp).
+  if (n >= 1_000_000_000n) return `${(Number(n) / 1_000_000_000).toFixed(2)}B`;
+  if (n >= 1_000_000n) return `${(Number(n) / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000n) return `${(Number(n) / 1_000).toFixed(1)}k`;
+  return n.toString();
+}
+
 export function EditorialBand() {
-  const { block, latencyMs } = useBlockMeta();
+  const reserves = useReserves();
+  const { totalSupply, loading: supplyLoading } = usePUSDBalance();
 
   const { vol, no, date } = useMemo(() => {
     const now = new Date();
@@ -46,10 +58,22 @@ export function EditorialBand() {
     };
   }, []);
 
-  const blockLabel = block === null ? '—' : formatBlockNumber(block);
-  const latencyLabel = latencyMs === null
+  const invariantState = useMemo(
+    () => deriveInvariantState(reserves.totalReserves, totalSupply),
+    [reserves.totalReserves, totalSupply],
+  );
+
+  const supplyWhole = totalSupply / 1_000_000n;
+  const ratioLabel = totalSupply === 0n
     ? '—'
-    : (latencyMs / 1000).toFixed(2);
+    : formatPct(reserves.totalReserves, totalSupply, 1);
+
+  const pegGlyph = invariantState === 'violation' ? '✕' : invariantState === 'warning' ? '△' : '▲';
+  const pegClass = invariantState === 'violation'
+    ? 'editorial-band__peg editorial-band__peg--down'
+    : invariantState === 'warning'
+      ? 'editorial-band__peg editorial-band__peg--warn'
+      : 'editorial-band__peg';
 
   return (
     <div className="editorial-band">
@@ -62,9 +86,19 @@ export function EditorialBand() {
           <span>{date}</span>
         </div>
         <div className="editorial-band__right">
-          <span>BLOCK <strong>{blockLabel}</strong></span>
+          <span className={pegClass}>
+            PEG <strong>$1.0000</strong> {pegGlyph}
+          </span>
+          <span>
+            SUPPLY <strong>{supplyLoading ? '—' : `${shortNumber(supplyWhole)} PUSD`}</strong>
+          </span>
+          <span>
+            RATIO <strong>{reserves.loading || supplyLoading ? '—' : ratioLabel}</strong>
+          </span>
+          <span>
+            RESERVES <strong>{reserves.loading ? '—' : formatAmount(reserves.totalReserves, 6, { maxFractionDigits: 0 })}</strong>
+          </span>
           <span>DONUT TESTNET</span>
-          <span>LATENCY <strong>{latencyLabel}</strong></span>
         </div>
       </div>
     </div>

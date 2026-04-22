@@ -38,7 +38,11 @@ export default function HistoryPage() {
           </div>
           <ConnectedGate
             title="CONNECT TO VIEW HISTORY"
-            subtitle="Your Deposited + Redeemed events will appear here once authorized."
+            subtitle="Your Deposited + Redeemed events will appear here once authorized. Nothing is stored off-chain — this page reads PUSDManager events directly."
+            links={[
+              { to: '/mint', label: 'MINT →' },
+              { to: '/redeem', label: 'REDEEM →' },
+            ]}
           />
         </section>
       </div>
@@ -57,7 +61,7 @@ export default function HistoryPage() {
                 {truncAddr(account)}
               </a>
             )}
-            {' '}· last 10,000 blocks · updated {history.updatedAt ? formatRelative(history.updatedAt, now) : '—'}
+            {' '}· last 2,000 blocks · updated {history.updatedAt ? formatRelative(history.updatedAt, now) : '—'}
           </p>
         </div>
 

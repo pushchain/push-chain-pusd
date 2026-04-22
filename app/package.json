@@ -8,7 +8,7 @@
     "build": "tsc && vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "deploy": "yarn build && gh-pages -d dist -r https://github.com/pushchain/push-chain-pusd-prod-deployment.git -b gh-pages"
+    "deploy": "yarn build && echo 'pusd.push.org' > ./dist/CNAME && gh-pages -d dist -r https://github.com/pushchain/push-chain-pusd-prod-deployment.git -b gh-pages"
   },
   "dependencies": {
     "@fontsource/fraunces": "^5.1.0",

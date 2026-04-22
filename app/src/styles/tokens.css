@@ -16,6 +16,7 @@
   --c-gold:       #d4b47a;   /* numeric accent (balances, APY later) */
   --c-oxblood:    #7a2a2a;   /* errors, invariant violation */
   --c-jade:       #2a6b52;   /* success, in-range, I-01 holds */
+  --c-paper-warm: #ede7d7;   /* track bg for distribution bars */
 
   /* --- Typography --- */
   --f-display: 'Fraunces', 'Charter', 'Georgia', serif;

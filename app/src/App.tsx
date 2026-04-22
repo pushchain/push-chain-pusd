@@ -1,32 +1,33 @@
 /**
  * App.tsx — top-level shell.
  *
- *   EditorialBand            ← VOL · NO · DATE | BLOCK · LATENCY
+ *   EditorialBand            ← VOL · NO · DATE | PEG | SUPPLY | RATIO | RESERVES | NETWORK
  *   Masthead                 ← logo + nav + connect
  *   Routes                   ← each page owns its own container / full-bleed layout
  *   Footer                   ← editorial colophon
  *
- * The InvariantRibbon is no longer mounted globally — solvency status is
- * surfaced by the Ticker on the editorial home and by the CTA state inside
- * MintCard / RedeemCard. Keeping a global ribbon made the page feel crowded
- * on top of the EditorialBand.
- *
  * Routes:
- *   /          ReservesPage  — editorial home
- *   /mint      MintPage
- *   /redeem    RedeemPage
- *   /reserves  alias → ReservesPage
- *   /history   HistoryPage
- *   *          → /
+ *   /           ReservesPage         — editorial home (narrative + reserves + dispatch)
+ *   /mint       MintPage
+ *   /redeem     RedeemPage
+ *   /reserves   ReservesDetailPage   — focused book-of-reserves view
+ *   /history    HistoryPage          — user activity
+ *   /changelog  ChangelogPage        — editorial release notes
+ *   *           → /
+ *
+ * /docs is an external link (pusd.push.org/docs) and is NOT handled in-app —
+ * see Masthead for the anchor with target=_blank.
  */
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { EditorialBand } from './components/EditorialBand';
 import { Footer } from './components/Footer';
 import { Masthead } from './components/Masthead';
+import ChangelogPage from './pages/ChangelogPage';
 import HistoryPage from './pages/HistoryPage';
 import MintPage from './pages/MintPage';
 import RedeemPage from './pages/RedeemPage';
+import ReservesDetailPage from './pages/ReservesDetailPage';
 import ReservesPage from './pages/ReservesPage';
 
 function App() {
@@ -40,8 +41,9 @@ function App() {
             <Route path="/" element={<ReservesPage />} />
             <Route path="/mint" element={<MintPage />} />
             <Route path="/redeem" element={<RedeemPage />} />
-            <Route path="/reserves" element={<ReservesPage />} />
+            <Route path="/reserves" element={<ReservesDetailPage />} />
             <Route path="/history" element={<HistoryPage />} />
+            <Route path="/changelog" element={<ChangelogPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

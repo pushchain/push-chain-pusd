@@ -35,17 +35,17 @@ export function Footer() {
             <ul className="footer__links">
               <li>
                 <a href={explorerAddress(PUSD_ADDRESS)} target="_blank" rel="noreferrer">
-                  Contracts
+                  Contracts ↗
                 </a>
               </li>
               <li>
-                <a href="/docs">Audit report</a>
+                <a href="/reserves">Reserves</a>
               </li>
               <li>
-                <a href="/docs">Changelog</a>
+                <a href="/changelog">Changelog</a>
               </li>
               <li>
-                <a href="/history">Status</a>
+                <a href="/history">Activity</a>
               </li>
             </ul>
           </div>
@@ -54,6 +54,20 @@ export function Footer() {
             <div className="footer__col-label">Elsewhere</div>
             <ul className="footer__links">
               <li>
+                <a href="https://pusd.push.org/docs" target="_blank" rel="noreferrer">
+                  Docs ↗
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://github.com/pushchain/push-chain-pusd"
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  GitHub ↗
+                </a>
+              </li>
+              <li>
                 <a href="https://donut.push.network" target="_blank" rel="noreferrer">
                   Explorer ↗
                 </a>
@@ -61,16 +75,6 @@ export function Footer() {
               <li>
                 <a href="https://push.org" target="_blank" rel="noreferrer">
                   Push ↗
-                </a>
-              </li>
-              <li>
-                <a href="https://github.com/push-protocol" target="_blank" rel="noreferrer">
-                  GitHub ↗
-                </a>
-              </li>
-              <li>
-                <a href="https://docs.push.org" target="_blank" rel="noreferrer">
-                  Docs ↗
                 </a>
               </li>
             </ul>

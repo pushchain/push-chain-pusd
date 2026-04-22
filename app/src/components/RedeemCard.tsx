@@ -82,6 +82,17 @@ export function RedeemCard() {
     }
   }, [amount, PushChain]);
 
+  // Pre-flight Route 2 check. The SDK's MOVEABLE.TOKEN table doesn't yet
+  // cover every chain (notably Ethereum Sepolia on some SDK versions). If
+  // it's missing, the Route 2 forward will throw "Chain X is not supported
+  // for CEA operations". We detect that here so the UI can warn up front
+  // and let the user still redeem on Push Chain (step 1) without forwarding.
+  const crossChainSupported = useMemo(() => {
+    if (!PushChain) return true; // optimistic until SDK loads
+    const [chainKey, symbolKey] = selected.moveableKey;
+    return resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey) !== undefined;
+  }, [PushChain, selected.moveableKey]);
+
   const feeAmount = useMemo(() => {
     if (parsedAmount === 0n) return 0n;
     return (parsedAmount * BigInt(baseFeeBps)) / 10_000n;
@@ -93,6 +104,7 @@ export function RedeemCard() {
   const solventHalt = invariants.state === 'violation';
   const pushRecipientValid = isValidAddress(pushRecipient);
   const externalRecipientValid = !crossChain || isValidAddress(externalRecipient);
+  const crossChainBlocked = crossChain && !crossChainSupported;
   const submitting =
     stage.kind === 'signing' ||
     stage.kind === 'step1-broadcasting' ||
@@ -183,6 +195,7 @@ export function RedeemCard() {
     if (!amountValid) return 'ENTER AN AMOUNT';
     if (exceedsBalance) return 'INSUFFICIENT PUSD';
     if (!pushRecipientValid) return 'INVALID PUSH RECIPIENT';
+    if (crossChainBlocked) return `${selected.chainShort} FORWARD UNAVAILABLE — TOGGLE OFF`;
     if (crossChain && !externalRecipientValid) return 'INVALID EXTERNAL RECIPIENT';
     if (crossChain) return `REDEEM → FORWARD TO ${selected.chainShort} →`;
     return `REDEEM ${formatAmount(parsedAmount, 6, { maxFractionDigits: 2 })} PUSD →`;
@@ -194,6 +207,7 @@ export function RedeemCard() {
     exceedsBalance ||
     solventHalt ||
     !pushRecipientValid ||
+    crossChainBlocked ||
     (crossChain && !externalRecipientValid);
 
   const ctaVariant = solventHalt ? 'btn--danger' : allowBasket ? 'btn--danger' : 'btn--primary';
@@ -217,7 +231,11 @@ export function RedeemCard() {
       {!isConnected ? (
         <ConnectedGate
           title="CONNECT TO REDEEM"
-          subtitle="Authorize a universal account to burn PUSD and withdraw reserves."
+          subtitle="Authorize a universal account to burn PUSD and withdraw reserves at par — preferred, basket, or forwarded to any supported chain."
+          links={[
+            { to: '/mint', label: 'MINT →' },
+            { to: '/history', label: 'HISTORY →' },
+          ]}
         />
       ) : (
         <>
@@ -368,6 +386,9 @@ export function RedeemCard() {
             <div>
               <div className="toggle-row__label">
                 RECEIVE ON {selected.chainLabel} {crossChain ? '[ON]' : '[OFF]'}
+                {!crossChainSupported && (
+                  <span style={{ color: 'var(--c-gold)', marginLeft: 8 }}>· SDK UNSUPPORTED</span>
+                )}
               </div>
               <div className="toggle-row__sub">
                 Two-step flow — redeem on Push Chain, then route the payout to an address on{' '}
@@ -382,7 +403,23 @@ export function RedeemCard() {
             />
           </div>
 
-          {crossChain && (
+          {crossChain && !crossChainSupported && (
+            <div className="feedback feedback--warn" style={{ marginTop: 12 }}>
+              <div className="feedback__title">SDK LIMITATION · {selected.chainLabel}</div>
+              <div className="mono" style={{ marginTop: 4 }}>
+                The Push Chain SDK on this client does not yet support CEA-routed
+                payouts to <strong>{selected.chainLabel}</strong>. Route 2 forwards to
+                this chain will fail with "Chain {selected.moveableKey[0]} is not
+                supported for CEA operations." You can still redeem to your Push Chain
+                address — toggle "RECEIVE ON {selected.chainLabel}" off, or pick a
+                different preferred asset. This is not a Route 3 case (origin and
+                destination chains differ — Route 2 is correct); it's a coverage gap
+                in the SDK's MOVEABLE.TOKEN table for this chain.
+              </div>
+            </div>
+          )}
+
+          {crossChain && crossChainSupported && (
             <div className="input-row" style={{ marginTop: 12 }}>
               <div className="input-head" style={{ margin: 0 }}>
                 <span>EXTERNAL RECIPIENT ({selected.chainShort})</span>
