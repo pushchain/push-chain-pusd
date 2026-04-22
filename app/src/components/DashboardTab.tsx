@@ -1,192 +1,225 @@
-import { usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
+import { PushUI, usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
 import { ethers } from 'ethers';
 import { useEffect, useState } from 'react';
 import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS, RPC_URL } from '../contracts/config';
 
 const PUSD_ABI = [
-  "function balanceOf(address account) external view returns (uint256)",
-  "function totalSupply() external view returns (uint256)"
+  "function balanceOf(address) view returns (uint256)",
+  "function totalSupply() view returns (uint256)",
 ];
-
 const MANAGER_ABI = [
-  "function getSupportedTokensCount() external view returns (uint256)",
-  "function baseFee() external view returns (uint256)",
-  "function getSupportedTokenAt(uint256 index) external view returns (address)",
-  "function getTokenInfo(address token) external view returns (tuple(string symbol, string name, uint8 decimals, bool isActive, uint256 balance))"
+  "function getSupportedTokensCount() view returns (uint256)",
+  "function baseFee() view returns (uint256)",
+  "function getSupportedTokenAt(uint256) view returns (address)",
 ];
-
 const ERC20_ABI = [
-  "function balanceOf(address account) external view returns (uint256)",
-  "function symbol() external view returns (string)",
-  "function decimals() external view returns (uint8)"
+  "function balanceOf(address) view returns (uint256)",
+  "function symbol() view returns (string)",
+  "function decimals() view returns (uint8)",
 ];
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
+
+type Reserve = { symbol: string; balance: number; decimals: number };
+
+function fmt(n: number, dec = 2) {
+  return n.toLocaleString('en-US', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+}
+function shortAddr(a: string) { return a ? `${a.slice(0, 6)}…${a.slice(-4)}` : '—'; }
 
 export function DashboardTab() {
   const { connectionStatus } = usePushWalletContext();
   const { pushChainClient } = usePushChainClient();
 
-  const [balance, setBalance] = useState('0');
-  const [totalSupply, setTotalSupply] = useState('0');
-  const [tokensCount, setTokensCount] = useState(0);
-  const [baseFee, setBaseFee] = useState('0');
-  const [reserves, setReserves] = useState<Array<{symbol: string, balance: string, decimals: number}>>([]);
+  const [userBalance, setUserBalance]   = useState(0);
+  const [totalSupply, setTotalSupply]   = useState(0);
+  const [tokensCount, setTokensCount]   = useState(0);
+  const [baseFee, setBaseFee]           = useState('—');
+  const [reserves, setReserves]         = useState<Reserve[]>([]);
+  const [loading, setLoading]           = useState(true);
+
+  const isConnected = connectionStatus === PushUI.CONSTANTS.CONNECTION.STATUS.CONNECTED;
+  const account = pushChainClient?.universal?.account ?? '';
 
   useEffect(() => {
-    const fetchData = async () => {
+    const load = async () => {
+      setLoading(true);
       try {
-        const pusdContract = new ethers.Contract(PUSD_ADDRESS, PUSD_ABI, provider);
-        const managerContract = new ethers.Contract(PUSD_MANAGER_ADDRESS, MANAGER_ABI, provider);
+        const pusd = new ethers.Contract(PUSD_ADDRESS, PUSD_ABI, provider);
+        const mgr  = new ethers.Contract(PUSD_MANAGER_ADDRESS, MANAGER_ABI, provider);
 
         const [supply, count, fee] = await Promise.all([
-          pusdContract.totalSupply(),
-          managerContract.getSupportedTokensCount(),
-          managerContract.baseFee()
+          pusd.totalSupply(),
+          mgr.getSupportedTokensCount(),
+          mgr.baseFee(),
         ]);
 
-        // PUSD uses 6 decimals
-        setTotalSupply(ethers.formatUnits(supply, 6));
+        setTotalSupply(Number(ethers.formatUnits(supply, 6)));
         setTokensCount(Number(count));
-        setBaseFee((Number(fee) / 100).toFixed(2));
+        setBaseFee((Number(fee) / 100).toFixed(2) + '%');
 
-        // Fetch reserves for all supported tokens (they also use 6 decimals)
-        const reservesData = [];
-        for (let i = 0; i < Number(count); i++) {
+        const n = Number(count);
+        const resArr: Reserve[] = [];
+        for (let i = 0; i < n; i++) {
           try {
-            const tokenAddress = await managerContract.getSupportedTokenAt(i);
-            const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, provider);
-            const [symbol, decimals, balance] = await Promise.all([
-              tokenContract.symbol(),
-              tokenContract.decimals(),
-              tokenContract.balanceOf(PUSD_MANAGER_ADDRESS)
+            const addr = await mgr.getSupportedTokenAt(i);
+            const tok  = new ethers.Contract(addr, ERC20_ABI, provider);
+            const [sym, dec, bal] = await Promise.all([
+              tok.symbol(), tok.decimals(), tok.balanceOf(PUSD_MANAGER_ADDRESS),
             ]);
-            reservesData.push({
-              symbol,
-              balance: ethers.formatUnits(balance, decimals),
-              decimals: Number(decimals)
-            });
-          } catch (err) {
-            console.error(`Error fetching token ${i}:`, err);
-          }
+            resArr.push({ symbol: sym, decimals: Number(dec), balance: Number(ethers.formatUnits(bal, dec)) });
+          } catch { /* skip bad tokens */ }
         }
-        setReserves(reservesData);
+        setReserves(resArr);
 
-        if (connectionStatus === 'connected' && pushChainClient?.universal.account) {
-          const bal = await pusdContract.balanceOf(pushChainClient.universal.account);
-          // PUSD uses 6 decimals
-          setBalance(ethers.formatUnits(bal, 6));
+        if (isConnected && account) {
+          const b = await pusd.balanceOf(account);
+          setUserBalance(Number(ethers.formatUnits(b, 6)));
         }
-      } catch (err) {
-        console.error('Error fetching data:', err);
-      }
+      } catch { /* no-op */ }
+      setLoading(false);
     };
 
-    fetchData();
-    const interval = setInterval(fetchData, 15000);
-    return () => clearInterval(interval);
-  }, [connectionStatus, pushChainClient]);
+    load();
+    const id = setInterval(load, 15000);
+    return () => clearInterval(id);
+  }, [isConnected, account]);
+
+  const totalReserve = reserves.reduce((s, r) => s + r.balance, 0);
+
+  const card = (extra?: React.CSSProperties): React.CSSProperties => ({
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
+    borderRadius: 14, padding: '20px 22px', ...extra,
+  });
 
   return (
-    <div className="space-y-6">
-      <h2 className="text-2xl font-bold">Dashboard</h2>
-
-      {connectionStatus !== 'connected' ? (
-        <div className="bg-gray-800 rounded-lg p-8 text-center">
-          <p className="text-gray-400">Connect your wallet to view your dashboard</p>
-        </div>
-      ) : (
-        <>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gradient-to-br from-blue-900 to-blue-800 rounded-lg p-6">
-              <p className="text-sm text-blue-200 mb-2">Your PUSD Balance</p>
-              <p className="text-3xl font-bold">{parseFloat(balance).toFixed(6)}</p>
-              <p className="text-sm text-blue-200 mt-1">PUSD</p>
-            </div>
-
-            <div className="bg-gradient-to-br from-purple-900 to-purple-800 rounded-lg p-6">
-              <p className="text-sm text-purple-200 mb-2">Your Wallet</p>
-              <p className="text-sm font-mono break-all">{pushChainClient?.universal.account}</p>
-            </div>
-          </div>
-
-          <div className="bg-gray-800 rounded-lg p-6">
-            <h3 className="text-xl font-semibold mb-4">Your Assets</h3>
-            {parseFloat(balance) > 0 ? (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between bg-gray-700 rounded-lg p-4">
-                  <div className="flex items-center space-x-3">
-                    <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center font-bold">
-                      P
-                    </div>
-                    <div>
-                      <p className="font-semibold">PUSD</p>
-                      <p className="text-sm text-gray-400">Push USD Stablecoin</p>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold">{parseFloat(balance).toFixed(6)}</p>
-                    <p className="text-sm text-gray-400">≈ ${parseFloat(balance).toFixed(2)}</p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <div className="text-center py-8 text-gray-400">
-                <p>No assets yet. Mint some PUSD to get started!</p>
-              </div>
-            )}
-          </div>
-        </>
-      )}
-
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold mb-4">Protocol Statistics</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="bg-gray-700 rounded-lg p-4">
-            <p className="text-sm text-gray-400 mb-1">Total Supply</p>
-            <p className="text-2xl font-bold">{parseFloat(totalSupply).toFixed(2)}</p>
-            <p className="text-sm text-gray-400">PUSD</p>
-          </div>
-
-          <div className="bg-gray-700 rounded-lg p-4">
-            <p className="text-sm text-gray-400 mb-1">Supported Tokens</p>
-            <p className="text-2xl font-bold">{tokensCount}</p>
-            <p className="text-sm text-gray-400">Stablecoins</p>
-          </div>
-
-          <div className="bg-gray-700 rounded-lg p-4">
-            <p className="text-sm text-gray-400 mb-1">Base Fee</p>
-            <p className="text-2xl font-bold">{baseFee}%</p>
-            <p className="text-sm text-gray-400">Per transaction</p>
-          </div>
-        </div>
+    <div style={{ maxWidth: 900, margin: '0 auto' }}>
+      {/* ── Page header ── */}
+      <div style={{ marginBottom: 32 }}>
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 6 }}>Dashboard</div>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Live protocol stats and your PUSD position — refreshes every 15 seconds.</div>
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold mb-4">Push Chain Reserves</h3>
-        {reserves.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {reserves.map((reserve, idx) => (
-              <div key={idx} className="bg-gray-700 rounded-lg p-4">
-                <p className="text-sm text-gray-400 mb-1">{reserve.symbol}</p>
-                <p className="text-xl font-bold">{parseFloat(reserve.balance).toFixed(6)}</p>
-                <p className="text-xs text-gray-400 mt-1">Held in PUSDManager</p>
-              </div>
-            ))}
+      {/* ── User balance (connected only) ── */}
+      {isConnected && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16, marginBottom: 24 }}>
+          {/* Balance hero */}
+          <div style={{
+            ...card(),
+            background: 'linear-gradient(135deg, rgba(79,142,247,0.15) 0%, rgba(124,95,247,0.15) 100%)',
+            border: '1px solid rgba(79,142,247,0.3)',
+          }}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600, letterSpacing: 0.5 }}>YOUR PUSD BALANCE</div>
+            <div style={{ fontSize: 36, fontWeight: 800, letterSpacing: '-1px', color: 'var(--accent)' }}>
+              {loading ? '…' : `$${fmt(userBalance)}`}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>
+              ≈ {fmt(userBalance)} PUSD · 1:1 USD peg
+            </div>
           </div>
+          {/* Wallet */}
+          <div style={card()}>
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10, fontWeight: 600, letterSpacing: 0.5 }}>UNIVERSAL ACCOUNT</div>
+            <div style={{ fontFamily: 'monospace', fontSize: 13, color: 'var(--text-primary)', wordBreak: 'break-all', marginBottom: 8 }}>
+              {account || '—'}
+            </div>
+            {account && (
+              <a href={`https://donut.push.network/address/${account}`} target="_blank" rel="noopener noreferrer"
+                style={{ fontSize: 12, color: 'var(--accent)' }}>
+                View on Explorer ↗
+              </a>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Protocol stats strip ── */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 12, marginBottom: 28 }}>
+        {[
+          { label: 'Total PUSD Supply', value: loading ? '…' : `$${fmt(totalSupply)}`, sub: 'PUSD minted' },
+          { label: 'Collateral Ratio',  value: '100%', sub: 'Fully backed' },
+          { label: 'Supported Tokens',  value: loading ? '…' : String(tokensCount), sub: 'Stablecoins' },
+          { label: 'Base Fee',          value: loading ? '…' : baseFee, sub: 'Per redemption' },
+        ].map(s => (
+          <div key={s.label} style={{ ...card(), textAlign: 'center' }}
+            onMouseEnter={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border-glow)'; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLDivElement).style.borderColor = 'var(--border)'; }}
+          >
+            <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 4 }}>{s.value}</div>
+            <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{s.sub}</div>
+            <div style={{ fontSize: 10, color: 'var(--text-muted)', marginTop: 2, opacity: 0.7 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Reserves ── */}
+      <div style={card({ marginBottom: 24 })}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>Reserve Breakdown</div>
+          <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+            Total: <span style={{ color: 'var(--text-primary)', fontWeight: 600 }}>${fmt(totalReserve)}</span>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 14 }}>Loading reserves…</div>
+        ) : reserves.length === 0 ? (
+          <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--text-muted)', fontSize: 14 }}>No reserves found</div>
         ) : (
-          <div className="text-center py-8 text-gray-400">
-            <p>Loading reserves...</p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            {reserves
+              .sort((a, b) => b.balance - a.balance)
+              .map((r, i) => {
+                const pct = totalReserve > 0 ? (r.balance / totalReserve) * 100 : 0;
+                const barColor = i % 3 === 0 ? '#4f8ef7' : i % 3 === 1 ? '#22d3a5' : '#7c5ff7';
+                return (
+                  <div key={r.symbol + i}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6, fontSize: 13 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <div style={{ width: 8, height: 8, borderRadius: '50%', background: barColor }} />
+                        <span style={{ fontWeight: 600 }}>{r.symbol}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 16, color: 'var(--text-secondary)' }}>
+                        <span>{fmt(r.balance, 4)}</span>
+                        <span style={{ minWidth: 48, textAlign: 'right', color: 'var(--text-muted)' }}>{pct.toFixed(1)}%</span>
+                      </div>
+                    </div>
+                    <div style={{ height: 6, background: 'var(--bg-elevated)', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', width: `${pct}%`, borderRadius: 4,
+                        background: barColor, transition: 'width 0.6s ease',
+                      }} />
+                    </div>
+                  </div>
+                );
+              })}
           </div>
         )}
       </div>
 
-      <div className="bg-gray-800 rounded-lg p-6">
-        <h3 className="text-xl font-semibold mb-4">Recent Activity</h3>
-        <div className="text-center py-8 text-gray-400">
-          <p>No recent activity</p>
-          <p className="text-sm mt-2">Your transactions will appear here</p>
-        </div>
+      {/* ── Contract addresses ── */}
+      <div style={card()}>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 16 }}>Contracts</div>
+        {[
+          { label: 'PUSD Token',    addr: PUSD_ADDRESS },
+          { label: 'PUSDManager',   addr: PUSD_MANAGER_ADDRESS },
+        ].map((c, i, arr) => (
+          <div key={c.label} style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            flexWrap: 'wrap', gap: 8,
+            padding: '12px 0',
+            borderBottom: i < arr.length - 1 ? '1px solid var(--border)' : 'none',
+          }}>
+            <div>
+              <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-muted)', marginBottom: 2 }}>{c.label}</div>
+              <div style={{ fontFamily: 'monospace', fontSize: 12, color: 'var(--text-secondary)' }}>{shortAddr(c.addr)}</div>
+            </div>
+            <a href={`https://donut.push.network/address/${c.addr}`} target="_blank" rel="noopener noreferrer"
+              style={{ fontSize: 12, color: 'var(--accent)', fontFamily: 'monospace', wordBreak: 'break-all' }}>
+              {c.addr}
+            </a>
+          </div>
+        ))}
       </div>
     </div>
   );

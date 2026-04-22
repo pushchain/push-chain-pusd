@@ -1,0 +1,1069 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>The Push Ledger · Vol. I</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;0,9..144,800;1,9..144,400;1,9..144,500;1,9..144,600&family=IBM+Plex+Mono:wght@300;400;500;600&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #0f0d0a;          /* warm espresso */
+    --paper-2: #15120e;         /* slightly lifted cards */
+    --paper-3: #1a1612;         /* hover / accent panels */
+    --ink: #ece5d6;             /* aged paper, inverted */
+    --ink-2: #a89d88;           /* secondary */
+    --ink-3: #6b6356;           /* muted */
+    --rule: #2a2520;            /* hairlines */
+    --rule-soft: #1e1a16;
+    --magenta: #dd44b9;         /* Push brand */
+    --gold: #d4b47a;            /* newsprint highlighter */
+    --green: #7fb394;           /* solvent / live */
+    --red:   #d66a6a;           /* emergency */
+
+    --serif: "Fraunces", Georgia, "Times New Roman", serif;
+    --sans:  "Inter", -apple-system, "Segoe UI", system-ui, sans-serif;
+    --mono:  "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--paper); color: var(--ink); }
+  body {
+    font-family: var(--sans);
+    font-size: 14px;
+    line-height: 1.45;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    min-height: 100vh;
+    /* subtle grain — simulate paper fiber on dark */
+    background-image:
+      radial-gradient(rgba(255,245,220,0.015) 1px, transparent 1px),
+      radial-gradient(rgba(255,245,220,0.008) 1px, transparent 1px);
+    background-size: 3px 3px, 7px 7px;
+    background-position: 0 0, 2px 2px;
+  }
+  a { color: inherit; text-decoration: none; }
+
+  /* =============== Layout primitives =============== */
+
+  .page {
+    max-width: 1440px;
+    margin: 0 auto;
+    padding: 28px 48px 80px;
+  }
+
+  .rule { height: 1px; background: var(--rule); margin: 0; }
+  .rule-double {
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    height: 4px;
+  }
+  .rule-thick { height: 2px; background: var(--ink); margin: 0; }
+
+  .label {
+    font-family: var(--sans);
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--ink-3);
+  }
+
+  .num { font-family: var(--mono); font-feature-settings: "tnum" 1; }
+  .serif { font-family: var(--serif); }
+  .italic { font-style: italic; }
+
+  /* =============== Masthead =============== */
+
+  .masthead {
+    display: grid;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: end;
+    padding-bottom: 16px;
+    gap: 24px;
+  }
+  .mast-left, .mast-right {
+    display: flex; flex-direction: column; gap: 4px;
+    font-size: 11px; color: var(--ink-2);
+    font-family: var(--mono); letter-spacing: 0.02em;
+  }
+  .mast-right { align-items: flex-end; text-align: right; }
+
+  .mast-title {
+    font-family: var(--serif);
+    font-weight: 600;
+    font-variation-settings: "opsz" 144;
+    font-size: 72px;
+    line-height: 0.9;
+    letter-spacing: -0.02em;
+    text-align: center;
+    margin: 0;
+    color: var(--ink);
+  }
+  .mast-title .the { font-style: italic; font-weight: 400; color: var(--ink-2); font-size: 36px; vertical-align: middle; margin-right: 10px; font-variation-settings: "opsz" 72; }
+
+  .mast-dot {
+    display: inline-block; width: 7px; height: 7px; border-radius: 50%;
+    background: var(--green); margin-right: 6px;
+    box-shadow: 0 0 8px rgba(127,179,148,0.5);
+    animation: livepulse 2.4s ease-in-out infinite;
+  }
+  @keyframes livepulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.55; transform: scale(0.9); }
+  }
+
+  .mast-nav {
+    display: flex; justify-content: center; gap: 28px;
+    padding: 10px 0 0;
+    font-family: var(--sans);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-2);
+  }
+  .mast-nav a { position: relative; padding: 4px 0; cursor: pointer; }
+  .mast-nav a.active { color: var(--ink); }
+  .mast-nav a.active::after {
+    content: ""; position: absolute; left: 0; right: 0; bottom: -1px;
+    height: 2px; background: var(--magenta);
+  }
+  .mast-nav a:hover:not(.active) { color: var(--ink); }
+
+  .mast-rules { margin: 10px 0 22px; }
+
+  .btn-connect {
+    font-family: var(--sans); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--paper); background: var(--ink);
+    border: none; padding: 9px 14px; cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .btn-connect:hover { background: var(--magenta); color: #fff; }
+
+  /* =============== Hero lede =============== */
+
+  .hero {
+    padding: 40px 0 36px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 40px;
+  }
+  .hero h1 {
+    font-family: var(--serif);
+    font-weight: 500;
+    font-variation-settings: "opsz" 144;
+    font-size: 76px;
+    line-height: 1.02;
+    letter-spacing: -0.025em;
+    margin: 0;
+    max-width: 980px;
+  }
+  .hero h1 .em {
+    font-style: italic; font-weight: 500;
+    background-image: linear-gradient(transparent 72%, var(--magenta) 72%, var(--magenta) 82%, transparent 82%);
+    padding: 0 2px;
+  }
+  .hero h1 .em-gold {
+    font-style: italic; font-weight: 500;
+    background-image: linear-gradient(transparent 72%, var(--gold) 72%, var(--gold) 82%, transparent 82%);
+    padding: 0 2px;
+  }
+  .hero-sub {
+    font-family: var(--serif);
+    font-size: 18px; line-height: 1.5;
+    color: var(--ink-2);
+    max-width: 440px;
+    text-align: right;
+    font-style: italic;
+    font-weight: 400;
+  }
+  .hero-sub .caps {
+    display: block;
+    font-family: var(--sans); font-style: normal;
+    font-size: 10px; font-weight: 600;
+    letter-spacing: 0.22em; text-transform: uppercase;
+    color: var(--ink-3); margin-bottom: 10px;
+  }
+
+  /* =============== KPI Strip =============== */
+
+  .kpi-strip {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+  }
+  .kpi {
+    padding: 22px 24px 20px;
+    border-right: 1px solid var(--rule);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .kpi:last-child { border-right: none; }
+  .kpi .label { margin-bottom: 2px; }
+  .kpi .big {
+    font-family: var(--serif);
+    font-variation-settings: "opsz" 144;
+    font-weight: 500;
+    font-size: 44px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+    color: var(--ink);
+    font-feature-settings: "tnum" 1, "lnum" 1;
+  }
+  .kpi .big .dec { color: var(--ink-2); font-size: 32px; }
+  .kpi .delta {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--green); letter-spacing: 0.02em;
+  }
+  .kpi .delta.down { color: var(--red); }
+  .kpi .delta.flat { color: var(--ink-3); }
+  .kpi svg.spark { width: 100%; height: 28px; display: block; margin-top: 4px; opacity: 0.85; }
+
+  /* =============== Ticker =============== */
+
+  .ticker-rail {
+    border-bottom: 1px solid var(--rule);
+    overflow: hidden;
+    background: var(--paper-2);
+    height: 38px;
+    display: flex; align-items: center;
+    position: relative;
+  }
+  .ticker-rail::before, .ticker-rail::after {
+    content: ""; position: absolute; top: 0; bottom: 0; width: 60px; z-index: 2;
+    pointer-events: none;
+  }
+  .ticker-rail::before { left: 0;  background: linear-gradient(90deg, var(--paper-2), transparent); }
+  .ticker-rail::after  { right: 0; background: linear-gradient(-90deg, var(--paper-2), transparent); }
+  .ticker-tag {
+    position: absolute; left: 14px; top: 50%; transform: translateY(-50%);
+    z-index: 3; background: var(--paper-2);
+    padding: 4px 10px 4px 0;
+    font-family: var(--sans); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--magenta);
+  }
+  .ticker-track {
+    display: flex; gap: 48px;
+    padding-left: 120px;
+    white-space: nowrap;
+    animation: scroll 55s linear infinite;
+  }
+  .ticker-item {
+    font-family: var(--mono); font-size: 12px;
+    color: var(--ink); letter-spacing: 0.02em;
+  }
+  .ticker-item .sym { color: var(--ink-2); margin-right: 8px; }
+  .ticker-item .delta-up { color: var(--green); margin-left: 8px; }
+  .ticker-item .delta-dn { color: var(--red); margin-left: 8px; }
+  @keyframes scroll {
+    from { transform: translateX(0); }
+    to   { transform: translateX(-50%); }
+  }
+
+  /* =============== Main columns =============== */
+
+  .section-head {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 28px 0 14px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 18px;
+  }
+  .section-head h2 {
+    font-family: var(--serif); font-weight: 500;
+    font-variation-settings: "opsz" 144;
+    font-size: 28px; letter-spacing: -0.015em; margin: 0;
+    color: var(--ink);
+  }
+  .section-head h2 .roman {
+    font-family: var(--mono); font-weight: 400;
+    font-size: 13px; letter-spacing: 0.22em;
+    color: var(--ink-3); margin-right: 18px;
+    vertical-align: middle;
+  }
+  .section-head .aside {
+    font-family: var(--mono); font-size: 11px;
+    color: var(--ink-3); letter-spacing: 0.04em;
+  }
+
+  .two-col {
+    display: grid;
+    grid-template-columns: 1fr 420px;
+    gap: 56px;
+    padding-top: 32px;
+  }
+
+  /* =============== Ledger table =============== */
+
+  table.ledger {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+  }
+  table.ledger thead th {
+    font-family: var(--sans); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-3);
+    text-align: left;
+    padding: 6px 10px;
+    border-bottom: 1px solid var(--rule);
+  }
+  table.ledger thead th.num-col { text-align: right; }
+  table.ledger tbody td {
+    padding: 14px 10px;
+    border-bottom: 1px solid var(--rule-soft);
+    vertical-align: middle;
+  }
+  table.ledger tbody td.num-col { text-align: right; font-family: var(--mono); font-feature-settings: "tnum" 1; letter-spacing: 0.01em; }
+  table.ledger tbody tr:last-child td { border-bottom: none; }
+  table.ledger tbody tr:hover td { background: var(--paper-2); }
+
+  .token-cell { display: flex; align-items: center; gap: 12px; }
+  .token-mark {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: var(--paper-3);
+    display: grid; place-items: center;
+    font-family: var(--serif); font-size: 13px; font-weight: 600; font-style: italic;
+    color: var(--ink); border: 1px solid var(--rule);
+  }
+  .token-name { font-family: var(--serif); font-size: 16px; letter-spacing: -0.005em; }
+  .token-meta { font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em; }
+  .token-chain {
+    display: inline-block; padding: 2px 7px;
+    border: 1px solid var(--rule);
+    font-family: var(--mono); font-size: 10px;
+    color: var(--ink-2); letter-spacing: 0.04em;
+    margin-right: 4px;
+  }
+
+  .share-bar {
+    display: inline-block; width: 80px; height: 4px; background: var(--rule);
+    vertical-align: middle; margin-left: 12px; position: relative;
+  }
+  .share-bar > span {
+    position: absolute; left: 0; top: 0; bottom: 0; background: var(--ink);
+  }
+
+  .status {
+    display: inline-block;
+    font-family: var(--serif); font-style: italic;
+    font-size: 13px; font-weight: 500;
+    letter-spacing: 0;
+    padding: 2px 10px;
+    border: 1px solid var(--rule);
+    border-radius: 999px;
+    color: var(--ink);
+  }
+  .status.enabled { color: var(--green); border-color: rgba(127,179,148,0.3); }
+  .status.redeem-only { color: var(--gold); border-color: rgba(212,180,122,0.35); }
+  .status.emergency { color: var(--red); border-color: rgba(214,106,106,0.35); }
+
+  /* =============== Deposit Slip =============== */
+
+  .deposit-slip {
+    border: 1px solid var(--rule);
+    background: var(--paper-2);
+    padding: 24px 26px 28px;
+    position: relative;
+  }
+  .slip-head {
+    display: flex; align-items: flex-start; justify-content: space-between;
+    padding-bottom: 14px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 20px;
+  }
+  .slip-head .num-seq {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em;
+  }
+  .slip-title {
+    font-family: var(--serif); font-weight: 500;
+    font-variation-settings: "opsz" 72;
+    font-size: 22px; letter-spacing: -0.01em;
+    margin: 4px 0 0;
+  }
+  .slip-route {
+    font-family: var(--mono); font-size: 10px;
+    color: var(--paper); background: var(--gold);
+    padding: 4px 8px; letter-spacing: 0.1em;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .slip-route.preferred { background: var(--magenta); color: #fff; }
+  .slip-route.basket    { background: var(--gold);    color: var(--paper); }
+  .slip-route.emergency { background: var(--red);     color: #fff; }
+
+  .slip-tabs {
+    display: flex; gap: 0;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 22px;
+  }
+  .slip-tab {
+    flex: 1; text-align: center;
+    font-family: var(--sans); font-size: 11px; font-weight: 600;
+    letter-spacing: 0.18em; text-transform: uppercase;
+    color: var(--ink-3);
+    padding: 10px 0;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+  }
+  .slip-tab.active { color: var(--ink); border-bottom-color: var(--magenta); }
+
+  .slip-field {
+    padding: 12px 0 16px;
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 14px;
+  }
+  .slip-field .row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    margin-bottom: 8px;
+  }
+  .slip-field .row .label { margin: 0; }
+  .slip-field .row .bal { font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.02em; }
+  .slip-field .row .bal .amt { color: var(--ink-2); }
+
+  .slip-input-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    gap: 12px;
+  }
+  .slip-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    border-bottom: 1px dashed var(--rule);
+    font-family: var(--mono);
+    font-size: 32px;
+    color: var(--ink);
+    padding: 2px 0;
+    outline: none;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: 0.005em;
+  }
+  .slip-input::placeholder { color: var(--ink-3); }
+  .slip-input:focus { border-bottom-color: var(--magenta); }
+
+  .slip-asset {
+    display: flex; align-items: center; gap: 8px;
+    font-family: var(--serif); font-size: 20px;
+    font-weight: 500;
+    border: 1px solid var(--rule);
+    padding: 6px 12px;
+    background: var(--paper);
+    cursor: pointer;
+  }
+  .slip-asset .mark {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: var(--paper-3);
+    display: grid; place-items: center;
+    font-family: var(--serif); font-size: 11px; font-weight: 600; font-style: italic;
+    border: 1px solid var(--rule);
+  }
+  .slip-asset .chev { font-family: var(--mono); color: var(--ink-3); font-size: 12px; margin-left: 2px; }
+
+  .arrow-row {
+    display: flex; justify-content: center;
+    margin: 6px 0;
+    color: var(--ink-3);
+    font-family: var(--mono); font-size: 14px;
+  }
+
+  .slip-meta {
+    display: grid; grid-template-columns: 1fr auto;
+    gap: 6px 12px;
+    font-size: 12px;
+    padding: 14px 0 18px;
+    border-top: 1px solid var(--rule);
+    border-bottom: 1px solid var(--rule);
+    margin-bottom: 18px;
+  }
+  .slip-meta .k {
+    font-family: var(--sans); font-size: 10px; font-weight: 600;
+    letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink-3);
+  }
+  .slip-meta .v { font-family: var(--mono); color: var(--ink); text-align: right; font-size: 12px; }
+  .slip-meta .v.pos { color: var(--green); }
+
+  .slip-submit {
+    width: 100%;
+    font-family: var(--sans); font-weight: 600;
+    font-size: 13px; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--paper);
+    background: var(--ink);
+    border: none;
+    padding: 16px 0;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+  .slip-submit:hover { background: var(--magenta); color: #fff; }
+
+  .slip-promise {
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid var(--rule);
+    font-family: var(--serif);
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-2);
+    line-height: 1.5;
+  }
+  .slip-promise strong {
+    font-weight: 500; font-style: normal;
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase;
+    display: block; margin-bottom: 6px;
+  }
+
+  /* =============== Dispatch (activity) =============== */
+
+  .dispatch {
+    padding-top: 8px;
+    columns: 2;
+    column-gap: 48px;
+    column-rule: 1px solid var(--rule);
+  }
+  .dispatch .entry {
+    break-inside: avoid;
+    padding: 12px 0;
+    border-bottom: 1px dotted var(--rule);
+    display: block;
+  }
+  .dispatch .entry:last-child { border-bottom: none; }
+  .dispatch .ts {
+    font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+    letter-spacing: 0.04em; margin-right: 10px;
+  }
+  .dispatch .body {
+    font-family: var(--serif);
+    font-size: 15px; line-height: 1.55; color: var(--ink);
+  }
+  .dispatch .body .verb { font-style: italic; color: var(--gold); }
+  .dispatch .body .verb.red { color: var(--red); }
+  .dispatch .body .addr { font-family: var(--mono); font-size: 12px; color: var(--ink-2); }
+  .dispatch .body .num  { font-family: var(--mono); font-feature-settings: "tnum" 1; color: var(--ink); }
+  .dispatch .meta {
+    font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.04em;
+    margin-top: 4px;
+  }
+  .dispatch .meta .ok  { color: var(--green); }
+  .dispatch .meta .mid { color: var(--gold); }
+  .dispatch .meta .bad { color: var(--red); }
+
+  /* =============== Colophon =============== */
+
+  .colophon {
+    margin-top: 56px;
+    padding-top: 28px;
+    border-top: 2px solid var(--ink);
+    display: grid;
+    grid-template-columns: 1.1fr 1fr 1fr;
+    gap: 48px;
+    font-size: 12px;
+  }
+  .colophon h3 {
+    font-family: var(--serif); font-weight: 500;
+    font-variation-settings: "opsz" 72;
+    font-size: 18px; margin: 0 0 10px;
+    letter-spacing: -0.005em;
+  }
+  .colophon p { color: var(--ink-2); line-height: 1.6; font-family: var(--serif); font-size: 13px; }
+  .invariants {
+    display: flex; flex-wrap: wrap; gap: 6px 14px;
+    margin-top: 6px;
+  }
+  .inv {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.02em;
+    color: var(--ink-2);
+  }
+  .inv .ok { color: var(--green); margin-right: 4px; }
+  .inv .id { color: var(--ink); }
+
+  .colophon .links { display: flex; flex-direction: column; gap: 4px; }
+  .colophon .links a {
+    font-family: var(--mono); font-size: 12px; color: var(--ink-2);
+    border-bottom: 1px dotted var(--rule); padding: 3px 0;
+  }
+  .colophon .links a:hover { color: var(--magenta); border-bottom-color: var(--magenta); }
+
+  .imprint {
+    margin-top: 40px;
+    padding-top: 18px;
+    border-top: 1px solid var(--rule);
+    display: flex; justify-content: space-between;
+    font-family: var(--mono); font-size: 10px; color: var(--ink-3);
+    letter-spacing: 0.08em; text-transform: uppercase;
+  }
+  .imprint .slug { color: var(--ink-2); }
+
+  /* =============== Tiny helpers =============== */
+  .sep-dot { display: inline-block; width: 3px; height: 3px; border-radius: 50%; background: var(--ink-3); vertical-align: middle; margin: 0 10px; }
+  .dotline { display: block; border-top: 1px dotted var(--rule); margin: 10px 0; height: 0; }
+
+  @media (max-width: 1100px) {
+    .two-col { grid-template-columns: 1fr; }
+    .kpi-strip { grid-template-columns: repeat(2, 1fr); }
+    .kpi:nth-child(2) { border-right: none; }
+    .kpi:nth-child(-n+2) { border-bottom: 1px solid var(--rule); }
+    .hero h1 { font-size: 56px; }
+    .mast-title { font-size: 48px; }
+    .dispatch { columns: 1; }
+    .colophon { grid-template-columns: 1fr; }
+    .page { padding: 20px 24px 60px; }
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- ========== MASTHEAD ========== -->
+  <div class="mast-rules"><div class="rule-thick"></div></div>
+
+  <header class="masthead">
+    <div class="mast-left">
+      <span><span class="mast-dot"></span>LEDGER ONLINE · BLOCK #4,382,119</span>
+      <span>DONUT TESTNET · CHAIN 42101</span>
+      <span>CONTRACT 0x9a4F…B3C1</span>
+    </div>
+    <h1 class="mast-title"><span class="the">The</span>Push Ledger</h1>
+    <div class="mast-right">
+      <span>WEDNESDAY, APRIL 22, 2026</span>
+      <span>VOL. I · NO. 117</span>
+      <span>FIFTEEN MINUTES AGO</span>
+    </div>
+  </header>
+
+  <div class="mast-rules"><div class="rule-double"></div></div>
+
+  <nav class="mast-nav">
+    <a class="active">I. Ledger</a>
+    <a>II. Convert</a>
+    <a>III. Dispatch</a>
+    <a>IV. Colophon</a>
+    <a style="margin-left: 40px;"><button class="btn-connect">Connect Wallet →</button></a>
+  </nav>
+
+  <!-- ========== HERO ========== -->
+  <section class="hero">
+    <h1>
+      Deposit any stable.<br/>
+      Mint <span class="em">PUSD</span>. Redeem<br/>
+      it <span class="em-gold">anywhere</span>.
+    </h1>
+    <div class="hero-sub">
+      <span class="caps">Editor's Note · Apr. 22</span>
+      A boring dollar, held boringly. Reserves are public.
+      Redemption is a promise, not a feature. Yield, when
+      it arrives, will live elsewhere — in
+      <span style="font-style: normal; font-family: var(--mono); font-size: 13px;">PUSD+</span>
+      — and will not touch the base unit.
+    </div>
+  </section>
+
+  <!-- ========== KPI STRIP ========== -->
+  <section class="kpi-strip">
+    <div class="kpi">
+      <div class="label">Total Reserves</div>
+      <div class="big">$24,873,291<span class="dec">.04</span></div>
+      <div class="delta">▲ $142,008 · 24H</div>
+      <svg class="spark" viewBox="0 0 200 28" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#7fb394" stroke-width="1.2"
+          points="0,20 12,19 24,17 36,18 48,15 60,14 72,13 84,15 96,12 108,10 120,11 132,9 144,8 156,10 168,7 180,6 192,5 200,4" />
+      </svg>
+    </div>
+    <div class="kpi">
+      <div class="label">Collateral Ratio</div>
+      <div class="big">100.003<span class="dec">%</span></div>
+      <div class="delta flat">■ stable · since genesis</div>
+      <svg class="spark" viewBox="0 0 200 28" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#a89d88" stroke-width="1.2"
+          points="0,14 14,13 28,14 42,14 56,13 70,14 84,14 98,13 112,14 126,14 140,13 154,14 168,14 182,13 196,14 200,14" />
+      </svg>
+    </div>
+    <div class="kpi">
+      <div class="label">Mint Fee · Now</div>
+      <div class="big">0.0421<span class="dec">%</span></div>
+      <div class="delta down">▼ −0.0018 · ON USDC</div>
+      <svg class="spark" viewBox="0 0 200 28" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#d4b47a" stroke-width="1.2"
+          points="0,6 14,8 28,10 42,9 56,12 70,11 84,13 98,14 112,12 126,15 140,14 154,16 168,15 182,17 196,18 200,19" />
+      </svg>
+    </div>
+    <div class="kpi">
+      <div class="label">Deployed Capital</div>
+      <div class="big">23.1<span class="dec">%</span></div>
+      <div class="delta">▲ target 25.0% · cap 35.0%</div>
+      <svg class="spark" viewBox="0 0 200 28" preserveAspectRatio="none">
+        <polyline fill="none" stroke="#dd44b9" stroke-width="1.2"
+          points="0,24 14,23 28,22 42,21 56,20 70,19 84,18 98,18 112,17 126,17 140,16 154,15 168,14 182,13 196,12 200,12" />
+        <line x1="0" y1="8" x2="200" y2="8" stroke="#2a2520" stroke-width="1" stroke-dasharray="2,3" />
+      </svg>
+    </div>
+  </section>
+
+  <!-- ========== TICKER ========== -->
+  <div class="ticker-rail">
+    <span class="ticker-tag">Live Reserves →</span>
+    <div class="ticker-track">
+      <div class="ticker-item"><span class="sym">USDT</span> $8,212,441 <span class="delta-up">▲ 0.02%</span></div>
+      <div class="ticker-item"><span class="sym">USDC</span> $7,440,109 <span class="delta-up">▲ 0.04%</span></div>
+      <div class="ticker-item"><span class="sym">USDe</span> $4,931,770 <span class="delta-dn">▼ 0.01%</span></div>
+      <div class="ticker-item"><span class="sym">sDAI</span> $2,201,844 <span class="delta-up">▲ 0.03%</span></div>
+      <div class="ticker-item"><span class="sym">crvUSD</span> $2,087,127 <span class="delta-up">▲ 0.01%</span></div>
+      <div class="ticker-item"><span class="sym">PUSD supply</span> 24,872,521 <span class="delta-up">▲ 142,008</span></div>
+      <div class="ticker-item"><span class="sym">Haircut accrued</span> $81,229 <span class="delta-up">▲ 4,118 / 24h</span></div>
+      <div class="ticker-item"><span class="sym">Fees accrued</span> $12,847 <span class="delta-up">▲ 501 / 24h</span></div>
+      <!-- duplicate for seamless scroll -->
+      <div class="ticker-item"><span class="sym">USDT</span> $8,212,441 <span class="delta-up">▲ 0.02%</span></div>
+      <div class="ticker-item"><span class="sym">USDC</span> $7,440,109 <span class="delta-up">▲ 0.04%</span></div>
+      <div class="ticker-item"><span class="sym">USDe</span> $4,931,770 <span class="delta-dn">▼ 0.01%</span></div>
+      <div class="ticker-item"><span class="sym">sDAI</span> $2,201,844 <span class="delta-up">▲ 0.03%</span></div>
+      <div class="ticker-item"><span class="sym">crvUSD</span> $2,087,127 <span class="delta-up">▲ 0.01%</span></div>
+      <div class="ticker-item"><span class="sym">PUSD supply</span> 24,872,521 <span class="delta-up">▲ 142,008</span></div>
+      <div class="ticker-item"><span class="sym">Haircut accrued</span> $81,229 <span class="delta-up">▲ 4,118 / 24h</span></div>
+      <div class="ticker-item"><span class="sym">Fees accrued</span> $12,847 <span class="delta-up">▲ 501 / 24h</span></div>
+    </div>
+  </div>
+
+  <!-- ========== MAIN TWO-COL ========== -->
+  <section class="two-col">
+
+    <!-- ---- LEFT: Ledger table ---- -->
+    <div>
+      <div class="section-head">
+        <h2><span class="roman">I.</span>The Reserves</h2>
+        <div class="aside">5 active · 0 emergency · updated 2s ago</div>
+      </div>
+
+      <table class="ledger">
+        <thead>
+          <tr>
+            <th style="width: 28%;">Asset</th>
+            <th>Chain</th>
+            <th class="num-col">Balance</th>
+            <th class="num-col">Share</th>
+            <th class="num-col">Fee</th>
+            <th style="text-align:right; width: 140px;">Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>
+              <div class="token-cell">
+                <div class="token-mark">T</div>
+                <div>
+                  <div class="token-name">Tether USD</div>
+                  <div class="token-meta">USDT · 6 dec</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="token-chain">ETH</span>
+              <span class="token-chain">ARB</span>
+            </td>
+            <td class="num-col">$8,212,441.20</td>
+            <td class="num-col">33.01%<span class="share-bar"><span style="width: 33%;"></span></span></td>
+            <td class="num-col">0.042%</td>
+            <td style="text-align:right;"><span class="status enabled">Enabled</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="token-cell">
+                <div class="token-mark">C</div>
+                <div>
+                  <div class="token-name">USD Coin</div>
+                  <div class="token-meta">USDC · 6 dec</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="token-chain">ETH</span>
+              <span class="token-chain">BASE</span>
+              <span class="token-chain">SOL</span>
+            </td>
+            <td class="num-col">$7,440,109.84</td>
+            <td class="num-col">29.91%<span class="share-bar"><span style="width: 29.9%;"></span></span></td>
+            <td class="num-col">0.038%</td>
+            <td style="text-align:right;"><span class="status enabled">Enabled</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="token-cell">
+                <div class="token-mark">e</div>
+                <div>
+                  <div class="token-name">Ethena USDe</div>
+                  <div class="token-meta">USDe · 18 dec</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="token-chain">ETH</span>
+            </td>
+            <td class="num-col">$4,931,770.11</td>
+            <td class="num-col">19.83%<span class="share-bar"><span style="width: 19.8%;"></span></span></td>
+            <td class="num-col">0.055%</td>
+            <td style="text-align:right;"><span class="status enabled">Enabled</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="token-cell">
+                <div class="token-mark">s</div>
+                <div>
+                  <div class="token-name">Savings DAI</div>
+                  <div class="token-meta">sDAI · 18 dec</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="token-chain">ETH</span>
+            </td>
+            <td class="num-col">$2,201,844.27</td>
+            <td class="num-col">8.85%<span class="share-bar"><span style="width: 8.85%;"></span></span></td>
+            <td class="num-col">0.068%</td>
+            <td style="text-align:right;"><span class="status redeem-only">Redeem Only</span></td>
+          </tr>
+          <tr>
+            <td>
+              <div class="token-cell">
+                <div class="token-mark">x</div>
+                <div>
+                  <div class="token-name">Curve USD</div>
+                  <div class="token-meta">crvUSD · 18 dec</div>
+                </div>
+              </div>
+            </td>
+            <td>
+              <span class="token-chain">ETH</span>
+            </td>
+            <td class="num-col">$2,087,127.62</td>
+            <td class="num-col">8.40%<span class="share-bar"><span style="width: 8.4%;"></span></span></td>
+            <td class="num-col">0.071%</td>
+            <td style="text-align:right;"><span class="status enabled">Enabled</span></td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="display:flex; justify-content: space-between; padding-top: 14px; font-family: var(--mono); font-size: 11px; color: var(--ink-3); letter-spacing: 0.04em;">
+        <span>5 of 25 slots used · cap set by ADR 0003 §8</span>
+        <span>Next review: May 4, 2026 · by Admin role</span>
+      </div>
+    </div>
+
+    <!-- ---- RIGHT: Deposit Slip ---- -->
+    <aside>
+      <div class="deposit-slip">
+        <div class="slip-head">
+          <div>
+            <div class="num-seq">FORM PUSD-001 · No. 0000447182</div>
+            <div class="slip-title">Deposit Slip</div>
+          </div>
+          <div class="slip-route preferred">Preferred · 0.042%</div>
+        </div>
+
+        <div class="slip-tabs">
+          <div class="slip-tab active">Mint</div>
+          <div class="slip-tab">Redeem</div>
+        </div>
+
+        <div class="slip-field">
+          <div class="row">
+            <span class="label">You pay</span>
+            <span class="bal">Balance <span class="amt">10,000.00 USDC</span></span>
+          </div>
+          <div class="slip-input-row">
+            <input class="slip-input" value="10,000.00" />
+            <div class="slip-asset">
+              <div class="mark">C</div>
+              <span>USDC</span>
+              <span class="chev">▾</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="arrow-row">↓</div>
+
+        <div class="slip-field" style="border-bottom: none; margin-bottom: 4px;">
+          <div class="row">
+            <span class="label">You receive</span>
+            <span class="bal">Rate <span class="amt">1 USDC → 0.99958 PUSD</span></span>
+          </div>
+          <div class="slip-input-row">
+            <input class="slip-input" value="9,995.80" readonly style="color: var(--ink); border-bottom-style: solid;" />
+            <div class="slip-asset">
+              <div class="mark" style="background: var(--magenta); color: #fff; border-color: var(--magenta); font-style: normal;">P</div>
+              <span>PUSD</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="slip-meta">
+          <div class="k">Route</div>        <div class="v">Preferred · direct</div>
+          <div class="k">Haircut</div>      <div class="v">4.20 bps</div>
+          <div class="k">Base fee</div>     <div class="v">0.01%</div>
+          <div class="k">Gas (est.)</div>   <div class="v">~0.00021 PC</div>
+          <div class="k">Settles in</div>   <div class="v">~2 sec · Donut</div>
+          <div class="k">Invariants held</div><div class="v pos">I-01 · I-02 · I-10 ✓</div>
+        </div>
+
+        <button class="slip-submit">Mint 9,995.80 PUSD</button>
+
+        <div class="slip-promise">
+          <strong>The Promise</strong>
+          Every PUSD is redeemable, now and later, for its preferred reserve
+          if the pool is deep enough; otherwise a proportional basket; otherwise
+          the emergency path. Nothing else is attempted on your behalf.
+        </div>
+      </div>
+
+      <div style="padding-top: 16px; font-family: var(--mono); font-size: 10px; color: var(--ink-3); letter-spacing: 0.08em; text-transform: uppercase;">
+        Signed by you · countersigned by PUSDManager 0x9a4F…B3C1
+      </div>
+    </aside>
+
+  </section>
+
+  <!-- ========== DISPATCH ========== -->
+  <section>
+    <div class="section-head">
+      <h2><span class="roman">III.</span>Dispatch</h2>
+      <div class="aside">Reported from Donut Testnet · 24 hrs</div>
+    </div>
+
+    <div class="dispatch">
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">14:32:05 UTC</span>
+          <span class="addr">0xd4c2…a19f</span> <span class="verb">minted</span>
+          <span class="num">10,000.00 PUSD</span> against
+          <span class="num">10,000.00 USDC</span>.
+        </span>
+        <div class="meta">Route · PREFERRED &nbsp;·&nbsp; Haircut <span class="ok">4.20 bps</span> &nbsp;·&nbsp; Block #4,382,117</div>
+      </div>
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">14:29:44 UTC</span>
+          <span class="addr">0x8e11…4c73</span> <span class="verb">redeemed</span>
+          <span class="num">24,000 PUSD</span> for
+          <span class="num">24,016.80 USDT</span>.
+        </span>
+        <div class="meta">Route · PREFERRED &nbsp;·&nbsp; Fee <span class="ok">7.0 bps</span> &nbsp;·&nbsp; Block #4,382,112</div>
+      </div>
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">14:21:02 UTC</span>
+          <span class="addr">0xbc99…f4a0</span> <span class="verb">redeemed</span>
+          <span class="num">500,000 PUSD</span> across the basket —
+          USDT 33%, USDC 30%, USDe 20%, sDAI 9%, crvUSD 8%.
+        </span>
+        <div class="meta">Route · <span class="mid">BASKET</span> &nbsp;·&nbsp; Preferred pool shallow &nbsp;·&nbsp; Block #4,382,099</div>
+      </div>
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">13:58:17 UTC</span>
+          <span class="addr">0x40f8…2cb1</span> <span class="verb">minted</span>
+          <span class="num">250,000 PUSD</span> via
+          <span class="num">crvUSD</span> on Ethereum.
+        </span>
+        <div class="meta">Route · PREFERRED &nbsp;·&nbsp; Haircut <span class="ok">7.10 bps</span> &nbsp;·&nbsp; Block #4,382,043</div>
+      </div>
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">13:40:52 UTC</span>
+          ADMIN <span class="verb">rotated</span> <span class="num">sDAI</span>
+          status to <span class="num">REDEEM_ONLY</span>. Outstanding balance
+          <span class="num">$2,201,844</span> remains withdrawable. New mints disabled.
+        </span>
+        <div class="meta">Governance · role ADMIN_ROLE &nbsp;·&nbsp; tx 0x9f21…b4cd &nbsp;·&nbsp; Block #4,381,998</div>
+      </div>
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">13:22:16 UTC</span>
+          <span class="addr">0x3a77…e280</span> <span class="verb">minted</span>
+          <span class="num">4,800 PUSD</span> against <span class="num">USDe</span>.
+        </span>
+        <div class="meta">Route · PREFERRED &nbsp;·&nbsp; Haircut <span class="ok">5.50 bps</span> &nbsp;·&nbsp; Block #4,381,954</div>
+      </div>
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">12:58:49 UTC</span>
+          <span class="addr">0x71bf…30ed</span> <span class="verb">redeemed</span>
+          <span class="num">12,400 PUSD</span> for
+          <span class="num">12,406.82 USDC</span>.
+        </span>
+        <div class="meta">Route · PREFERRED &nbsp;·&nbsp; Fee <span class="ok">5.5 bps</span> &nbsp;·&nbsp; Block #4,381,901</div>
+      </div>
+
+      <div class="entry">
+        <span class="body">
+          <span class="ts">12:40:13 UTC</span>
+          Surplus keeper <span class="verb">swept</span>
+          <span class="num">$4,118.44</span> of accrued haircut into treasury.
+        </span>
+        <div class="meta">Route · SWEEP &nbsp;·&nbsp; <span class="ok">I-05 surplus ring-fence ✓</span> &nbsp;·&nbsp; Block #4,381,858</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ========== COLOPHON ========== -->
+  <section class="colophon">
+    <div>
+      <h3>Colophon</h3>
+      <p>
+        The Push Ledger is set in
+        <em>Fraunces</em> for display,
+        <span style="font-family: var(--mono);">IBM Plex Mono</span> for numbers,
+        and Inter for everything in between. It is written by
+        <span style="font-family: var(--mono);">PUSDManager.sol</span>,
+        typeset in the browser, and printed on no paper.
+        It is read every two seconds by anyone who asks.
+      </p>
+    </div>
+
+    <div>
+      <h3>Invariants · Live</h3>
+      <div class="invariants">
+        <div class="inv"><span class="ok">✓</span><span class="id">I-01</span> solvency</div>
+        <div class="inv"><span class="ok">✓</span><span class="id">I-02</span> haircut floor</div>
+        <div class="inv"><span class="ok">✓</span><span class="id">I-03</span> token status lifecycle</div>
+        <div class="inv"><span class="ok">✓</span><span class="id">I-05</span> surplus ring-fence</div>
+        <div class="inv"><span class="ok">✓</span><span class="id">I-06</span> decimal parity</div>
+        <div class="inv"><span class="ok">✓</span><span class="id">I-08</span> fee bounds</div>
+        <div class="inv"><span class="ok">✓</span><span class="id">I-10</span> redeem non-inflation</div>
+        <div class="inv"><span class="ok">✓</span><span class="id">I-11</span> supply parity</div>
+      </div>
+      <p style="margin-top: 14px; font-size: 12px;">
+        All eleven invariants verified at block #4,382,119.
+        See <span style="font-family: var(--mono);">contracts/docs/design/invariants.md</span>.
+      </p>
+    </div>
+
+    <div>
+      <h3>Masthead</h3>
+      <div class="links">
+        <a>Whitepaper · ADR 0003</a>
+        <a>Contracts · Etherscan</a>
+        <a>Reserves · Proof of Reserves</a>
+        <a>Governance · Timelock 48h</a>
+        <a>GitHub · push-chain/pusd</a>
+      </div>
+    </div>
+  </section>
+
+  <div class="imprint">
+    <span class="slug">© 2026 Push Chain · Printed on block #4,382,119</span>
+    <span>Not investment advice · Use at your own risk · Boring by design</span>
+  </div>
+
+</div>
+</body>
+</html>

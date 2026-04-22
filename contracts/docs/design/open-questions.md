@@ -2,9 +2,11 @@
 
 Unresolved design questions that require a decision before the protocol can be considered production-ready.
 
+> **Resolved in [ADR 0003](decisions/0003-product-architecture.md):** OQ-01 (timelock on `UPGRADER_ROLE`) and OQ-02 (`MAX_TOKENS = 25`). They remain below for historical context.
+
 ---
 
-## OQ-01 – Upgrade Governance
+## OQ-01 – Upgrade Governance  *(resolved · [ADR 0003 §7](decisions/0003-product-architecture.md))*
 
 **Question:** Should upgrades to `PUSD` and `PUSDManager` require a timelock, a DAO vote, or both?
 
@@ -15,11 +17,11 @@ Unresolved design questions that require a decision before the protocol can be c
 2. Require a governance token vote to queue upgrades.
 3. Accept current model and rely on multisig key management.
 
-**Blocking:** No — but should be resolved before mainnet launch.
+**Resolution:** Option 1 — 48h `TimelockController` as the sole holder of `UPGRADER_ROLE` before mainnet genesis.
 
 ---
 
-## OQ-02 – Maximum Token Count
+## OQ-02 – Maximum Token Count  *(resolved · [ADR 0003 §8](decisions/0003-product-architecture.md))*
 
 **Question:** Should there be a hard on-chain cap on `tokenCount`?
 
@@ -29,7 +31,7 @@ Unresolved design questions that require a decision before the protocol can be c
 1. Add a `require(tokenCount < MAX_TOKENS)` guard in `addSupportedToken`. A value of 20–50 seems reasonable.
 2. Rely on admin discipline and off-chain monitoring.
 
-**Blocking:** No, but should be decided before the protocol opens to many chains.
+**Resolution:** Option 1 — `MAX_TOKENS = 25` as a compile-time constant in `PUSDManager`. Increasing the cap requires first reclaiming tombstone slots (OQ-03).
 
 ---
 

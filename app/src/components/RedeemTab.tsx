@@ -1,268 +1,265 @@
-import { usePushChain, usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
+import { PushUI, usePushChain, usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
 import { ethers } from 'ethers';
 import { useEffect, useState } from 'react';
 import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS, RPC_URL } from '../contracts/config';
 
 const SUPPORTED_TOKENS = [
-  { address: '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3', symbol: 'USDT.eth', chain: 'Ethereum Sepolia', decimals: 6 },
-  { address: '0x387b9C8Db60E74999aAAC5A2b7825b400F12d68E', symbol: 'USDC.eth', chain: 'Ethereum Sepolia', decimals: 6 },
-  { address: '0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34', symbol: 'USDT.sol', chain: 'Solana Devnet', decimals: 6 },
-  { address: '0x04B8F634ABC7C879763F623e0f0550a4b5c4426F', symbol: 'USDC.sol', chain: 'Solana Devnet', decimals: 6 },
-  { address: '0x2C455189D2af6643B924A981a9080CcC63d5a567', symbol: 'USDT.base', chain: 'Base Testnet', decimals: 6 },
-  { address: '0x84B62e44F667F692F7739Ca6040cD17DA02068A8', symbol: 'USDC.base', chain: 'Base Testnet', decimals: 6 },
-  { address: '0x76Ad08339dF606BeEDe06f90e3FaF82c5b2fb2E9', symbol: 'USDT.arb', chain: 'Arbitrum Sepolia', decimals: 6 },
-  { address: '0xa261A10e94aE4bA88EE8c5845CbE7266bD679DD6', symbol: 'USDC.arb', chain: 'Arbitrum Sepolia', decimals: 6 },
-  { address: '0x2f98B4235FD2BA0173a2B056D722879360B12E7b', symbol: 'USDT.bnb', chain: 'BNB Testnet', decimals: 6 },
+  { address: '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3', symbol: 'USDT', chain: 'Ethereum Sepolia', badge: 'badge-eth', decimals: 6 },
+  { address: '0x7A58048036206bB898008b5bBDA85697DB1e5d66', symbol: 'USDC', chain: 'Ethereum Sepolia', badge: 'badge-eth', decimals: 6 },
+  { address: '0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34', symbol: 'USDT', chain: 'Solana Devnet',    badge: 'badge-sol', decimals: 6 },
+  { address: '0x04B8F634ABC7C879763F623e0f0550a4b5c4426F', symbol: 'USDC', chain: 'Solana Devnet',    badge: 'badge-sol', decimals: 6 },
+  { address: '0x2C455189D2af6643B924A981a9080CcC63d5a567', symbol: 'USDT', chain: 'Base Sepolia',     badge: 'badge-base', decimals: 6 },
+  { address: '0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1', symbol: 'USDC', chain: 'Base Sepolia',     badge: 'badge-base', decimals: 6 },
+  { address: '0x76Ad08339dF606BeEDe06f90e3FaF82c5b2fb2E9', symbol: 'USDT', chain: 'Arbitrum Sepolia', badge: 'badge-arb', decimals: 6 },
+  { address: '0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C', symbol: 'USDC', chain: 'Arbitrum Sepolia', badge: 'badge-arb', decimals: 6 },
+  { address: '0x2f98B4235FD2BA0173a2B056D722879360B12E7b', symbol: 'USDT', chain: 'BNB Testnet',       badge: 'badge-bnb', decimals: 6 },
 ];
 
-const MANAGER_ABI = [
+const REDEEM_ABI = [
   { inputs: [{ name: "pusdAmount", type: "uint256" }, { name: "preferredAsset", type: "address" }, { name: "allowBasket", type: "bool" }], name: "redeem", outputs: [], stateMutability: "nonpayable", type: "function" },
-  { inputs: [{ name: "amount", type: "uint256" }], name: "calculateFee", outputs: [{ name: "", type: "uint256" }], stateMutability: "view", type: "function" }
 ];
-
-const ERC20_ABI = [
-  { inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], name: "approve", outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable", type: "function" }
+const APPROVE_ABI = [
+  { inputs: [{ name: "spender", type: "address" }, { name: "amount", type: "uint256" }], name: "approve", outputs: [{ name: "", type: "bool" }], stateMutability: "nonpayable", type: "function" },
 ];
-
-const PUSD_ABI = [
-  "function balanceOf(address account) external view returns (uint256)"
-];
+const PUSD_ABI = ["function balanceOf(address) view returns (uint256)"];
 
 const provider = new ethers.JsonRpcProvider(RPC_URL);
+const BASE_FEE_BPS = 5;
 
 export function RedeemTab() {
   const { connectionStatus } = usePushWalletContext();
   const { pushChainClient } = usePushChainClient();
   const { PushChain } = usePushChain();
-  
+
   const [selectedToken, setSelectedToken] = useState(SUPPORTED_TOKENS[0]);
   const [amount, setAmount] = useState('');
   const [balance, setBalance] = useState('0');
-  const [fee, setFee] = useState('0');
   const [isRedeeming, setIsRedeeming] = useState(false);
   const [txHash, setTxHash] = useState('');
   const [error, setError] = useState('');
+  const [showSelector, setShowSelector] = useState(false);
+  const [basketMode, setBasketMode] = useState(false);
+
+  const isConnected = connectionStatus === PushUI.CONSTANTS.CONNECTION.STATUS.CONNECTED;
+  const amountNum = parseFloat(amount) || 0;
+  const feeNum = amountNum * (BASE_FEE_BPS / 10000);
+  const receiveNum = Math.max(0, amountNum - feeNum);
 
   useEffect(() => {
-    const fetchBalance = async () => {
-      if (connectionStatus !== 'connected' || !pushChainClient?.universal.account) return;
-
+    if (!isConnected || !pushChainClient?.universal.account) { setBalance('0'); return; }
+    const fetch = async () => {
       try {
-        const contract = new ethers.Contract(PUSD_ADDRESS, PUSD_ABI, provider);
-        const bal = await contract.balanceOf(pushChainClient.universal.account);
-        // PUSD uses 6 decimals
-        setBalance(ethers.formatUnits(bal, 6));
-      } catch (err) {
-        console.error('Error fetching balance:', err);
-      }
+        const c = new ethers.Contract(PUSD_ADDRESS, PUSD_ABI, provider);
+        const b = await c.balanceOf(pushChainClient.universal.account);
+        setBalance(ethers.formatUnits(b, 6));
+      } catch { setBalance('0'); }
     };
-
-    fetchBalance();
-    const interval = setInterval(fetchBalance, 10000);
-    return () => clearInterval(interval);
-  }, [connectionStatus, pushChainClient]);
-
-  useEffect(() => {
-    const calculateFee = async () => {
-      if (!amount || parseFloat(amount) <= 0) {
-        setFee('0');
-        return;
-      }
-
-      try {
-        const contract = new ethers.Contract(PUSD_MANAGER_ADDRESS, MANAGER_ABI, provider);
-        // PUSD uses 6 decimals
-        const amountBigInt = ethers.parseUnits(amount, 6);
-        const feeData = await contract.calculateFee(amountBigInt);
-        // Fee is returned in PUSD decimals (6)
-        const feeInPUSD = ethers.formatUnits(feeData, 6);
-        setFee(feeInPUSD);
-      } catch (err) {
-        console.error('Error calculating fee:', err);
-        setFee('0');
-      }
-    };
-
-    calculateFee();
-  }, [amount, selectedToken]);
+    fetch();
+    const id = setInterval(fetch, 12000);
+    return () => clearInterval(id);
+  }, [isConnected, pushChainClient]);
 
   const handleRedeem = async () => {
-    if (!amount || !pushChainClient) {
-      setError('Please enter an amount and connect your wallet');
-      return;
-    }
-
-    if (parseFloat(amount) > parseFloat(balance)) {
-      setError('Insufficient balance');
-      return;
-    }
-
-    setIsRedeeming(true);
-    setError('');
-    setTxHash('');
-
+    if (!amountNum || !pushChainClient || !PushChain) return;
+    setIsRedeeming(true); setError(''); setTxHash('');
     try {
-      if (!PushChain) { setError('PushChain not initialized'); return; }
-      
-      // PUSD uses 6 decimals
       const amountBigInt = PushChain.utils.helpers.parseUnits(amount, 6);
-      
-      // Call 1: Approve PUSDManager to spend PUSD
+
       const approveData = PushChain.utils.helpers.encodeTxData({
-        abi: ERC20_ABI,
-        functionName: 'approve',
-        args: [PUSD_MANAGER_ADDRESS, amountBigInt]
+        abi: APPROVE_ABI, functionName: 'approve',
+        args: [PUSD_MANAGER_ADDRESS, amountBigInt],
       });
-      
-      // Call 2: Redeem PUSD for preferred token
       const redeemData = PushChain.utils.helpers.encodeTxData({
-        abi: MANAGER_ABI,
-        functionName: 'redeem',
-        args: [amountBigInt, selectedToken.address, false]
+        abi: REDEEM_ABI, functionName: 'redeem',
+        args: [amountBigInt, selectedToken.address, basketMode],
       });
-      
-      // Multicall: execute both calls atomically
-      const calls = [
-        { to: PUSD_ADDRESS, value: BigInt(0), data: approveData },
-        { to: PUSD_MANAGER_ADDRESS, value: BigInt(0), data: redeemData }
-      ];
 
       const tx = await pushChainClient.universal.sendTransaction({
-        to: pushChainClient.universal.account,
+        to: '0x0000000000000000000000000000000000000000',
         value: BigInt(0),
-        data: calls
+        data: [
+          { to: PUSD_ADDRESS,         value: BigInt(0), data: approveData },
+          { to: PUSD_MANAGER_ADDRESS, value: BigInt(0), data: redeemData },
+        ],
       });
 
       setTxHash(tx.hash);
       await tx.wait();
-      
       setAmount('');
-      setIsRedeeming(false);
     } catch (err) {
-      console.error('Redeem error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to redeem PUSD');
+      setError(err instanceof Error ? err.message : 'Transaction failed');
+    } finally {
       setIsRedeeming(false);
     }
   };
 
-  // Calculate receive amount: PUSD amount minus fee, displayed in token decimals
-  const receiveAmount = amount && fee 
-    ? (parseFloat(amount) - parseFloat(fee)).toFixed(6)
-    : '0';
+  const card: React.CSSProperties = {
+    background: 'var(--bg-card)', border: '1px solid var(--border)',
+    borderRadius: 16, padding: '24px',
+  };
+  const inputRow: React.CSSProperties = {
+    background: 'var(--bg-elevated)', border: '1px solid var(--border)',
+    borderRadius: 12, padding: '16px 18px',
+    display: 'flex', alignItems: 'center', gap: 12,
+  };
+  const bigInput: React.CSSProperties = {
+    flex: 1, background: 'none', border: 'none', outline: 'none',
+    fontSize: 28, fontWeight: 700, color: 'var(--text-primary)',
+    fontFamily: 'inherit', width: 0,
+  };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-gray-800 rounded-lg p-6 space-y-6">
-        <h2 className="text-2xl font-bold">Redeem PUSD</h2>
-        
-        {connectionStatus !== 'connected' ? (
-          <div className="text-center py-8">
-            <p className="text-gray-400 mb-4">Connect your wallet to redeem PUSD</p>
+    <div style={{ maxWidth: 520, margin: '0 auto' }}>
+      <div style={{ marginBottom: 28 }}>
+        <div style={{ fontSize: 24, fontWeight: 800, letterSpacing: '-0.5px', marginBottom: 6 }}>Redeem PUSD</div>
+        <div style={{ fontSize: 14, color: 'var(--text-secondary)' }}>Burn PUSD and receive your preferred stablecoin (minus a {(BASE_FEE_BPS / 100).toFixed(2)}% fee).</div>
+      </div>
+
+      <div style={card}>
+        {!isConnected ? (
+          <div style={{ textAlign: 'center', padding: '48px 0' }}>
+            <div style={{ fontSize: 40, marginBottom: 16 }}>🔗</div>
+            <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 8 }}>Connect your wallet</div>
+            <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>Use the Connect Wallet button in the top-right to get started.</div>
           </div>
         ) : (
-          <>
-            <div className="bg-gray-700 rounded-lg p-4">
-              <p className="text-sm text-gray-400">Your PUSD Balance</p>
-              <p className="text-2xl font-bold">{parseFloat(balance).toFixed(6)} PUSD</p>
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
+            {/* ── You burn ── */}
             <div>
-              <label className="block text-sm font-medium mb-2">Redeem To</label>
-              <select
-                value={selectedToken.address}
-                onChange={(e) => {
-                  const token = SUPPORTED_TOKENS.find(t => t.address === e.target.value);
-                  if (token) setSelectedToken(token);
-                }}
-                className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                {SUPPORTED_TOKENS.map((token) => (
-                  <option key={token.address} value={token.address}>
-                    {token.symbol} - {token.chain}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-2">Amount</label>
-              <div className="relative">
-                <input
-                  type="number"
-                  value={amount}
-                  onChange={(e) => setAmount(e.target.value)}
-                  placeholder="0.00"
-                  className="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, paddingLeft: 4 }}>
+                <span>YOU BURN</span>
+                <span style={{ cursor: 'pointer', color: 'var(--accent)' }} onClick={() => setAmount(balance)}>
+                  Balance: {parseFloat(balance).toFixed(4)} PUSD → MAX
+                </span>
+              </div>
+              <div style={inputRow}>
+                <input type="number" min="0" value={amount}
+                  onChange={e => setAmount(e.target.value)}
+                  placeholder="0.00" style={bigInput}
                 />
-                <button
-                  onClick={() => setAmount(balance)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-blue-400 hover:text-blue-300"
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '8px 14px',
+                }}>
+                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'linear-gradient(135deg,#4f8ef7,#7c5ff7)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 10, fontWeight: 800 }}>P</div>
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>PUSD</div>
+                </div>
+              </div>
+            </div>
+
+            {/* ── Arrow ── */}
+            <div style={{ display: 'flex', justifyContent: 'center' }}>
+              <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--bg-elevated)', border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'var(--text-secondary)' }}>↓</div>
+            </div>
+
+            {/* ── You receive ── */}
+            <div>
+              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 8, paddingLeft: 4 }}>YOU RECEIVE</div>
+              <div style={{ ...inputRow, borderColor: receiveNum > 0 ? 'rgba(34,211,165,0.3)' : 'var(--border)' }}>
+                <div style={{ flex: 1, fontSize: 28, fontWeight: 700, color: receiveNum > 0 ? 'var(--green)' : 'var(--text-muted)' }}>
+                  {receiveNum > 0 ? receiveNum.toFixed(6) : '0.00'}
+                </div>
+                <button onClick={() => setShowSelector(s => !s)} style={{
+                  display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+                  background: 'var(--bg-card)', border: '1px solid var(--border)',
+                  borderRadius: 10, padding: '8px 14px', cursor: 'pointer',
+                  fontFamily: 'inherit', transition: 'border-color 0.15s',
+                }}
+                  onMouseEnter={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border-glow)'}
+                  onMouseLeave={e => (e.currentTarget as HTMLButtonElement).style.borderColor = 'var(--border)'}
                 >
-                  MAX
+                  <div style={{ fontWeight: 700, fontSize: 15, color: 'var(--text-primary)' }}>{selectedToken.symbol}</div>
+                  <span className={`token-pill ${selectedToken.badge}`}>{selectedToken.chain.split(' ')[0]}</span>
+                  <span style={{ fontSize: 10, color: 'var(--text-muted)', marginLeft: 2 }}>▼</span>
                 </button>
               </div>
             </div>
 
-            {amount && parseFloat(amount) > 0 && (
-              <div className="bg-gray-700 rounded-lg p-4 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-400">Fee (0.05%)</span>
-                  <span>{fee} PUSD</span>
-                </div>
-                <div className="flex justify-between font-semibold">
-                  <span>You will receive</span>
-                  <span className="text-green-400">{receiveAmount} {selectedToken.symbol}</span>
-                </div>
+            {/* ── Token dropdown ── */}
+            {showSelector && (
+              <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden' }}>
+                {SUPPORTED_TOKENS.map(t => (
+                  <button key={t.address} onClick={() => { setSelectedToken(t); setShowSelector(false); }} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+                    padding: '12px 16px', background: t.address === selectedToken.address ? 'var(--accent-dim)' : 'none',
+                    border: 'none', borderBottom: '1px solid var(--border)',
+                    cursor: 'pointer', fontFamily: 'inherit', textAlign: 'left', transition: 'background 0.1s',
+                  }}
+                    onMouseEnter={e => { if (t.address !== selectedToken.address) (e.currentTarget as HTMLButtonElement).style.background = 'var(--bg-card)'; }}
+                    onMouseLeave={e => { if (t.address !== selectedToken.address) (e.currentTarget as HTMLButtonElement).style.background = 'none'; }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: 14, color: 'var(--text-primary)', minWidth: 44 }}>{t.symbol}</div>
+                    <span className={`token-pill ${t.badge}`}>{t.chain}</span>
+                    {t.address === selectedToken.address && <span style={{ marginLeft: 'auto', color: 'var(--accent)', fontSize: 14 }}>✓</span>}
+                  </button>
+                ))}
               </div>
             )}
 
-            <button
-              onClick={handleRedeem}
-              disabled={!amount || isRedeeming || parseFloat(amount) > parseFloat(balance)}
-              className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 disabled:cursor-not-allowed text-white font-semibold py-3 px-6 rounded-lg transition-colors"
-            >
-              {isRedeeming ? 'Redeeming...' : 'Redeem PUSD'}
+            {/* ── Basket mode toggle ── */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: 'var(--bg-elevated)', borderRadius: 10, padding: '12px 16px' }}>
+              <div>
+                <div style={{ fontSize: 13, fontWeight: 600 }}>Basket redemption</div>
+                <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>Distribute across all reserve tokens if preferred has insufficient liquidity</div>
+              </div>
+              <button onClick={() => setBasketMode(b => !b)} style={{
+                width: 44, height: 24, borderRadius: 12, border: 'none', cursor: 'pointer',
+                background: basketMode ? 'var(--accent)' : 'var(--border)',
+                position: 'relative', transition: 'background 0.2s', flexShrink: 0,
+              }}>
+                <span style={{
+                  position: 'absolute', top: 3, left: basketMode ? 23 : 3,
+                  width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                  transition: 'left 0.2s',
+                }} />
+              </button>
+            </div>
+
+            {/* ── Fee breakdown ── */}
+            {amountNum > 0 && (
+              <div style={{ background: 'var(--bg-elevated)', borderRadius: 10, padding: '12px 16px', fontSize: 13 }}>
+                {[
+                  { label: 'Burn amount', value: `${amountNum.toFixed(6)} PUSD` },
+                  { label: `Redemption fee (${(BASE_FEE_BPS / 100).toFixed(2)}%)`, value: `−${feeNum.toFixed(6)} PUSD` },
+                  { label: 'You receive', value: `${receiveNum.toFixed(6)} ${basketMode ? '(basket)' : selectedToken.symbol}`, bold: true, green: true },
+                ].map(r => (
+                  <div key={r.label} style={{ display: 'flex', justifyContent: 'space-between', padding: '3px 0', color: r.green ? 'var(--green)' : 'var(--text-secondary)', fontWeight: r.bold ? 700 : 400 }}>
+                    <span>{r.label}</span><span>{r.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* ── CTA ── */}
+            <button onClick={handleRedeem} disabled={!amountNum || isRedeeming || amountNum > parseFloat(balance)} style={{
+              width: '100%', padding: '16px', borderRadius: 12, border: 'none',
+              background: !amountNum || isRedeeming ? 'var(--bg-elevated)' : 'linear-gradient(135deg, #22d3a5, #4f8ef7)',
+              color: !amountNum || isRedeeming ? 'var(--text-muted)' : '#fff',
+              fontFamily: 'inherit', fontSize: 16, fontWeight: 700,
+              cursor: !amountNum || isRedeeming ? 'not-allowed' : 'pointer',
+              transition: 'opacity 0.15s',
+            }}>
+              {isRedeeming ? '⏳ Redeeming…' : !amountNum ? 'Enter an amount' : amountNum > parseFloat(balance) ? 'Insufficient PUSD' : `Redeem ${amountNum.toFixed(2)} PUSD`}
             </button>
 
             {error && (
-              <div className="bg-red-900/50 border border-red-500 rounded-lg p-4">
-                <p className="text-red-400">{error}</p>
+              <div style={{ background: 'var(--red-dim)', border: '1px solid var(--red)', borderRadius: 10, padding: '12px 16px', fontSize: 13, color: 'var(--red)' }}>
+                ⚠ {error}
               </div>
             )}
-
             {txHash && (
-              <div className="bg-green-900/50 border border-green-500 rounded-lg p-4">
-                <p className="text-green-400 font-semibold">✓ Successfully redeemed PUSD!</p>
-                <a
-                  href={`https://donut.push.network/tx/${txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-sm text-blue-400 hover:text-blue-300 mt-2 inline-block"
-                >
-                  View transaction →
+              <div style={{ background: 'var(--green-dim)', border: '1px solid var(--green)', borderRadius: 10, padding: '12px 16px', fontSize: 13 }}>
+                <div style={{ fontWeight: 700, color: 'var(--green)', marginBottom: 4 }}>✓ Redemption successful!</div>
+                <a href={`https://donut.push.network/tx/${txHash}`} target="_blank" rel="noopener noreferrer"
+                  style={{ color: 'var(--accent)', fontSize: 12, fontFamily: 'monospace' }}>
+                  {txHash.slice(0, 20)}… View on Explorer ↗
                 </a>
               </div>
             )}
-          </>
+          </div>
         )}
-      </div>
-
-      <div className="mt-6 bg-gray-800 rounded-lg p-6">
-        <h3 className="font-semibold mb-3">How to Redeem</h3>
-        <ol className="space-y-2 text-sm text-gray-300">
-          <li className="flex items-start">
-            <span className="font-bold mr-2">1.</span>
-            <span>Select the stablecoin you want to receive</span>
-          </li>
-          <li className="flex items-start">
-            <span className="font-bold mr-2">2.</span>
-            <span>Enter the amount of PUSD to redeem</span>
-          </li>
-          <li className="flex items-start">
-            <span className="font-bold mr-2">3.</span>
-            <span>Confirm the transaction to receive your stablecoin</span>
-          </li>
-        </ol>
       </div>
     </div>
   );

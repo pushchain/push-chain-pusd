@@ -5,102 +5,120 @@ import { InfoTab } from "./components/InfoTab";
 import { MintTab } from "./components/MintTab";
 import { RedeemTab } from "./components/RedeemTab";
 
-type Tab = 'info' | 'mint' | 'redeem' | 'dashboard';
+type Tab = 'overview' | 'mint' | 'redeem' | 'dashboard';
+
+const TABS: { id: Tab; label: string; icon: string }[] = [
+  { id: 'overview',   label: 'Overview',   icon: '◈' },
+  { id: 'mint',       label: 'Mint',        icon: '⊕' },
+  { id: 'redeem',     label: 'Redeem',      icon: '⊖' },
+  { id: 'dashboard',  label: 'Dashboard',   icon: '◉' },
+];
 
 function App() {
-  const [activeTab, setActiveTab] = useState<Tab>('info');
-
-  const tabs = [
-    { id: 'info' as Tab, label: 'Info', icon: 'ℹ️' },
-    { id: 'mint' as Tab, label: 'Mint', icon: '💰' },
-    { id: 'redeem' as Tab, label: 'Redeem', icon: '🔄' },
-    { id: 'dashboard' as Tab, label: 'Dashboard', icon: '📊' },
-  ];
+  const [activeTab, setActiveTab] = useState<Tab>('overview');
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 text-white">
-      {/* Header */}
-      <header className="border-b border-gray-700 bg-gray-900/50 backdrop-blur-sm sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center font-bold text-xl">
-                P
-              </div>
-              <div>
-                <h1 className="text-2xl font-bold">PUSD</h1>
-                <p className="text-xs text-gray-400">Multi-Chain Stablecoin</p>
-              </div>
-            </div>
-            <PushUniversalAccountButton />
-          </div>
-        </div>
-      </header>
+    <div style={{ minHeight: '100vh', backgroundColor: 'var(--bg-base)', color: 'var(--text-primary)' }}>
 
-      {/* Navigation Tabs */}
-      <div className="border-b border-gray-700 bg-gray-900/30">
-        <div className="container mx-auto px-4">
-          <nav className="flex space-x-1">
-            {tabs.map((tab) => (
+      {/* ── Navbar ── */}
+      <header style={{
+        position: 'sticky', top: 0, zIndex: 50,
+        backgroundColor: 'rgba(10,11,15,0.85)',
+        backdropFilter: 'blur(16px)',
+        borderBottom: '1px solid var(--border)',
+      }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 24px', height: 64,
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 24 }}>
+
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+            <div style={{
+              width: 36, height: 36, borderRadius: 10,
+              background: 'linear-gradient(135deg, #4f8ef7 0%, #7c5ff7 100%)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontWeight: 800, fontSize: 16, color: '#fff', letterSpacing: '-0.5px',
+              boxShadow: '0 0 16px rgba(79,142,247,0.4)',
+            }}>P$</div>
+            <div>
+              <div style={{ fontWeight: 700, fontSize: 18, letterSpacing: '-0.3px' }}>PUSD</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)', lineHeight: 1.2 }}>Universal Stablecoin</div>
+            </div>
+          </div>
+
+          {/* Tab nav */}
+          <nav style={{ display: 'flex', gap: 2, flex: 1, justifyContent: 'center' }}>
+            {TABS.map(tab => (
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`px-6 py-4 font-medium transition-colors relative ${
-                  activeTab === tab.id
-                    ? 'text-blue-400'
-                    : 'text-gray-400 hover:text-gray-200'
-                }`}
+                style={{
+                  position: 'relative',
+                  padding: '8px 20px',
+                  background: 'none',
+                  border: 'none',
+                  cursor: 'pointer',
+                  fontFamily: 'inherit',
+                  fontSize: 14,
+                  fontWeight: activeTab === tab.id ? 600 : 400,
+                  color: activeTab === tab.id ? 'var(--accent)' : 'var(--text-secondary)',
+                  transition: 'color 0.15s',
+                  borderRadius: 8,
+                }}
+                onMouseEnter={e => { if (activeTab !== tab.id) (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-primary)'; }}
+                onMouseLeave={e => { if (activeTab !== tab.id) (e.currentTarget as HTMLButtonElement).style.color = 'var(--text-secondary)'; }}
               >
-                <span className="mr-2">{tab.icon}</span>
+                <span style={{ marginRight: 6, fontSize: 12, opacity: 0.8 }}>{tab.icon}</span>
                 {tab.label}
                 {activeTab === tab.id && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-400" />
+                  <span style={{
+                    position: 'absolute', bottom: -1, left: '20%', right: '20%',
+                    height: 2, background: 'var(--accent)', borderRadius: '2px 2px 0 0',
+                  }} />
                 )}
               </button>
             ))}
           </nav>
-        </div>
-      </div>
 
-      {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
-        {activeTab === 'info' && <InfoTab />}
-        {activeTab === 'mint' && <MintTab />}
-        {activeTab === 'redeem' && <RedeemTab />}
-        {activeTab === 'dashboard' && <DashboardTab />}
+          {/* Wallet button */}
+          <div style={{ flexShrink: 0 }}>
+            <PushUniversalAccountButton
+              connectButtonText="Connect Wallet"
+              themeOverrides={{
+                '--pwauth-btn-connect-bg-color': '#4f8ef7',
+                '--pwauth-btn-connect-border-radius': '10px',
+                '--pwauth-btn-connected-bg-color': '#1e2330',
+              }}
+            />
+          </div>
+        </div>
+      </header>
+
+      {/* ── Main Content ── */}
+      <main style={{ maxWidth: 1200, margin: '0 auto', padding: '40px 24px 80px' }}>
+        {activeTab === 'overview'   && <InfoTab />}
+        {activeTab === 'mint'       && <MintTab />}
+        {activeTab === 'redeem'     && <RedeemTab />}
+        {activeTab === 'dashboard'  && <DashboardTab />}
       </main>
 
-      {/* Footer */}
-      <footer className="border-t border-gray-700 bg-gray-900/50 mt-12">
-        <div className="container mx-auto px-4 py-6">
-          <div className="flex flex-col md:flex-row items-center justify-between text-sm text-gray-400">
-            <p>© 2024 PUSD. Multi-chain stablecoin on Push Chain.</p>
-            <div className="flex space-x-4 mt-4 md:mt-0">
-              <a
-                href="https://donut.push.network"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-400 transition-colors"
-              >
-                Explorer
-              </a>
-              <a
-                href="https://github.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-400 transition-colors"
-              >
-                GitHub
-              </a>
-              <a
-                href="https://docs.push.org"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="hover:text-blue-400 transition-colors"
-              >
-                Docs
-              </a>
-            </div>
+      {/* ── Footer ── */}
+      <footer style={{ borderTop: '1px solid var(--border)', backgroundColor: 'var(--bg-surface)', padding: '24px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto',
+          display: 'flex', flexWrap: 'wrap', gap: 16,
+          alignItems: 'center', justifyContent: 'space-between',
+          fontSize: 13, color: 'var(--text-muted)' }}>
+          <span>© 2025 PUSD · Universal stablecoin on Push Chain</span>
+          <div style={{ display: 'flex', gap: 20 }}>
+            {[
+              { label: 'Explorer', href: 'https://donut.push.network' },
+              { label: 'Push Docs', href: 'https://docs.push.org' },
+            ].map(l => (
+              <a key={l.label} href={l.href} target="_blank" rel="noopener noreferrer"
+                style={{ color: 'var(--text-muted)', transition: 'color 0.15s' }}
+                onMouseEnter={e => (e.currentTarget as HTMLAnchorElement).style.color = 'var(--accent)'}
+                onMouseLeave={e => (e.currentTarget as HTMLAnchorElement).style.color = 'var(--text-muted)'}
+              >{l.label}</a>
+            ))}
           </div>
         </div>
       </footer>

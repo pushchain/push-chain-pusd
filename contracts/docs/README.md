@@ -21,6 +21,7 @@ Push USD (PUSD) is a pegged USD stablecoin that pools liquidity from USDT, USDC,
 |---|---|
 | [0001](design/decisions/0001-why-pusdmanager-exists.md) | Why PUSDManager exists as a separate contract |
 | [0002](design/decisions/0002-access-control-model.md) | Access control model |
+| [0003](design/decisions/0003-product-architecture.md) | Product architecture: boring base, separate liquidity engine, wrapped yield |
 
 ### Agent Context (AI/LLM)
 

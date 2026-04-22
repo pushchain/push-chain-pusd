@@ -1,0 +1,564 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PUSD — Direction A · Universal Terminal</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --bg:       #0a0b0f;
+  --bg-1:     #0f1115;
+  --bg-2:     #13161d;
+  --bg-3:     #191d26;
+  --line:     #242935;
+  --line-2:   #2f3545;
+  --muted:    #5e6780;
+  --sec:      #8b93a8;
+  --text:     #e7ecf5;
+  --text-2:   #f6f8fd;
+  --mg:       #dd44b9;      /* push magenta */
+  --mg-dim:   rgba(221,68,185,.15);
+  --mg-glow:  rgba(221,68,185,.35);
+  --ok:       #2ed39a;
+  --ok-dim:   rgba(46,211,154,.13);
+  --warn:     #e8a23a;
+  --bad:      #ef5d5d;
+  --steel:    #4d7aa8;
+  --steel-2:  #3b6a99;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{background:var(--bg);color:var(--text);font-family:'Inter',system-ui,sans-serif;font-size:13px;line-height:1.45;-webkit-font-smoothing:antialiased}
+.mono{font-family:'JetBrains Mono',monospace;font-variant-numeric:tabular-nums}
+a{color:inherit;text-decoration:none}
+
+/* ── shell ── */
+.shell{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+aside{background:var(--bg-1);border-right:1px solid var(--line);padding:20px 0;position:sticky;top:0;height:100vh}
+main{min-width:0}
+
+/* logo */
+.logo{display:flex;align-items:center;gap:10px;padding:4px 20px 24px;border-bottom:1px solid var(--line);margin-bottom:12px}
+.logo-mark{width:28px;height:28px;border-radius:7px;background:var(--mg);color:#fff;display:grid;place-items:center;font-weight:800;font-size:13px;letter-spacing:-0.5px;box-shadow:0 0 12px var(--mg-glow)}
+.logo-name{font-weight:700;font-size:14px;letter-spacing:-0.2px}
+.logo-sub{font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase;margin-top:1px}
+
+/* nav */
+.nav{padding:0 10px;display:flex;flex-direction:column;gap:1px}
+.nav a{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:6px;color:var(--sec);font-size:13px;font-weight:500;letter-spacing:-0.1px;position:relative}
+.nav a:hover{color:var(--text);background:var(--bg-2)}
+.nav a.active{color:var(--text-2);background:var(--bg-2)}
+.nav a.active::before{content:'';position:absolute;left:-10px;top:6px;bottom:6px;width:2px;background:var(--mg);border-radius:2px}
+.nav .ico{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+
+.nav-section{padding:18px 18px 6px;font-size:10px;letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
+
+/* wallet pill bottom */
+.wallet{position:absolute;bottom:16px;left:16px;right:16px;border:1px solid var(--line);border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:10px;background:var(--bg-2)}
+.wallet-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.wallet-addr{font-family:'JetBrains Mono',monospace;font-size:11px;color:var(--text)}
+.wallet-chain{font-size:10px;color:var(--muted);margin-top:1px}
+.wallet-menu{margin-left:auto;color:var(--muted);font-size:14px}
+
+/* topbar */
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 28px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,var(--bg-1) 0%, var(--bg) 100%);position:sticky;top:0;z-index:2}
+.crumb{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--muted)}
+.crumb .sep{opacity:.4}
+.crumb .cur{color:var(--text);font-weight:600}
+.topbar-right{display:flex;align-items:center;gap:14px;font-size:11px;color:var(--muted)}
+.live{display:flex;align-items:center;gap:6px;padding:4px 10px;border:1px solid var(--line);border-radius:99px;background:var(--bg-1)}
+.live-dot{width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 8px var(--ok);animation:pulse 2.4s infinite}
+@keyframes pulse{50%{opacity:.35}}
+
+/* page wrap */
+.page{padding:28px;max-width:1440px}
+.page-header{display:flex;align-items:end;justify-content:space-between;margin-bottom:22px}
+.page-title{font-size:22px;font-weight:700;letter-spacing:-0.6px}
+.page-sub{font-size:12px;color:var(--muted);margin-top:4px;letter-spacing:.1px}
+
+/* grid */
+.grid{display:grid;gap:16px}
+.g-4{grid-template-columns:repeat(4,1fr)}
+.g-3{grid-template-columns:repeat(3,1fr)}
+.g-2{grid-template-columns:2fr 1fr}
+.g-main{grid-template-columns:1.6fr 1fr}
+
+/* card */
+.card{background:var(--bg-1);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.card h3{font-size:12px;font-weight:600;color:var(--sec);letter-spacing:.4px;text-transform:uppercase;padding:14px 18px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+.card h3 .pill{font-size:10px;color:var(--muted);background:var(--bg-2);padding:3px 8px;border-radius:99px;font-weight:500;letter-spacing:.5px;text-transform:none}
+
+/* kpi row */
+.kpi{padding:18px 18px 20px}
+.kpi .k-label{font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase}
+.kpi .k-val{font-family:'JetBrains Mono',monospace;font-size:26px;font-weight:600;letter-spacing:-0.6px;margin-top:8px;color:var(--text-2)}
+.kpi .k-sub{font-size:11px;color:var(--sec);margin-top:4px;display:flex;align-items:center;gap:6px}
+.kpi .k-val.accent{color:var(--mg)}
+.k-chg-up{color:var(--ok)}
+.k-chg-dn{color:var(--bad)}
+
+/* sparkline */
+.spark{height:28px;width:100%;margin-top:10px}
+
+/* reserves */
+.res-head{display:grid;grid-template-columns:36px 1.4fr 1fr 1fr .7fr 1.4fr;gap:12px;padding:10px 18px;font-size:10px;letter-spacing:1px;color:var(--muted);text-transform:uppercase;border-bottom:1px solid var(--line)}
+.res-row{display:grid;grid-template-columns:36px 1.4fr 1fr 1fr .7fr 1.4fr;gap:12px;padding:12px 18px;align-items:center;border-bottom:1px solid var(--line);font-size:12.5px}
+.res-row:last-child{border-bottom:none}
+.tok-logo{width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:11px;color:#fff}
+.tok-usdc{background:linear-gradient(135deg,#2775ca,#1a5a9c)}
+.tok-usdt{background:linear-gradient(135deg,#26a17b,#1b7456)}
+.chain-chip{font-size:10px;font-weight:600;padding:2px 7px;border-radius:4px;letter-spacing:.4px;text-transform:uppercase}
+.ch-eth {background:rgba(98,126,234,.15);color:#8ba3f7}
+.ch-sol {background:rgba(153,69,255,.15);color:#c084fc}
+.ch-base{background:rgba(0,82,255,.18);color:#60a5fa}
+.ch-arb {background:rgba(40,160,240,.18);color:#38bdf8}
+.ch-bnb {background:rgba(243,186,47,.18);color:#fbbf24}
+.status-ok{color:var(--ok);font-size:11px;display:flex;align-items:center;gap:5px}
+.status-ok::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+.status-warn{color:var(--warn);font-size:11px;display:flex;align-items:center;gap:5px}
+.status-warn::before{content:'';width:6px;height:6px;border-radius:50%;background:var(--warn);box-shadow:0 0 6px var(--warn)}
+
+.share-bar{height:6px;background:var(--bg-3);border-radius:3px;overflow:hidden;position:relative;margin-top:6px}
+.share-bar i{position:absolute;top:0;left:0;bottom:0;background:var(--steel);border-radius:3px}
+
+/* position + convert */
+.convert{padding:18px}
+.c-tabs{display:flex;background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:3px;margin-bottom:16px;gap:2px}
+.c-tab{flex:1;text-align:center;padding:8px 10px;font-size:12px;font-weight:600;color:var(--muted);border-radius:6px;cursor:default;letter-spacing:.2px}
+.c-tab.active{background:var(--bg-3);color:var(--text-2);box-shadow:inset 0 0 0 1px var(--line-2)}
+.c-row{background:var(--bg-2);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:8px}
+.c-row-head{display:flex;justify-content:space-between;font-size:10px;color:var(--muted);letter-spacing:1.2px;text-transform:uppercase}
+.c-row-body{display:flex;align-items:center;gap:10px;margin-top:8px}
+.c-row-amt{font-family:'JetBrains Mono',monospace;font-size:28px;font-weight:600;color:var(--text-2);flex:1;letter-spacing:-0.8px}
+.c-tokenbtn{display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg-3);border:1px solid var(--line);border-radius:8px;font-size:12px;font-weight:600}
+.c-tokenbtn .carat{color:var(--muted);font-size:10px;margin-left:4px}
+.c-swap{display:flex;justify-content:center;margin:-4px 0 -4px}
+.c-swap-btn{width:30px;height:30px;border-radius:50%;background:var(--bg-3);border:1px solid var(--line);display:grid;place-items:center;color:var(--sec)}
+
+.c-quote{background:var(--bg-2);border:1px solid var(--line);border-radius:8px;padding:10px 14px;margin-top:8px;font-size:11.5px;color:var(--sec)}
+.c-quote .kv{display:flex;justify-content:space-between;padding:3px 0}
+.c-quote .kv b{color:var(--text-2);font-weight:600}
+
+.cta{margin-top:14px;width:100%;padding:13px;border:none;border-radius:9px;background:var(--mg);color:#fff;font-weight:700;font-size:13px;letter-spacing:.3px;font-family:inherit;cursor:default;box-shadow:0 0 0 1px var(--mg),0 0 30px var(--mg-dim)}
+
+/* activity feed */
+.act{max-height:320px;overflow:hidden}
+.act-row{display:grid;grid-template-columns:16px 1fr auto;gap:10px;padding:10px 18px;border-bottom:1px solid var(--line);align-items:center;font-size:12px;color:var(--sec)}
+.act-row:last-child{border-bottom:none}
+.act-dot{width:6px;height:6px;border-radius:50%}
+.act-mint{background:var(--mg)}
+.act-redeem{background:var(--steel)}
+.act-rebal{background:var(--warn)}
+.act-msg b{color:var(--text-2);font-weight:600}
+.act-time{font-family:'JetBrains Mono',monospace;font-size:10.5px;color:var(--muted)}
+
+/* distribution */
+.dist-bar{display:flex;height:28px;border-radius:6px;overflow:hidden;background:var(--bg-3);margin:14px 18px 8px}
+.dist-bar span{display:block;height:100%}
+.dist-legend{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;padding:6px 18px 16px;font-size:11px;color:var(--sec)}
+.dist-legend .dot{width:8px;height:8px;display:inline-block;border-radius:2px;margin-right:6px;vertical-align:middle}
+
+/* chain exposure */
+.chain-tiles{display:grid;grid-template-columns:repeat(5,1fr);gap:1px;background:var(--line);border:1px solid var(--line);border-radius:8px;overflow:hidden;margin:14px 18px 18px}
+.chain-tile{background:var(--bg-1);padding:14px 12px}
+.chain-tile .c-name{font-size:11px;color:var(--muted);letter-spacing:.8px;text-transform:uppercase}
+.chain-tile .c-val{font-family:'JetBrains Mono',monospace;font-size:16px;font-weight:600;color:var(--text-2);margin-top:4px}
+.chain-tile .c-share{font-size:10px;color:var(--sec);margin-top:4px}
+
+/* your position */
+.pos-row{display:flex;justify-content:space-between;padding:10px 18px;border-bottom:1px solid var(--line);font-size:12px;color:var(--sec)}
+.pos-row:last-child{border-bottom:none}
+.pos-row b{color:var(--text-2);font-weight:600;font-family:'JetBrains Mono',monospace}
+
+/* legend badge */
+.badge-mg{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--mg);background:var(--mg-dim);padding:3px 8px;border-radius:4px}
+
+/* footnote / cap ribbon */
+.ribbon{display:flex;align-items:center;gap:10px;padding:10px 18px;border-top:1px solid var(--line);font-size:11px;color:var(--muted);background:var(--bg-2)}
+.ribbon .ok{color:var(--ok);font-weight:600}
+
+/* svg placeholders */
+svg{display:block}
+
+/* small utilities */
+.hstack{display:flex;align-items:center;gap:8px}
+.spacer{flex:1}
+.dim{color:var(--muted)}
+.tiny{font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--muted)}
+</style>
+</head>
+<body>
+
+<div class="shell">
+
+  <!-- ────── SIDEBAR ────── -->
+  <aside>
+    <div class="logo">
+      <div class="logo-mark">P$</div>
+      <div>
+        <div class="logo-name">Push USD</div>
+        <div class="logo-sub">Universal Stable</div>
+      </div>
+    </div>
+
+    <div class="nav">
+      <a class="active"><svg class="ico" viewBox="0 0 24 24"><path d="M3 12l9-8 9 8v9a2 2 0 0 1-2 2h-4v-6h-6v6H5a2 2 0 0 1-2-2z"/></svg>Home</a>
+      <a><svg class="ico" viewBox="0 0 24 24"><path d="M7 10l5-5 5 5M7 14l5 5 5-5"/></svg>Convert</a>
+      <a><svg class="ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9"/><path d="M12 3v9l6 4"/></svg>Reserves</a>
+      <a><svg class="ico" viewBox="0 0 24 24"><path d="M4 19h16M4 15l4-4 4 4 4-6 4 4"/></svg>Activity</a>
+      <a><svg class="ico" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3h0a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5h0a1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8v0a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>Admin</a>
+
+      <div class="nav-section">Resources</div>
+      <a><svg class="ico" viewBox="0 0 24 24"><path d="M12 20l9-5-9-5-9 5 9 5z"/><path d="M12 12V4"/></svg>Docs</a>
+      <a><svg class="ico" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></svg>Explorer</a>
+    </div>
+
+    <div class="wallet">
+      <div class="wallet-dot"></div>
+      <div>
+        <div class="wallet-addr">0xE7…9b4F</div>
+        <div class="wallet-chain">Universal · Push Chain</div>
+      </div>
+      <div class="wallet-menu">⋯</div>
+    </div>
+  </aside>
+
+  <!-- ────── MAIN ────── -->
+  <main>
+
+    <!-- Topbar -->
+    <div class="topbar">
+      <div class="crumb">
+        <span>PUSD</span><span class="sep">/</span><span class="cur">Home</span>
+      </div>
+      <div class="topbar-right">
+        <div class="live"><div class="live-dot"></div><span>LIVE</span>&nbsp;·&nbsp;<span class="mono">Block 4,248,116</span></div>
+        <span class="mono">Donut Testnet</span>
+      </div>
+    </div>
+
+    <!-- Page -->
+    <div class="page">
+
+      <div class="page-header">
+        <div>
+          <div class="page-title">Protocol overview</div>
+          <div class="page-sub">Reserves, supply and your position · refreshes every 12s</div>
+        </div>
+        <span class="badge-mg">v1.0 · Boring base</span>
+      </div>
+
+      <!-- KPIs -->
+      <div class="grid g-4" style="margin-bottom:18px">
+
+        <div class="card kpi">
+          <div class="k-label">PUSD in circulation</div>
+          <div class="k-val">$12,483,221.00</div>
+          <div class="k-sub"><span class="k-chg-up">▲ 2.14%</span><span class="dim">24h</span></div>
+          <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><polyline fill="none" stroke="#dd44b9" stroke-width="1.6" points="0,30 10,28 22,25 34,26 48,22 62,23 76,18 92,19 108,15 124,16 138,12 152,14 166,10 180,11 200,6"/></svg>
+        </div>
+
+        <div class="card kpi">
+          <div class="k-label">Collateral ratio</div>
+          <div class="k-val accent">100.00%</div>
+          <div class="k-sub"><span class="status-ok">Healthy</span></div>
+          <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none"><polyline fill="none" stroke="#2ed39a" stroke-width="1.6" points="0,18 30,20 60,19 100,20 140,18 170,19 200,18"/></svg>
+        </div>
+
+        <div class="card kpi">
+          <div class="k-label">Assets · chains</div>
+          <div class="k-val">9 · 5</div>
+          <div class="k-sub dim">USDT · USDC across ETH · SOL · BASE · ARB · BNB</div>
+          <svg class="spark" viewBox="0 0 200 40"><g fill="none" stroke="#4d7aa8" stroke-width="1.4">
+            <rect x="8"   y="20" width="16" height="14"/>
+            <rect x="32"  y="12" width="16" height="22"/>
+            <rect x="56"  y="24" width="16" height="10"/>
+            <rect x="80"  y="16" width="16" height="18"/>
+            <rect x="104" y="22" width="16" height="12"/>
+            <rect x="128" y="18" width="16" height="16"/>
+            <rect x="152" y="26" width="16" height="8"/>
+            <rect x="176" y="14" width="16" height="20"/>
+          </g></svg>
+        </div>
+
+        <div class="card kpi">
+          <div class="k-label">Base fee · preferred fee</div>
+          <div class="k-val">0.05% · 0.10–2.00%</div>
+          <div class="k-sub dim">Dynamic · liquidity-weighted</div>
+          <svg class="spark" viewBox="0 0 200 40" preserveAspectRatio="none">
+            <defs><linearGradient id="fg" x1="0" x2="1"><stop offset="0" stop-color="#4d7aa8"/><stop offset="1" stop-color="#dd44b9"/></linearGradient></defs>
+            <polyline fill="none" stroke="url(#fg)" stroke-width="1.6" points="0,32 40,28 80,22 120,18 160,14 200,10"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- Row 1: Convert + Your Position (right) · Reserves (left wider) -->
+      <div class="grid g-main" style="margin-bottom:18px">
+
+        <!-- Reserves -->
+        <div class="card">
+          <h3>Reserve breakdown <span class="pill">total $12,487,432 · ring-fenced surplus $4,211</span></h3>
+
+          <!-- Stacked distribution bar -->
+          <div class="dist-bar">
+            <span style="width:31%;background:#4d7aa8"></span>
+            <span style="width:22%;background:#2775ca"></span>
+            <span style="width:15%;background:#8ba3f7"></span>
+            <span style="width:11%;background:#c084fc"></span>
+            <span style="width:9%;background:#38bdf8"></span>
+            <span style="width:7%;background:#60a5fa"></span>
+            <span style="width:3%;background:#fbbf24"></span>
+            <span style="width:2%;background:#26a17b"></span>
+          </div>
+          <div class="dist-legend">
+            <div><span class="dot" style="background:#4d7aa8"></span>USDC Base</div>
+            <div><span class="dot" style="background:#2775ca"></span>USDT Ethereum</div>
+            <div><span class="dot" style="background:#8ba3f7"></span>USDC Ethereum</div>
+            <div><span class="dot" style="background:#c084fc"></span>USDC Solana</div>
+            <div><span class="dot" style="background:#38bdf8"></span>USDC Arbitrum</div>
+            <div><span class="dot" style="background:#60a5fa"></span>USDT Base</div>
+          </div>
+
+          <div class="res-head">
+            <div></div><div>Asset · Chain</div><div>Balance</div><div>Share</div><div>Status</div><div>Pref. fee · haircut</div>
+          </div>
+
+          <div class="res-row">
+            <div class="tok-logo tok-usdc">C</div>
+            <div>
+              <div style="font-weight:600">USDC <span class="chain-chip ch-base">Base</span></div>
+              <div class="dim" style="font-size:11px">eip155:8453 · 6dp</div>
+              <div class="share-bar"><i style="width:78%"></i></div>
+            </div>
+            <div class="mono">3,872,441.28</div>
+            <div class="mono">31.0%</div>
+            <div><span class="status-ok">Enabled</span></div>
+            <div class="mono dim">0.12% · 0 bps</div>
+          </div>
+
+          <div class="res-row">
+            <div class="tok-logo tok-usdt">T</div>
+            <div>
+              <div style="font-weight:600">USDT <span class="chain-chip ch-eth">Ethereum</span></div>
+              <div class="dim" style="font-size:11px">eip155:1 · 6dp</div>
+              <div class="share-bar"><i style="width:55%"></i></div>
+            </div>
+            <div class="mono">2,744,832.04</div>
+            <div class="mono">22.0%</div>
+            <div><span class="status-ok">Enabled</span></div>
+            <div class="mono dim">0.18% · 0 bps</div>
+          </div>
+
+          <div class="res-row">
+            <div class="tok-logo tok-usdc">C</div>
+            <div>
+              <div style="font-weight:600">USDC <span class="chain-chip ch-eth">Ethereum</span></div>
+              <div class="dim" style="font-size:11px">eip155:1 · 6dp</div>
+              <div class="share-bar"><i style="width:38%"></i></div>
+            </div>
+            <div class="mono">1,872,110.90</div>
+            <div class="mono">15.0%</div>
+            <div><span class="status-ok">Enabled</span></div>
+            <div class="mono dim">0.32% · 0 bps</div>
+          </div>
+
+          <div class="res-row">
+            <div class="tok-logo tok-usdc">C</div>
+            <div>
+              <div style="font-weight:600">USDC <span class="chain-chip ch-sol">Solana</span></div>
+              <div class="dim" style="font-size:11px">solana:mainnet · 6dp</div>
+              <div class="share-bar"><i style="width:28%"></i></div>
+            </div>
+            <div class="mono">1,373,201.45</div>
+            <div class="mono">11.0%</div>
+            <div><span class="status-ok">Enabled</span></div>
+            <div class="mono dim">0.55% · 0 bps</div>
+          </div>
+
+          <div class="res-row">
+            <div class="tok-logo tok-usdc">C</div>
+            <div>
+              <div style="font-weight:600">USDC <span class="chain-chip ch-arb">Arbitrum</span></div>
+              <div class="dim" style="font-size:11px">eip155:42161 · 6dp</div>
+              <div class="share-bar"><i style="width:22%"></i></div>
+            </div>
+            <div class="mono">1,123,488.11</div>
+            <div class="mono">9.0%</div>
+            <div><span class="status-ok">Enabled</span></div>
+            <div class="mono dim">0.70% · 0 bps</div>
+          </div>
+
+          <div class="res-row">
+            <div class="tok-logo tok-usdt">T</div>
+            <div>
+              <div style="font-weight:600">USDT <span class="chain-chip ch-bnb">BNB</span></div>
+              <div class="dim" style="font-size:11px">eip155:56 · 6dp</div>
+              <div class="share-bar"><i style="width:8%;background:#e8a23a"></i></div>
+            </div>
+            <div class="mono">374,129.00</div>
+            <div class="mono">3.0%</div>
+            <div><span class="status-warn">Redeem-only</span></div>
+            <div class="mono dim">— · 20 bps</div>
+          </div>
+
+          <div class="ribbon">
+            <span class="ok">●</span> <span>Surplus ring-fenced · totalSupply ≤ Σ availableLiquidity invariant holds</span>
+            <div class="spacer"></div>
+            <span class="mono">Σ ≥ 12,483,221.00</span>
+          </div>
+        </div>
+
+        <!-- Right column: Convert + Your Position + Chain exposure -->
+        <div style="display:flex;flex-direction:column;gap:16px">
+
+          <!-- Convert -->
+          <div class="card">
+            <h3>Convert <span class="pill">preferred · basket · emergency</span></h3>
+            <div class="convert">
+
+              <div class="c-tabs">
+                <div class="c-tab active">Deposit → Mint</div>
+                <div class="c-tab">Burn → Redeem</div>
+              </div>
+
+              <div class="c-row">
+                <div class="c-row-head"><span>You pay</span><span>Balance 4,820.00</span></div>
+                <div class="c-row-body">
+                  <div class="c-row-amt">1,000.00</div>
+                  <div class="c-tokenbtn">
+                    <div class="tok-logo tok-usdc" style="width:18px;height:18px;font-size:9px">C</div>
+                    USDC · <span class="chain-chip ch-base" style="padding:1px 6px">Base</span>
+                    <span class="carat">▼</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="c-swap"><div class="c-swap-btn">↓</div></div>
+
+              <div class="c-row">
+                <div class="c-row-head"><span>You receive</span><span class="mono" style="color:var(--ok)">≈ 1,000.00</span></div>
+                <div class="c-row-body">
+                  <div class="c-row-amt" style="color:var(--mg)">1,000.00</div>
+                  <div class="c-tokenbtn">
+                    <div class="logo-mark" style="width:18px;height:18px;font-size:9px;border-radius:4px">P$</div>
+                    PUSD
+                  </div>
+                </div>
+              </div>
+
+              <div class="c-quote">
+                <div class="kv"><span>Deposit haircut</span><span class="mono">0 bps · $0.00</span></div>
+                <div class="kv"><span>Protocol fee on mint</span><span class="mono">None</span></div>
+                <div class="kv"><span>Rate</span><span class="mono"><b>1 USDC = 1 PUSD</b></span></div>
+                <div class="kv"><span>Route</span><span class="mono">Base USDC → PUSDManager → PUSD.mint()</span></div>
+              </div>
+
+              <button class="cta">Mint 1,000.00 PUSD</button>
+            </div>
+          </div>
+
+          <!-- Your Position -->
+          <div class="card">
+            <h3>Your position <span class="pill">0xE7…9b4F · universal</span></h3>
+            <div class="pos-row"><span>PUSD balance</span><b>2,340.50</b></div>
+            <div class="pos-row"><span>Lifetime deposits</span><b>8,120.00</b></div>
+            <div class="pos-row"><span>Lifetime redemptions</span><b>5,780.00</b></div>
+            <div class="pos-row"><span>Average preferred fee paid</span><b>0.19%</b></div>
+            <div class="pos-row"><span>Savings layer (PUSD+)</span><b>—  <span class="dim" style="font-weight:400">coming soon</span></b></div>
+          </div>
+
+          <!-- Chain exposure -->
+          <div class="card">
+            <h3>Chain exposure <span class="pill">by collateral</span></h3>
+            <div class="chain-tiles">
+              <div class="chain-tile">
+                <div class="c-name" style="color:#8ba3f7">Ethereum</div>
+                <div class="c-val">37.0%</div>
+                <div class="c-share">$4.62M</div>
+              </div>
+              <div class="chain-tile">
+                <div class="c-name" style="color:#60a5fa">Base</div>
+                <div class="c-val">34.0%</div>
+                <div class="c-share">$4.24M</div>
+              </div>
+              <div class="chain-tile">
+                <div class="c-name" style="color:#c084fc">Solana</div>
+                <div class="c-val">11.0%</div>
+                <div class="c-share">$1.37M</div>
+              </div>
+              <div class="chain-tile">
+                <div class="c-name" style="color:#38bdf8">Arbitrum</div>
+                <div class="c-val">15.0%</div>
+                <div class="c-share">$1.87M</div>
+              </div>
+              <div class="chain-tile">
+                <div class="c-name" style="color:#fbbf24">BNB</div>
+                <div class="c-val">3.0%</div>
+                <div class="c-share">$0.37M</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+
+      <!-- Row 2: Activity -->
+      <div class="grid g-2" style="margin-bottom:24px">
+
+        <div class="card">
+          <h3>Activity <span class="pill">streaming · mint · redeem · rebalance</span></h3>
+          <div class="act">
+            <div class="act-row"><div class="act-dot act-mint"></div>
+              <div class="act-msg">MINT · <b>+1,000.00 PUSD</b> for 0x9e…a2F using <span class="chain-chip ch-base">USDC Base</span></div>
+              <div class="act-time">0s · blk 4,248,116</div>
+            </div>
+            <div class="act-row"><div class="act-dot act-redeem"></div>
+              <div class="act-msg">REDEEM · <b>−512.00 PUSD</b> for 0xAb…c44 into <span class="chain-chip ch-eth">USDT Ethereum</span> · pref. fee 0.18%</div>
+              <div class="act-time">14s · blk 4,248,113</div>
+            </div>
+            <div class="act-row"><div class="act-dot act-mint"></div>
+              <div class="act-msg">MINT · <b>+2,500.00 PUSD</b> for 0x13…9fE using <span class="chain-chip ch-sol">USDC Solana</span></div>
+              <div class="act-time">47s · blk 4,248,108</div>
+            </div>
+            <div class="act-row"><div class="act-dot act-rebal"></div>
+              <div class="act-msg">REBALANCE · admin swapped <b>100,000 USDT (BNB)</b> → <b>100,000 USDC (Base)</b></div>
+              <div class="act-time">3m · blk 4,248,094</div>
+            </div>
+            <div class="act-row"><div class="act-dot act-redeem"></div>
+              <div class="act-msg">REDEEM (basket) · <b>−1,250.00 PUSD</b> for 0x70…e11 distributed across 4 assets</div>
+              <div class="act-time">6m · blk 4,248,081</div>
+            </div>
+            <div class="act-row"><div class="act-dot act-mint"></div>
+              <div class="act-msg">MINT · <b>+300.00 PUSD</b> for 0xdd…c0A using <span class="chain-chip ch-arb">USDC Arbitrum</span></div>
+              <div class="act-time">11m · blk 4,248,047</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>System health <span class="pill">invariants</span></h3>
+          <div class="pos-row"><span>I-01 full collateralisation</span><span class="status-ok">holds</span></div>
+          <div class="pos-row"><span>I-02 surplus ring-fence</span><span class="status-ok">holds</span></div>
+          <div class="pos-row"><span>I-05 fee bounds</span><span class="status-ok">within caps</span></div>
+          <div class="pos-row"><span>I-10 reentrancy</span><span class="status-ok">guarded</span></div>
+          <div class="pos-row"><span>Admin role</span><span class="mono">3/5 multisig</span></div>
+          <div class="pos-row"><span>Upgrader role</span><span class="mono"><span class="status-warn">no timelock</span></span></div>
+          <div class="ribbon">
+            <span class="ok">●</span> <span>Last fuzz run: 2026-04-20 · 0 counterexamples</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:20px 0;font-size:11px;color:var(--muted);display:flex;justify-content:space-between;border-top:1px solid var(--line)">
+        <span>© 2026 PUSD · Universal stable on Push Chain · Donut testnet</span>
+        <span class="mono">PUSD 0x7aE5…1A0b · PUSDManager 0xF6d1…88cE</span>
+      </div>
+
+    </div>
+  </main>
+</div>
+
+</body>
+</html>

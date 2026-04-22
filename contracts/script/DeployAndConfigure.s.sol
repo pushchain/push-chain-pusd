@@ -66,7 +66,7 @@ contract DeployAndConfigure is Script {
         console.log("   Added USDT.eth");
 
         manager.addSupportedToken(
-            0x387b9C8Db60E74999aAAC5A2b7825b400F12d68E,
+            0x7A58048036206bB898008b5bBDA85697DB1e5d66,
             "USDC.eth",
             "Ethereum_Sepolia",
             6
@@ -98,7 +98,7 @@ contract DeployAndConfigure is Script {
         console.log("   Added USDT.base");
 
         manager.addSupportedToken(
-            0x84B62e44F667F692F7739Ca6040cD17DA02068A8,
+            0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1,
             "USDC.base",
             "Base_Testnet",
             6
@@ -114,7 +114,7 @@ contract DeployAndConfigure is Script {
         console.log("   Added USDT.arb");
 
         manager.addSupportedToken(
-            0xa261A10e94aE4bA88EE8c5845CbE7266bD679DD6,
+            0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C,
             "USDC.arb",
             "Arbitrum_Sepolia",
             6

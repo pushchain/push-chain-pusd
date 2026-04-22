@@ -1,0 +1,588 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>PUSD — Direction C · Brutalist Stable</title>
+<meta name="viewport" content="width=1440" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,wght@0,300..900;1,400..700&family=IBM+Plex+Mono:wght@400;500;600&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+<style>
+:root{
+  --paper:     #f3eee4;        /* warm cream */
+  --paper-2:   #ece6d9;
+  --paper-3:   #e3dccb;
+  --ink:       #0f0e0c;
+  --ink-2:     #2b2a26;
+  --ink-3:     #5a5850;
+  --ink-4:     #8a8779;
+  --rule:      #2a2924;        /* 1px lines */
+  --rule-soft: #b9b3a1;
+  --mg:        #dd44b9;
+  --mg-ink:    #a32b87;
+  --ok:        #1b6f3f;
+  --warn:      #9d6a11;
+  --bad:       #9d221a;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:'Inter',system-ui,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  font-size:14px;
+  line-height:1.5;
+  /* subtle paper grain */
+  background-image:
+    radial-gradient(rgba(60,55,40,.035) 1px, transparent 1px),
+    radial-gradient(rgba(60,55,40,.025) 1px, transparent 1px);
+  background-size: 3px 3px, 7px 7px;
+  background-position: 0 0, 1px 1px;
+}
+.serif{font-family:'Fraunces',Georgia,serif;font-weight:500;letter-spacing:-.02em}
+.mono{font-family:'IBM Plex Mono',monospace;font-variant-numeric:tabular-nums}
+a{color:inherit;text-decoration:none}
+button{font-family:inherit}
+.rule{height:1px;background:var(--rule);width:100%}
+.rule-soft{height:1px;background:var(--rule-soft);width:100%}
+
+/* page frame */
+.frame{max-width:1320px;margin:0 auto;border-left:1px solid var(--rule);border-right:1px solid var(--rule);min-height:100vh;background:var(--paper);position:relative}
+
+/* top meta bar */
+.metabar{display:flex;align-items:center;justify-content:space-between;padding:10px 28px;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:var(--ink-3);border-bottom:1px solid var(--rule);background:var(--paper-2)}
+.metabar .sep{opacity:.45;margin:0 10px}
+
+/* masthead */
+.masthead{padding:22px 28px 18px;border-bottom:2px solid var(--rule);display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:26px}
+.mast-logo{font-family:'Fraunces',Georgia,serif;font-weight:700;font-size:30px;letter-spacing:-1.5px;line-height:1}
+.mast-logo em{font-style:italic;color:var(--mg)}
+.mast-nav{display:flex;gap:22px;justify-content:center;font-size:12.5px;font-weight:500;color:var(--ink-2);text-transform:uppercase;letter-spacing:1px}
+.mast-nav a{padding-bottom:4px;border-bottom:1px solid transparent}
+.mast-nav a.on{border-bottom-color:var(--ink)}
+.mast-actions{display:flex;gap:10px}
+.btn{padding:9px 16px;border:1px solid var(--ink);background:transparent;font-weight:600;font-size:12px;letter-spacing:.8px;text-transform:uppercase;color:var(--ink);border-radius:1px;cursor:default;display:inline-flex;align-items:center;gap:8px}
+.btn.filled{background:var(--ink);color:var(--paper)}
+.btn.mg{background:var(--mg);border-color:var(--mg);color:#fff}
+
+/* section label */
+.label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3)}
+.label b{color:var(--ink);font-weight:600}
+
+/* ─── HERO ─── */
+.hero{display:grid;grid-template-columns:7fr 5fr;border-bottom:1px solid var(--rule)}
+.hero-l{padding:56px 28px 40px;border-right:1px solid var(--rule)}
+.hero-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:36px}
+.hero-label .dateline{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.8px;text-transform:uppercase}
+.hero-h1{font-family:'Fraunces',Georgia,serif;font-weight:400;font-size:clamp(56px,7vw,104px);line-height:.94;letter-spacing:-3.5px;color:var(--ink)}
+.hero-h1 em{font-style:italic}
+.hero-h1 u{text-decoration:none;border-bottom:3px solid var(--mg);padding-bottom:2px}
+.hero-sub{font-family:'Fraunces',Georgia,serif;font-weight:300;font-style:italic;font-size:22px;line-height:1.4;color:var(--ink-2);margin-top:36px;max-width:620px;letter-spacing:-.2px}
+
+/* stats row under hero h1 */
+.hero-stats{margin-top:48px;border-top:1px solid var(--rule);display:grid;grid-template-columns:repeat(4,1fr)}
+.hs{padding:18px 20px 18px 0;border-right:1px solid var(--rule-soft)}
+.hs:last-child{border-right:none}
+.hs .lbl{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+.hs .val{font-family:'IBM Plex Mono',monospace;font-size:26px;font-weight:500;letter-spacing:-1px;color:var(--ink)}
+.hs .sub{font-size:11px;color:var(--ink-3);margin-top:4px}
+
+/* hero right — convert */
+.hero-r{padding:36px 28px 36px;background:var(--paper-2);border-left:1px solid var(--rule);position:relative}
+.cvt-head{display:flex;align-items:baseline;justify-content:space-between;border-bottom:1px solid var(--rule);padding-bottom:10px;margin-bottom:18px}
+.cvt-head .t{font-family:'Fraunces',serif;font-weight:500;font-size:28px;letter-spacing:-1px}
+.cvt-head .n{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);letter-spacing:1px;text-transform:uppercase}
+
+.cvt-seg{display:grid;grid-template-columns:1fr 1fr;border:1px solid var(--ink);margin-bottom:22px}
+.cvt-seg span{padding:8px;font-size:11.5px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;text-align:center;color:var(--ink)}
+.cvt-seg span.on{background:var(--ink);color:var(--paper)}
+
+.cvt-field{margin-bottom:20px}
+.cvt-field-head{display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3);margin-bottom:8px}
+.cvt-field-body{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid var(--ink);padding-bottom:6px}
+.cvt-amt{font-family:'IBM Plex Mono',monospace;font-size:56px;font-weight:400;letter-spacing:-3px;color:var(--ink);flex:1;line-height:1}
+.cvt-amt.mg{color:var(--mg-ink)}
+.cvt-tok{text-align:right;min-width:160px}
+.cvt-tok .tt{font-family:'Fraunces',serif;font-size:20px;font-weight:500;letter-spacing:-.3px;line-height:1}
+.cvt-tok .tc{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3);margin-top:6px}
+
+.cvt-meta{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--rule-soft);border:1px solid var(--rule-soft);margin:20px 0 22px}
+.cvt-meta div{background:var(--paper-2);padding:10px 12px}
+.cvt-meta .k{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1.2px;text-transform:uppercase;color:var(--ink-3)}
+.cvt-meta .v{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink);margin-top:2px}
+
+.cvt-cta{width:100%;padding:16px;background:var(--mg);color:#fff;border:1px solid var(--mg);border-radius:1px;font-family:'IBM Plex Mono',monospace;font-weight:600;letter-spacing:2px;text-transform:uppercase;font-size:13px;cursor:default}
+
+.cvt-fine{margin-top:12px;font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);letter-spacing:.4px;line-height:1.55}
+
+/* pull-quote section */
+.pull{display:grid;grid-template-columns:2fr 3fr;border-bottom:1px solid var(--rule)}
+.pull-l{padding:64px 28px;border-right:1px solid var(--rule)}
+.pull-l .label{margin-bottom:18px}
+.pull-l h2{font-family:'Fraunces',serif;font-weight:400;font-size:48px;line-height:1.05;letter-spacing:-1.5px}
+.pull-l h2 em{font-style:italic;color:var(--mg)}
+.pull-r{padding:64px 28px;display:flex;flex-direction:column;gap:22px}
+.pull-r p{font-family:'Fraunces',serif;font-size:19px;line-height:1.55;color:var(--ink-2)}
+.pull-r p + p{padding-top:22px;border-top:1px solid var(--rule-soft)}
+.pull-r p b{font-weight:600;color:var(--ink)}
+
+/* reserves section — always visible full-width table */
+.reserves{padding:48px 0 0 0;border-bottom:2px solid var(--rule)}
+.reserves-head{padding:0 28px 22px;display:grid;grid-template-columns:auto 1fr auto;align-items:end;gap:30px}
+.reserves-head .kicker{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1.6px;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px}
+.reserves-head h3{font-family:'Fraunces',serif;font-weight:400;font-size:56px;letter-spacing:-2px;line-height:1}
+.reserves-head h3 em{font-style:italic}
+.reserves-head .right{text-align:right}
+.reserves-head .right .big{font-family:'IBM Plex Mono',monospace;font-size:36px;letter-spacing:-1.5px}
+.reserves-head .right .sml{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);letter-spacing:.8px;text-transform:uppercase;margin-top:4px}
+
+.tbl{width:100%;border-collapse:collapse;table-layout:fixed}
+.tbl th,.tbl td{padding:14px 20px;border-top:1px solid var(--rule);vertical-align:middle;text-align:left}
+.tbl th{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3);font-weight:500;background:var(--paper-2)}
+.tbl td{font-family:'IBM Plex Mono',monospace;font-size:13px;color:var(--ink)}
+.tbl tr:first-child td{border-top:1px solid var(--rule)}
+.tbl .asset{display:flex;align-items:center;gap:12px}
+.tbl .chip{display:inline-block;padding:2px 8px;border:1px solid var(--ink);font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:1px;color:var(--ink);margin-left:8px}
+.tbl .ticker{font-family:'Fraunces',serif;font-weight:600;font-size:16px;letter-spacing:-.3px;color:var(--ink)}
+.tbl .bar{height:6px;background:var(--paper-3);border:1px solid var(--rule-soft);position:relative}
+.tbl .bar i{position:absolute;inset:0 auto 0 0;background:var(--ink)}
+.tbl .bar i.mg{background:var(--mg)}
+.tbl .bar i.warn{background:var(--warn)}
+.status{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1px;text-transform:uppercase;display:inline-flex;align-items:center;gap:6px}
+.status.ok{color:var(--ok)}
+.status.warn{color:var(--warn)}
+.status::before{content:'';width:7px;height:7px;background:currentColor;display:inline-block}
+
+/* footer ribbon across reserves */
+.res-foot{display:grid;grid-template-columns:repeat(4,1fr);border-top:1px solid var(--rule);background:var(--paper-2)}
+.res-foot div{padding:14px 20px;border-right:1px solid var(--rule-soft)}
+.res-foot div:last-child{border-right:none}
+.res-foot .l{font-family:'IBM Plex Mono',monospace;font-size:10.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3)}
+.res-foot .v{font-family:'IBM Plex Mono',monospace;font-size:16px;color:var(--ink);margin-top:3px}
+
+/* promise grid */
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);border-bottom:1px solid var(--rule)}
+.grid3 > div{padding:48px 28px;border-right:1px solid var(--rule)}
+.grid3 > div:last-child{border-right:none}
+.grid3 .n{font-family:'Fraunces',serif;font-size:56px;font-style:italic;font-weight:400;letter-spacing:-2px;color:var(--mg);line-height:1}
+.grid3 .h{font-family:'Fraunces',serif;font-size:24px;letter-spacing:-.6px;margin:18px 0 10px}
+.grid3 .p{font-size:14px;color:var(--ink-2);line-height:1.6}
+
+/* marquee flow */
+.marquee{padding:18px 28px;border-bottom:1px solid var(--rule);overflow:hidden;font-family:'Fraunces',serif;font-size:24px;font-style:italic;letter-spacing:-.3px;color:var(--ink-2);white-space:nowrap}
+.marquee span{margin:0 24px}
+.marquee em{font-style:normal;color:var(--mg)}
+
+/* ticker */
+.ticker-bar{display:flex;align-items:center;gap:28px;padding:12px 28px;border-top:1px solid var(--rule);border-bottom:1px solid var(--rule);background:var(--paper-2);font-family:'IBM Plex Mono',monospace;font-size:12px;overflow:hidden;white-space:nowrap}
+.ticker-bar b{color:var(--ink);margin-right:6px;font-weight:600}
+.ticker-bar .up{color:var(--ok)}
+.ticker-bar .dn{color:var(--bad)}
+.ticker-bar .sep{color:var(--rule-soft);margin:0 4px}
+
+/* activity editorial cards */
+.activity{padding:56px 28px;border-bottom:1px solid var(--rule)}
+.activity h3{font-family:'Fraunces',serif;font-size:48px;letter-spacing:-1.5px;line-height:1;margin-bottom:8px;font-weight:400}
+.activity h3 em{font-style:italic;color:var(--mg)}
+.activity .lead{font-family:'Fraunces',serif;font-style:italic;font-size:17px;color:var(--ink-2);margin-bottom:32px}
+.act-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-top:1px solid var(--rule)}
+.act-cell{padding:22px 20px;border-right:1px solid var(--rule-soft);border-bottom:1px solid var(--rule-soft)}
+.act-cell:nth-child(4n){border-right:none}
+.act-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1.6px;text-transform:uppercase;color:var(--ink-3);margin-bottom:10px}
+.act-tag b.mint{color:var(--mg)}
+.act-tag b.red{color:var(--ink)}
+.act-tag b.rebal{color:var(--warn)}
+.act-hl{font-family:'Fraunces',serif;font-size:22px;line-height:1.3;letter-spacing:-.4px;color:var(--ink);margin-bottom:14px}
+.act-hl b{font-weight:600}
+.act-meta{font-family:'IBM Plex Mono',monospace;font-size:10.5px;color:var(--ink-3);letter-spacing:.4px}
+
+/* colophon footer */
+.colophon{padding:48px 28px;display:grid;grid-template-columns:2fr 1fr 1fr;gap:30px;border-top:2px solid var(--rule)}
+.colophon .brand{font-family:'Fraunces',serif;font-size:44px;letter-spacing:-1.5px;line-height:1}
+.colophon .brand em{font-style:italic;color:var(--mg)}
+.colophon .lede{font-family:'Fraunces',serif;font-style:italic;font-size:15px;color:var(--ink-2);margin-top:12px;max-width:520px;line-height:1.6}
+.colophon .col h5{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-3);margin-bottom:14px;font-weight:500}
+.colophon .col a{display:block;font-size:13px;padding:6px 0;border-bottom:1px solid var(--rule-soft)}
+.colophon .col a:last-child{border-bottom:none}
+
+.legalbar{padding:16px 28px;display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-3);border-top:1px solid var(--rule);background:var(--paper-2)}
+
+/* decorative circled number */
+.num-circ{width:26px;height:26px;border:1.5px solid var(--ink);display:inline-grid;place-items:center;border-radius:50%;font-family:'IBM Plex Mono',monospace;font-size:11px;font-weight:600;margin-right:8px;vertical-align:-2px}
+
+/* token dot mark */
+.tok{width:28px;height:28px;border:1.5px solid var(--ink);display:inline-grid;place-items:center;font-family:'Fraunces',serif;font-weight:700;font-size:13px;background:var(--paper)}
+.tok.mg{color:var(--mg)}
+</style>
+</head>
+<body>
+
+<div class="frame">
+
+  <!-- ── META BAR ── -->
+  <div class="metabar">
+    <div>Push USD · Vol. 1, No. 1 · Wednesday, April 22, 2026</div>
+    <div>
+      <span>Block 4,248,116</span><span class="sep">|</span>
+      <span>Donut Testnet</span><span class="sep">|</span>
+      <span>Latency 1.9s</span>
+    </div>
+  </div>
+
+  <!-- ── MASTHEAD ── -->
+  <header class="masthead">
+    <div class="mast-logo">Push <em>USD</em></div>
+    <nav class="mast-nav">
+      <a class="on">Home</a>
+      <a>Convert</a>
+      <a>Reserves</a>
+      <a>Activity</a>
+      <a>Docs</a>
+    </nav>
+    <div class="mast-actions">
+      <button class="btn">0xE7…9b4F</button>
+      <button class="btn filled">Connect</button>
+    </div>
+  </header>
+
+  <!-- ── HERO ── -->
+  <section class="hero">
+    <div class="hero-l">
+      <div class="hero-label">
+        <span class="dateline">Issue · 01 — The Universal Stable</span>
+        <span class="label"><b>LIVE</b> · 100% COLLATERALISED</span>
+      </div>
+
+      <h1 class="hero-h1">
+        A dollar<br/>
+        that works<br/>
+        on <em><u>every</u></em> chain.
+      </h1>
+
+      <p class="hero-sub">
+        PUSD is a 1:1 backed stablecoin on Push Chain. Deposit USDC or USDT from Ethereum, Solana, Base, Arbitrum or BNB. Redeem into any supported asset at any time. No algorithm. No rebase. No tricks.
+      </p>
+
+      <div class="hero-stats">
+        <div class="hs">
+          <div class="lbl">Circulation</div>
+          <div class="val">$12,483,221</div>
+          <div class="sub">▲ 2.14% · 24h</div>
+        </div>
+        <div class="hs">
+          <div class="lbl">Collateral ratio</div>
+          <div class="val">100.00%</div>
+          <div class="sub">fully backed</div>
+        </div>
+        <div class="hs">
+          <div class="lbl">Assets · chains</div>
+          <div class="val">9 · 5</div>
+          <div class="sub">stablecoins across 5 origins</div>
+        </div>
+        <div class="hs">
+          <div class="lbl">Base redemption fee</div>
+          <div class="val">0.05%</div>
+          <div class="sub">+ 0–2% preferred fee</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- CONVERT -->
+    <aside class="hero-r">
+      <div class="cvt-head">
+        <div class="t">Convert.</div>
+        <div class="n">no. 01 · one action</div>
+      </div>
+
+      <div class="cvt-seg">
+        <span class="on">Deposit → Mint</span>
+        <span>Burn → Redeem</span>
+      </div>
+
+      <div class="cvt-field">
+        <div class="cvt-field-head"><span>Deposit</span><span>Balance 4,820.00</span></div>
+        <div class="cvt-field-body">
+          <div class="cvt-amt">1,000</div>
+          <div class="cvt-tok">
+            <div class="tt">USDC</div>
+            <div class="tc">on Base</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cvt-field">
+        <div class="cvt-field-head"><span>Receive</span><span>1 : 1</span></div>
+        <div class="cvt-field-body">
+          <div class="cvt-amt mg">1,000</div>
+          <div class="cvt-tok">
+            <div class="tt" style="color:var(--mg)">PUSD</div>
+            <div class="tc">on Push Chain</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="cvt-meta">
+        <div><div class="k">Haircut</div><div class="v">0 bps</div></div>
+        <div><div class="k">Protocol fee</div><div class="v">None</div></div>
+        <div><div class="k">Rate</div><div class="v">1.000000</div></div>
+        <div><div class="k">Route</div><div class="v">Base → PC</div></div>
+      </div>
+
+      <button class="cvt-cta">Burn nothing. Mint 1,000 PUSD.</button>
+
+      <p class="cvt-fine">By proceeding you authorise PUSDManager to move 1,000.00 USDC from your Base account. PUSD will be minted 1:1 to your universal account on Push Chain. You may redeem at any time, into your preferred asset, or into a basket when preferred liquidity is thin.</p>
+    </aside>
+  </section>
+
+  <!-- ── TICKER ── -->
+  <div class="ticker-bar">
+    <span><b>PUSD</b> 1.0000 <span class="up">▲ peg</span></span>
+    <span class="sep">/</span>
+    <span><b>SUPPLY</b> 12,483,221 <span class="up">▲ 2.14%</span></span>
+    <span class="sep">/</span>
+    <span><b>RATIO</b> 100.00%</span>
+    <span class="sep">/</span>
+    <span><b>USDC·BASE</b> 31.0%</span>
+    <span class="sep">/</span>
+    <span><b>USDT·ETH</b> 22.0%</span>
+    <span class="sep">/</span>
+    <span><b>USDC·SOL</b> 11.0%</span>
+    <span class="sep">/</span>
+    <span><b>REBAL 24H</b> 1</span>
+    <span class="sep">/</span>
+    <span><b>TX 24H</b> 482 <span class="up">▲</span></span>
+    <span class="sep">/</span>
+    <span><b>INVARIANTS</b> 11/11 ✓</span>
+  </div>
+
+  <!-- ── MARQUEE / MANIFESTO ── -->
+  <div class="marquee">
+    <span>Boring is the feature.</span><em>·</em>
+    <span>Unit of settlement, not speculation.</span><em>·</em>
+    <span>Backed, not printed.</span><em>·</em>
+    <span>Preferred, basket, emergency — in that order.</span><em>·</em>
+    <span>The surplus is not your liquidity.</span>
+  </div>
+
+  <!-- ── PULL / MANIFESTO ── -->
+  <section class="pull">
+    <div class="pull-l">
+      <div class="label"><b>01</b> · THE PROMISE</div>
+      <h2>Every PUSD<br/>is a dollar.<br/><em>Not a bet.</em></h2>
+    </div>
+    <div class="pull-r">
+      <p><span class="num-circ">1</span>PUSD is <b>fully collateralised</b> by real stablecoins — USDC and USDT — held in a single on-chain reserve. No algorithmic component. No rebase. No yield contamination on the base asset.</p>
+      <p><span class="num-circ">2</span><b>Redemption routes in three paths:</b> preferred asset if available; otherwise proportional basket across every reserve; under stress, a forced emergency drain of at-risk positions. The order is the contract; the contract is the promise.</p>
+      <p><span class="num-circ">3</span>Fees exist to <b>steer inventory</b>, not to extract rent. Redeem into the abundant asset, pay almost nothing. Redeem into the thin one, pay slightly more. The math is on-chain and the ceiling is 2%.</p>
+    </div>
+  </section>
+
+  <!-- ── RESERVES (always visible, dominant) ── -->
+  <section class="reserves">
+    <div class="reserves-head">
+      <div>
+        <div class="kicker">02 · Proof of Reserves</div>
+        <h3>The <em>book</em>.</h3>
+      </div>
+      <div style="padding-bottom:10px;color:var(--ink-2);font-size:14px;max-width:440px;line-height:1.55">
+        Every asset, on every chain, visible at all times. This table is the protocol. If it disagrees with a claim, trust the table.
+      </div>
+      <div class="right">
+        <div class="big">$12,487,432.17</div>
+        <div class="sml">Gross reserves · ring-fenced surplus $4,211.04</div>
+      </div>
+    </div>
+
+    <table class="tbl">
+      <thead>
+        <tr>
+          <th style="width:28%">Asset · Chain</th>
+          <th style="width:16%">Balance</th>
+          <th style="width:10%">Share</th>
+          <th style="width:22%">Distribution</th>
+          <th style="width:12%">Status</th>
+          <th style="width:12%">Pref · Haircut</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="asset"><span class="tok mg">C</span><span class="ticker">USDC</span><span class="chip">Base</span></span></td>
+          <td>3,872,441.28</td>
+          <td>31.00%</td>
+          <td><div class="bar"><i class="mg" style="width:78%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>0.12% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok">T</span><span class="ticker">USDT</span><span class="chip">Ethereum</span></span></td>
+          <td>2,744,832.04</td>
+          <td>22.00%</td>
+          <td><div class="bar"><i style="width:55%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>0.18% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok">C</span><span class="ticker">USDC</span><span class="chip">Ethereum</span></span></td>
+          <td>1,872,110.90</td>
+          <td>15.00%</td>
+          <td><div class="bar"><i style="width:38%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>0.32% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok mg">C</span><span class="ticker">USDC</span><span class="chip">Solana</span></span></td>
+          <td>1,373,201.45</td>
+          <td>11.00%</td>
+          <td><div class="bar"><i class="mg" style="width:28%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>0.55% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok">C</span><span class="ticker">USDC</span><span class="chip">Arbitrum</span></span></td>
+          <td>1,123,488.11</td>
+          <td>9.00%</td>
+          <td><div class="bar"><i style="width:22%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>0.70% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok">T</span><span class="ticker">USDT</span><span class="chip">Base</span></span></td>
+          <td>873,001.00</td>
+          <td>7.00%</td>
+          <td><div class="bar"><i style="width:17%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>0.84% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok">T</span><span class="ticker">USDT</span><span class="chip">Arbitrum</span></span></td>
+          <td>499,120.40</td>
+          <td>4.00%</td>
+          <td><div class="bar"><i style="width:9%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>1.20% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok">T</span><span class="ticker">USDT</span><span class="chip">Solana</span></span></td>
+          <td>249,108.10</td>
+          <td>2.00%</td>
+          <td><div class="bar"><i style="width:4%"></i></div></td>
+          <td><span class="status ok">Enabled</span></td>
+          <td>1.70% · 0 bps</td>
+        </tr>
+        <tr>
+          <td><span class="asset"><span class="tok">T</span><span class="ticker">USDT</span><span class="chip">BNB</span></span></td>
+          <td>374,129.00</td>
+          <td>3.00%</td>
+          <td><div class="bar"><i class="warn" style="width:7%"></i></div></td>
+          <td><span class="status warn">Redeem-only</span></td>
+          <td>— · 20 bps</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="res-foot">
+      <div><div class="l">Invariants</div><div class="v">11 / 11 ✓</div></div>
+      <div><div class="l">Surplus (fees + haircut)</div><div class="v">$4,211.04</div></div>
+      <div><div class="l">Last rebalance</div><div class="v">3m ago · BNB → Base</div></div>
+      <div><div class="l">Last audit</div><div class="v">2026-02-12 · Report ↗</div></div>
+    </div>
+  </section>
+
+  <!-- ── PROMISE / NUMBERED ── -->
+  <section class="grid3">
+    <div>
+      <div class="n">I.</div>
+      <div class="h">Collateralised. Plainly.</div>
+      <div class="p">The reserve contract holds USDC and USDT on the chain they were deposited from. Mint is a deposit; redeem is a withdrawal. The ERC-20 knows nothing about collateral — which is exactly why it can be trusted with your balance.</div>
+    </div>
+    <div>
+      <div class="n">II.</div>
+      <div class="h">Multi-chain. Single ledger.</div>
+      <div class="p">Push Chain's universal accounts let liquidity enter from Ethereum, Solana, Base, Arbitrum or BNB. PUSD is issued on one ledger, redeemable against the whole basket — no wrapping, no bridging tokens in your wallet.</div>
+    </div>
+    <div>
+      <div class="n">III.</div>
+      <div class="h">Upgrade-gated. Emergency-aware.</div>
+      <div class="p">Upgrades pass through a timelocked role. Risky assets are moved to REDEEM-ONLY or EMERGENCY-REDEEM without pausing the protocol. The basket path guarantees exit even when preferred liquidity is thin.</div>
+    </div>
+  </section>
+
+  <!-- ── ACTIVITY AS NEWSPAPER ── -->
+  <section class="activity">
+    <h3>Dispatch · <em>the day so far</em>.</h3>
+    <p class="lead">Reported from the chain, unembellished.</p>
+
+    <div class="act-grid">
+      <div class="act-cell">
+        <div class="act-tag"><b class="mint">● MINT</b> · block 4,248,116</div>
+        <div class="act-hl"><b>+1,000.00 PUSD</b> issued against 1,000 USDC from Base.</div>
+        <div class="act-meta">for 0x9e…a2F · 0s ago · haircut 0 · fee 0</div>
+      </div>
+      <div class="act-cell">
+        <div class="act-tag"><b class="red">● REDEEM</b> · block 4,248,113</div>
+        <div class="act-hl"><b>−512.00 PUSD</b> burned; 511.06 USDT paid on Ethereum.</div>
+        <div class="act-meta">for 0xAb…c44 · 14s ago · base 0.05% · pref 0.18%</div>
+      </div>
+      <div class="act-cell">
+        <div class="act-tag"><b class="mint">● MINT</b> · block 4,248,108</div>
+        <div class="act-hl"><b>+2,500.00 PUSD</b> issued against 2,500 USDC from Solana.</div>
+        <div class="act-meta">for 0x13…9fE · 47s ago · pref fee trend 0.55%</div>
+      </div>
+      <div class="act-cell">
+        <div class="act-tag"><b class="rebal">● REBALANCE</b> · block 4,248,094</div>
+        <div class="act-hl">Admin swapped <b>100,000 USDT (BNB) → 100,000 USDC (Base)</b>, equal PUSD value.</div>
+        <div class="act-meta">3m ago · value conservation I-07 ✓</div>
+      </div>
+      <div class="act-cell">
+        <div class="act-tag"><b class="red">● REDEEM (basket)</b> · block 4,248,081</div>
+        <div class="act-hl"><b>−1,250.00 PUSD</b> distributed across four assets by share.</div>
+        <div class="act-meta">for 0x70…e11 · 6m ago · base 0.05% only</div>
+      </div>
+      <div class="act-cell">
+        <div class="act-tag"><b class="mint">● MINT</b> · block 4,248,047</div>
+        <div class="act-hl"><b>+300.00 PUSD</b> issued against 300 USDC from Arbitrum.</div>
+        <div class="act-meta">for 0xdd…c0A · 11m ago</div>
+      </div>
+      <div class="act-cell">
+        <div class="act-tag"><b class="red">● REDEEM</b> · block 4,247,942</div>
+        <div class="act-hl"><b>−8,200.00 PUSD</b> burned; 8,188.58 USDC paid on Base.</div>
+        <div class="act-meta">for 0xC1…ae2 · 22m ago · pref 0.14%</div>
+      </div>
+      <div class="act-cell">
+        <div class="act-tag"><b class="rebal">● SWEEP</b> · block 4,247,801</div>
+        <div class="act-hl">Treasury swept <b>$3,204.12</b> of accrued fees and haircut.</div>
+        <div class="act-meta">41m ago · to 0x7dA9…b14e</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── COLOPHON FOOTER ── -->
+  <section class="colophon">
+    <div>
+      <div class="brand">Push <em>USD</em></div>
+      <div class="lede">A universal dollar for applications that don't care which chain their users walk in from. Issued on Push Chain. Redeemable against a basket. Upgrade-gated, emergency-aware, audit-first.</div>
+    </div>
+    <div class="col">
+      <h5>Protocol</h5>
+      <a>Contracts</a>
+      <a>Audit report</a>
+      <a>Changelog</a>
+      <a>Status</a>
+    </div>
+    <div class="col">
+      <h5>Elsewhere</h5>
+      <a>Explorer ↗</a>
+      <a>Docs ↗</a>
+      <a>GitHub ↗</a>
+      <a>Forum ↗</a>
+    </div>
+  </section>
+
+  <div class="legalbar">
+    <span>© MMXXVI · Push USD · All serifs intentional.</span>
+    <span>PUSD · 0x7aE5…1A0b &nbsp;·&nbsp; PUSDManager · 0xF6d1…88cE</span>
+  </div>
+
+</div>
+
+</body>
+</html>

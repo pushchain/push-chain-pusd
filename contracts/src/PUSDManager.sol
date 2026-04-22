@@ -61,8 +61,8 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
     event TokenAdded(address indexed token, string name, string chainNamespace, uint8 decimals);
     event TokenStatusChanged(address indexed token, TokenStatus oldStatus, TokenStatus newStatus);
-    event Deposited(address indexed user, address indexed token, uint256 tokenAmount, uint256 pusdMinted, uint256 surplusAmount);
-    event Redeemed(address indexed user, address indexed token, uint256 pusdBurned, uint256 tokenAmount);
+    event Deposited(address indexed user, address indexed token, uint256 tokenAmount, uint256 pusdMinted, uint256 surplusAmount, address indexed recipient);
+    event Redeemed(address indexed user, address indexed token, uint256 pusdBurned, uint256 tokenAmount, address indexed recipient);
     event TreasuryReserveUpdated(address indexed oldTreasury, address indexed newTreasury);
     event BaseFeeUpdated(uint256 oldFee, uint256 newFee);
     event PreferredFeeRangeUpdated(uint256 oldMin, uint256 oldMax, uint256 newMin, uint256 newMax);
@@ -258,10 +258,12 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         emit Rebalanced(tokenIn, amountIn, tokenOut, amountOut);
     }
 
-    function deposit(address token, uint256 amount) external nonReentrant {
+    function deposit(address token, uint256 amount, address recipient) external nonReentrant {
         TokenInfo memory tokenInfo = supportedTokens[token];
         require(tokenInfo.status == TokenStatus.ENABLED, "PUSDManager: token not enabled for deposits");
         require(amount > 0, "PUSDManager: amount must be greater than 0");
+
+        require(recipient != address(0), "PUSDManager: recipient cannot be zero address");
 
         // Calculate surplus (haircut)
         uint256 surplusTokenAmount = (amount * tokenInfo.surplusHaircutBps) / BASIS_POINTS;
@@ -279,17 +281,19 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
 
         // Mint PUSD only for net amount (after haircut)
         uint256 pusdAmount = _normalizeDecimalsToPUSD(netTokenAmount, tokenInfo.decimals);
-        pusd.mint(msg.sender, pusdAmount);
+        pusd.mint(recipient, pusdAmount);
 
-        emit Deposited(msg.sender, token, amount, pusdAmount, surplusTokenAmount);
+        emit Deposited(msg.sender, token, amount, pusdAmount, surplusTokenAmount, recipient);
     }
 
     function redeem(
         uint256 pusdAmount,
         address preferredAsset,
-        bool allowBasket
+        bool allowBasket,
+        address recipient
     ) external nonReentrant {
         require(pusdAmount > 0, "PUSDManager: amount must be greater than 0");
+        require(recipient != address(0), "PUSDManager: recipient cannot be zero address");
         require(pusd.balanceOf(msg.sender) >= pusdAmount, "PUSDManager: insufficient PUSD balance");
         
         // Check if any token is in EMERGENCY_REDEEM status
@@ -309,14 +313,14 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
                 // Charge base fee + preferred fee
                 uint256 preferredFee = _calculatePreferredFee(preferredAsset);
                 uint256 totalFee = baseFee + preferredFee;
-                _executeRedeem(preferredAsset, pusdAmount, requiredAmount, true, totalFee);
+                _executeRedeem(preferredAsset, pusdAmount, requiredAmount, true, totalFee, recipient);
                 return;
             }
         }
         
         // If emergency tokens exist, force proportional redemption with preferred + emergency
         if (hasEmergencyTokens && isPreferredValid) {
-            _executeEmergencyRedeem(pusdAmount, preferredAsset);
+            _executeEmergencyRedeem(pusdAmount, preferredAsset, recipient);
             return;
         }
         
@@ -324,10 +328,10 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         require(allowBasket, "PUSDManager: preferred asset unavailable and basket not allowed");
         
         // Try basket redemption across multiple tokens
-        _executeBasketRedeem(pusdAmount);
+        _executeBasketRedeem(pusdAmount, recipient);
     }
     
-    function _executeBasketRedeem(uint256 pusdAmount) internal {
+    function _executeBasketRedeem(uint256 pusdAmount, address recipient) internal {
         // Calculate total available liquidity across all tokens (in PUSD terms)
         uint256 totalLiquidityPUSD = 0;
         uint256[] memory availableLiquidity = new uint256[](tokenCount);
@@ -371,7 +375,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             
             if (tokenSharePUSD > 0) {
                 uint256 tokenAmount = _convertFromPUSD(tokenSharePUSD, info.decimals);
-                _executeRedeem(token, tokenSharePUSD, tokenAmount, false, baseFee);
+                _executeRedeem(token, tokenSharePUSD, tokenAmount, false, baseFee, recipient);
                 remainingPUSD -= tokenSharePUSD;
                 availableLiquidity[i] -= tokenSharePUSD;
             }
@@ -394,7 +398,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             address token = tokenList[maxLiquidityIndex];
             TokenInfo memory info = supportedTokens[token];
             uint256 tokenAmount = _convertFromPUSD(remainingPUSD, info.decimals);
-            _executeRedeem(token, remainingPUSD, tokenAmount, false, baseFee);
+            _executeRedeem(token, remainingPUSD, tokenAmount, false, baseFee, recipient);
         }
     }
     
@@ -411,21 +415,22 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         return false;
     }
     
-    function _executeEmergencyRedeem(uint256 pusdAmount, address preferredAsset) internal {
+    function _executeEmergencyRedeem(uint256 pusdAmount, address preferredAsset, address recipient) internal {
         // Calculate total liquidity of preferred + emergency tokens
         uint256 totalLiquidityPUSD = 0;
         uint256[] memory availableLiquidity = new uint256[](tokenCount);
+        uint256 preferredIndex;
         
-        TokenInfo memory preferredInfo = supportedTokens[preferredAsset];
-        require(preferredInfo.exists, "PUSDManager: preferred asset not added");
-        
-        uint256 preferredBalance = _getAvailableLiquidity(preferredAsset);
-        uint256 preferredBalanceInPUSD = _normalizeDecimalsToPUSD(preferredBalance, preferredInfo.decimals);
-        
-        // Track preferred asset index (safe because we verified existence)
-        uint256 preferredIndex = tokenIndex[preferredAsset];
-        availableLiquidity[preferredIndex] = preferredBalanceInPUSD;
-        totalLiquidityPUSD += preferredBalanceInPUSD;
+        {
+            TokenInfo memory preferredInfo = supportedTokens[preferredAsset];
+            require(preferredInfo.exists, "PUSDManager: preferred asset not added");
+            preferredIndex = tokenIndex[preferredAsset];
+            uint256 preferredBalanceInPUSD = _normalizeDecimalsToPUSD(
+                _getAvailableLiquidity(preferredAsset), preferredInfo.decimals
+            );
+            availableLiquidity[preferredIndex] = preferredBalanceInPUSD;
+            totalLiquidityPUSD += preferredBalanceInPUSD;
+        }
         
         // Add all emergency tokens
         for (uint256 i = 0; i < tokenCount; i++) {
@@ -467,7 +472,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             
             if (tokenSharePUSD > 0) {
                 uint256 tokenAmount = _convertFromPUSD(tokenSharePUSD, info.decimals);
-                _executeRedeem(token, tokenSharePUSD, tokenAmount, false, baseFee);
+                _executeRedeem(token, tokenSharePUSD, tokenAmount, false, baseFee, recipient);
                 remainingPUSD -= tokenSharePUSD;
                 availableLiquidity[i] -= tokenSharePUSD;
             }
@@ -490,11 +495,11 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             address token = tokenList[maxLiquidityIndex];
             TokenInfo memory info = supportedTokens[token];
             uint256 tokenAmount = _convertFromPUSD(remainingPUSD, info.decimals);
-            _executeRedeem(token, remainingPUSD, tokenAmount, false, baseFee);
+            _executeRedeem(token, remainingPUSD, tokenAmount, false, baseFee, recipient);
         }
     }
     
-    function _executeRedeem(address token, uint256 pusdAmount, uint256 tokenAmount, bool shouldBurn, uint256 feeBps) internal {
+    function _executeRedeem(address token, uint256 pusdAmount, uint256 tokenAmount, bool shouldBurn, uint256 feeBps, address recipient) internal {
         if (shouldBurn) {
             pusd.burn(msg.sender, pusdAmount);
         }
@@ -511,8 +516,8 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         
         // Transfer only user amount (fees stay in contract)
         uint256 userAmount = tokenAmount - feeAmount;
-        IERC20(token).safeTransfer(msg.sender, userAmount);
-        emit Redeemed(msg.sender, token, pusdAmount, userAmount);
+        IERC20(token).safeTransfer(recipient, userAmount);
+        emit Redeemed(msg.sender, token, pusdAmount, userAmount, recipient);
     }
 
     function _normalizeDecimalsToPUSD(uint256 amount, uint8 tokenDecimals) internal pure returns (uint256) {

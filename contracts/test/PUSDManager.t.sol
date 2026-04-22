@@ -209,7 +209,7 @@ contract PUSDManagerTest is Test {
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
         vm.expectRevert("PUSDManager: token not enabled for deposits");
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
     }
 
@@ -222,7 +222,7 @@ contract PUSDManagerTest is Test {
 
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
 
         assertEq(pusd.balanceOf(user), depositAmount);
@@ -239,7 +239,7 @@ contract PUSDManagerTest is Test {
 
         vm.startPrank(user);
         usdtBnb.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtBnb), depositAmount);
+        manager.deposit(address(usdtBnb), depositAmount, user);
         vm.stopPrank();
 
         uint256 expectedPUSD = 1000 * 10**6;
@@ -254,7 +254,7 @@ contract PUSDManagerTest is Test {
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
         vm.expectRevert("PUSDManager: token not enabled for deposits");
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
     }
 
@@ -264,7 +264,90 @@ contract PUSDManagerTest is Test {
 
         vm.prank(user);
         vm.expectRevert("PUSDManager: amount must be greater than 0");
-        manager.deposit(address(usdtEth), 0);
+        manager.deposit(address(usdtEth), 0, user);
+    }
+
+    function testDepositZeroAddressRecipientReverts() public {
+        vm.prank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+
+        uint256 depositAmount = 500 * 10**6;
+        usdtEth.mint(user, depositAmount);
+
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        vm.expectRevert("PUSDManager: recipient cannot be zero address");
+        manager.deposit(address(usdtEth), depositAmount, address(0));
+        vm.stopPrank();
+    }
+
+    function testRedeemToRecipient() public {
+        address recipient = address(42);
+        vm.prank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+
+        uint256 depositAmount = 1000 * 10**6;
+        usdtEth.mint(user, depositAmount);
+
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
+
+        uint256 redeemAmount = 500 * 10**6;
+        manager.redeem(redeemAmount, address(usdtEth), false, recipient);
+        vm.stopPrank();
+
+        assertEq(usdtEth.balanceOf(recipient), redeemAmount, "recipient should receive tokens");
+        assertEq(usdtEth.balanceOf(user), 0, "redeemer should receive nothing");
+        assertEq(pusd.balanceOf(user), depositAmount - redeemAmount, "redeemer PUSD burned correctly");
+    }
+
+    function testRedeemZeroAddressRecipientReverts() public {
+        vm.prank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+
+        uint256 depositAmount = 500 * 10**6;
+        usdtEth.mint(user, depositAmount);
+
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
+        vm.expectRevert("PUSDManager: recipient cannot be zero address");
+        manager.redeem(depositAmount, address(usdtEth), false, address(0));
+        vm.stopPrank();
+    }
+
+    function testRedeemToRecipientEmitsCorrectEvent() public {
+        address recipient = address(42);
+        vm.prank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+
+        uint256 depositAmount = 500 * 10**6;
+        usdtEth.mint(user, depositAmount);
+
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
+
+        vm.expectEmit(true, true, true, true);
+        emit PUSDManager.Redeemed(user, address(usdtEth), depositAmount, depositAmount, recipient);
+        manager.redeem(depositAmount, address(usdtEth), false, recipient);
+        vm.stopPrank();
+    }
+
+    function testDepositToSelfExplicitly() public {
+        vm.prank(admin);
+        manager.addSupportedToken(address(usdtEth), "USDT.eth", "Ethereum_Sepolia", 6);
+
+        uint256 depositAmount = 200 * 10**6;
+        usdtEth.mint(user, depositAmount);
+
+        vm.startPrank(user);
+        usdtEth.approve(address(manager), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
+        vm.stopPrank();
+
+        assertEq(pusd.balanceOf(user), depositAmount, "depositor should receive PUSD when passing own address");
     }
 
     function testRedeem() public {
@@ -276,10 +359,10 @@ contract PUSDManagerTest is Test {
 
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
 
         uint256 redeemAmount = 500 * 10**6;
-        manager.redeem(redeemAmount, address(usdtEth), false);
+        manager.redeem(redeemAmount, address(usdtEth), false, user);
         vm.stopPrank();
 
         assertEq(pusd.balanceOf(user), 500 * 10**6);
@@ -296,10 +379,10 @@ contract PUSDManagerTest is Test {
 
         vm.startPrank(user);
         usdtBnb.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtBnb), depositAmount);
+        manager.deposit(address(usdtBnb), depositAmount, user);
 
         uint256 redeemPUSD = 500 * 10**6;
-        manager.redeem(redeemPUSD, address(usdtBnb), false);
+        manager.redeem(redeemPUSD, address(usdtBnb), false, user);
         vm.stopPrank();
 
         assertEq(pusd.balanceOf(user), 500 * 10**6);
@@ -316,10 +399,10 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdcEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcEth), depositAmount);
+        manager.deposit(address(usdcEth), depositAmount, user);
         
         vm.expectRevert("PUSDManager: preferred asset unavailable and basket not allowed");
-        manager.redeem(100 * 10**6, address(usdtEth), false);
+        manager.redeem(100 * 10**6, address(usdtEth), false, user);
         vm.stopPrank();
     }
 
@@ -329,7 +412,7 @@ contract PUSDManagerTest is Test {
 
         vm.prank(user);
         vm.expectRevert("PUSDManager: insufficient PUSD balance");
-        manager.redeem(100 * 10**6, address(usdtEth), false);
+        manager.redeem(100 * 10**6, address(usdtEth), false, user);
     }
 
     function testRedeemInsufficientLiquidity() public {
@@ -343,12 +426,12 @@ contract PUSDManagerTest is Test {
         usdtEth.mint(user, depositAmount);
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
 
         vm.prank(user);
         vm.expectRevert("PUSDManager: preferred asset unavailable and basket not allowed");
-        manager.redeem(depositAmount, address(usdcEth), false);
+        manager.redeem(depositAmount, address(usdcEth), false, user);
     }
 
     function testDepositEvent() public {
@@ -361,9 +444,9 @@ contract PUSDManagerTest is Test {
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
 
-        vm.expectEmit(true, true, false, true);
-        emit PUSDManager.Deposited(user, address(usdtEth), depositAmount, depositAmount, 0);
-        manager.deposit(address(usdtEth), depositAmount);
+        vm.expectEmit(true, true, true, true);
+        emit PUSDManager.Deposited(user, address(usdtEth), depositAmount, depositAmount, 0, user);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
     }
 
@@ -376,12 +459,12 @@ contract PUSDManagerTest is Test {
 
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
 
         uint256 redeemAmount = 500 * 10**6;
-        vm.expectEmit(true, true, false, true);
-        emit PUSDManager.Redeemed(user, address(usdtEth), redeemAmount, redeemAmount);
-        manager.redeem(redeemAmount, address(usdtEth), false);
+        vm.expectEmit(true, true, true, true);
+        emit PUSDManager.Redeemed(user, address(usdtEth), redeemAmount, redeemAmount, user);
+        manager.redeem(redeemAmount, address(usdtEth), false, user);
         vm.stopPrank();
     }
 
@@ -399,12 +482,12 @@ contract PUSDManagerTest is Test {
 
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount1);
-        manager.deposit(address(usdtEth), depositAmount1);
+        manager.deposit(address(usdtEth), depositAmount1, user);
         vm.stopPrank();
 
         vm.startPrank(user2);
         usdtEth.approve(address(manager), depositAmount2);
-        manager.deposit(address(usdtEth), depositAmount2);
+        manager.deposit(address(usdtEth), depositAmount2, user2);
         vm.stopPrank();
 
         assertEq(pusd.balanceOf(user), depositAmount1);
@@ -412,7 +495,7 @@ contract PUSDManagerTest is Test {
         assertEq(usdtEth.balanceOf(address(manager)), depositAmount1 + depositAmount2);
 
         vm.prank(user);
-        manager.redeem(depositAmount1, address(usdtEth), false);
+        manager.redeem(depositAmount1, address(usdtEth), false, user);
 
         assertEq(pusd.balanceOf(user), 0);
         assertEq(usdtEth.balanceOf(user), depositAmount1);
@@ -430,11 +513,11 @@ contract PUSDManagerTest is Test {
         usdcEth.mint(user, depositAmount);
         vm.startPrank(user);
         usdcEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcEth), depositAmount);
+        manager.deposit(address(usdcEth), depositAmount, user);
         vm.stopPrank();
 
         vm.prank(user);
-        manager.redeem(depositAmount, address(usdtEth), true);
+        manager.redeem(depositAmount, address(usdtEth), true, user);
 
         assertEq(pusd.balanceOf(user), 0);
         assertEq(usdcEth.balanceOf(user), depositAmount);
@@ -456,15 +539,15 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdcEth.approve(address(manager), depositUSDC);
-        manager.deposit(address(usdcEth), depositUSDC);
+        manager.deposit(address(usdcEth), depositUSDC, user);
         
         usdtBnb.approve(address(manager), depositBNB);
-        manager.deposit(address(usdtBnb), depositBNB);
+        manager.deposit(address(usdtBnb), depositBNB, user);
         vm.stopPrank();
 
         uint256 redeemAmount = 500 * 10**6;
         vm.prank(user);
-        manager.redeem(redeemAmount, address(usdtEth), true);
+        manager.redeem(redeemAmount, address(usdtEth), true, user);
 
         assertEq(pusd.balanceOf(user), 500 * 10**6);
         assertTrue(usdcEth.balanceOf(user) > 0 || usdtBnb.balanceOf(user) > 0);
@@ -483,15 +566,15 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         
         usdcEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcEth), depositAmount);
+        manager.deposit(address(usdcEth), depositAmount, user);
         vm.stopPrank();
 
         uint256 redeemAmount = 500 * 10**6;
         vm.prank(user);
-        manager.redeem(redeemAmount, address(usdtEth), true);
+        manager.redeem(redeemAmount, address(usdtEth), true, user);
 
         assertEq(pusd.balanceOf(user), 1500 * 10**6);
         assertEq(usdtEth.balanceOf(user), 500 * 10**6);
@@ -511,13 +594,13 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), 333 * 10**6);
-        manager.deposit(address(usdtEth), 333 * 10**6);
+        manager.deposit(address(usdtEth), 333 * 10**6, user);
         
         usdcEth.approve(address(manager), 333 * 10**6);
-        manager.deposit(address(usdcEth), 333 * 10**6);
+        manager.deposit(address(usdcEth), 333 * 10**6, user);
         
         usdtSol.approve(address(manager), 334 * 10**6);
-        manager.deposit(address(usdtSol), 334 * 10**6);
+        manager.deposit(address(usdtSol), 334 * 10**6, user);
         vm.stopPrank();
 
         uint256 userPUSDBefore = pusd.balanceOf(user);
@@ -526,7 +609,7 @@ contract PUSDManagerTest is Test {
         uint256 redeemAmount = 100 * 10**6;
         
         vm.prank(user);
-        manager.redeem(redeemAmount, address(usdtArb), true);
+        manager.redeem(redeemAmount, address(usdtArb), true, user);
 
         uint256 userPUSDAfter = pusd.balanceOf(user);
         assertEq(userPUSDAfter, userPUSDBefore - redeemAmount, "User should have exactly redeemAmount less PUSD");
@@ -552,26 +635,26 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), 1234567);
-        manager.deposit(address(usdtEth), 1234567);
+        manager.deposit(address(usdtEth), 1234567, user);
         
         usdcEth.approve(address(manager), 2345678);
-        manager.deposit(address(usdcEth), 2345678);
+        manager.deposit(address(usdcEth), 2345678, user);
         
         usdtSol.approve(address(manager), 3456789);
-        manager.deposit(address(usdtSol), 3456789);
+        manager.deposit(address(usdtSol), 3456789, user);
         
         usdcSol.approve(address(manager), 4567890);
-        manager.deposit(address(usdcSol), 4567890);
+        manager.deposit(address(usdcSol), 4567890, user);
         
         usdtBase.approve(address(manager), 5678901);
-        manager.deposit(address(usdtBase), 5678901);
+        manager.deposit(address(usdtBase), 5678901, user);
         vm.stopPrank();
 
         uint256 userPUSDBefore = pusd.balanceOf(user);
         uint256 redeemAmount = 9876543;
         
         vm.prank(user);
-        manager.redeem(redeemAmount, address(usdtArb), true);
+        manager.redeem(redeemAmount, address(usdtArb), true, user);
 
         uint256 userPUSDAfter = pusd.balanceOf(user);
         assertEq(userPUSDAfter, userPUSDBefore - redeemAmount, "User should have exactly redeemAmount less PUSD");
@@ -600,19 +683,19 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdcSol.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcSol), depositAmount);
+        manager.deposit(address(usdcSol), depositAmount, user);
         
         usdcBase.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcBase), depositAmount);
+        manager.deposit(address(usdcBase), depositAmount, user);
         
         usdcEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcEth), depositAmount);
+        manager.deposit(address(usdcEth), depositAmount, user);
         
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         
         usdtBase.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtBase), depositAmount);
+        manager.deposit(address(usdtBase), depositAmount, user);
         vm.stopPrank();
 
         vm.prank(admin);
@@ -621,7 +704,7 @@ contract PUSDManagerTest is Test {
         uint256 redeemAmount = 50 * 10**6;
         
         vm.prank(user);
-        manager.redeem(redeemAmount, address(usdcBase), false);
+        manager.redeem(redeemAmount, address(usdcBase), false, user);
 
         uint256 usdcSolReceived = usdcSol.balanceOf(user);
         uint256 usdcBaseReceived = usdcBase.balanceOf(user);
@@ -650,13 +733,13 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdcSol.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcSol), depositAmount);
+        manager.deposit(address(usdcSol), depositAmount, user);
         
         usdcBase.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcBase), depositAmount);
+        manager.deposit(address(usdcBase), depositAmount, user);
         
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
 
         vm.startPrank(admin);
@@ -667,7 +750,7 @@ contract PUSDManagerTest is Test {
         uint256 redeemAmount = 60 * 10**6;
         
         vm.prank(user);
-        manager.redeem(redeemAmount, address(usdcBase), false);
+        manager.redeem(redeemAmount, address(usdcBase), false, user);
 
         uint256 totalReceived = usdcSol.balanceOf(user) + usdcBase.balanceOf(user) + usdtEth.balanceOf(user);
         assertEq(totalReceived, redeemAmount, "Total should equal redeem amount");
@@ -689,10 +772,10 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdcSol.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcSol), depositAmount);
+        manager.deposit(address(usdcSol), depositAmount, user);
         
         usdcBase.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcBase), depositAmount);
+        manager.deposit(address(usdcBase), depositAmount, user);
         vm.stopPrank();
 
         vm.prank(admin);
@@ -701,7 +784,7 @@ contract PUSDManagerTest is Test {
         uint256 redeemAmount = 50 * 10**6;
         
         vm.prank(user);
-        manager.redeem(redeemAmount, address(usdcSol), false);
+        manager.redeem(redeemAmount, address(usdcSol), false, user);
 
         assertGt(usdcSol.balanceOf(user), 0, "Should be able to redeem emergency token as preferred");
     }
@@ -745,10 +828,10 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         
         uint256 redeemAmount = 500 * 10**6;
-        manager.redeem(redeemAmount, address(usdtEth), false);
+        manager.redeem(redeemAmount, address(usdtEth), false, user);
         vm.stopPrank();
 
         // Calculate expected fee (base + preferred)
@@ -784,13 +867,13 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         
         usdcEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcEth), depositAmount);
+        manager.deposit(address(usdcEth), depositAmount, user);
         
         uint256 redeemAmount = 500 * 10**6;
-        manager.redeem(redeemAmount, address(usdtBase), true); // Basket redemption
+        manager.redeem(redeemAmount, address(usdtBase), true, user); // Basket redemption
         vm.stopPrank();
 
         // Basket redemption should only charge base fee (5 bps)
@@ -831,17 +914,17 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), 900 * 10**6);
-        manager.deposit(address(usdtEth), 900 * 10**6);
+        manager.deposit(address(usdtEth), 900 * 10**6, user);
         
         usdcEth.approve(address(manager), 100 * 10**6);
-        manager.deposit(address(usdcEth), 100 * 10**6);
+        manager.deposit(address(usdcEth), 100 * 10**6, user);
         vm.stopPrank();
 
         uint256 userBalanceBefore = usdtEth.balanceOf(user);
 
         // Redeem USDT (90% liquidity) - should have lower preferred fee (close to min)
         vm.prank(user);
-        manager.redeem(100 * 10**6, address(usdtEth), false);
+        manager.redeem(100 * 10**6, address(usdtEth), false, user);
         
         uint256 usdtReceived = usdtEth.balanceOf(user) - userBalanceBefore;
         uint256 usdtFee = 100 * 10**6 - usdtReceived;
@@ -850,7 +933,7 @@ contract PUSDManagerTest is Test {
         
         // Redeem USDC (10% liquidity) - should have higher preferred fee (max)
         vm.prank(user);
-        manager.redeem(50 * 10**6, address(usdcEth), false);
+        manager.redeem(50 * 10**6, address(usdcEth), false, user);
         
         uint256 usdcReceived = usdcEth.balanceOf(user) - userBalanceBefore;
         uint256 usdcFee = 50 * 10**6 - usdcReceived;
@@ -874,10 +957,10 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         
         uint256 redeemAmount = 500 * 10**6;
-        manager.redeem(redeemAmount, address(usdtEth), false);
+        manager.redeem(redeemAmount, address(usdtEth), false, user);
         vm.stopPrank();
 
         // Fees are still deducted even without treasury set
@@ -925,7 +1008,7 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
 
         // User should receive PUSD for 95% of tokens (950 USDT -> 950 PUSD)
@@ -951,7 +1034,7 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
 
         // Expected haircut: 5% of 1000 = 50
@@ -987,7 +1070,7 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
         
         // With zero haircut, no surplus should be accrued
@@ -1014,7 +1097,7 @@ contract PUSDManagerTest is Test {
         usdtEth.mint(user, usdtDepositAmount);
         vm.startPrank(user);
         usdtEth.approve(address(manager), usdtDepositAmount);
-        manager.deposit(address(usdtEth), usdtDepositAmount);
+        manager.deposit(address(usdtEth), usdtDepositAmount, user);
         vm.stopPrank();
 
         // Deposit USDC with haircut
@@ -1022,12 +1105,12 @@ contract PUSDManagerTest is Test {
         usdcEth.mint(user, usdcDepositAmount);
         vm.startPrank(user);
         usdcEth.approve(address(manager), usdcDepositAmount);
-        manager.deposit(address(usdcEth), usdcDepositAmount);
+        manager.deposit(address(usdcEth), usdcDepositAmount, user);
         vm.stopPrank();
 
         // Redeem to generate fees
         vm.startPrank(user);
-        manager.redeem(100 * 10**6, address(usdtEth), false);
+        manager.redeem(100 * 10**6, address(usdtEth), false, user);
         vm.stopPrank();
 
         // Calculate expected amounts
@@ -1074,14 +1157,14 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         
         // User has 950 PUSD (from 950 USDT backing)
         uint256 userPusd = pusd.balanceOf(user);
         assertEq(userPusd, 950 * 10**6);
         
         // Redeem should be 1:1 (no haircut on redemption)
-        manager.redeem(userPusd, address(usdtEth), false);
+        manager.redeem(userPusd, address(usdtEth), false, user);
         vm.stopPrank();
 
         // User should receive 950 USDT (1:1 redemption)
@@ -1101,10 +1184,10 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         
         usdcEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdcEth), depositAmount);
+        manager.deposit(address(usdcEth), depositAmount, user);
         vm.stopPrank();
 
         // Admin rebalances: swap 500 USDT for 500 USDC
@@ -1138,12 +1221,12 @@ contract PUSDManagerTest is Test {
         usdtEth.mint(user, depositAmount);
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
 
         // User redeems to generate fees
         vm.startPrank(user);
-        manager.redeem(100 * 10**6, address(usdtEth), false);
+        manager.redeem(100 * 10**6, address(usdtEth), false, user);
         vm.stopPrank();
 
         // Check accrued surplus before rebalance
@@ -1187,12 +1270,12 @@ contract PUSDManagerTest is Test {
         usdtEth.mint(user, depositAmount);
         vm.startPrank(user);
         usdtEth.approve(address(manager), depositAmount);
-        manager.deposit(address(usdtEth), depositAmount);
+        manager.deposit(address(usdtEth), depositAmount, user);
         vm.stopPrank();
 
         // User redeems to generate fees
         vm.startPrank(user);
-        manager.redeem(100 * 10**6, address(usdtEth), false);
+        manager.redeem(100 * 10**6, address(usdtEth), false, user);
         vm.stopPrank();
 
         // Check accrued surplus (should still be in contract since no treasury)
@@ -1240,10 +1323,10 @@ contract PUSDManagerTest is Test {
         
         vm.startPrank(user);
         usdtEth.approve(address(manager), 1000 * 10**6);
-        manager.deposit(address(usdtEth), 1000 * 10**6);
+        manager.deposit(address(usdtEth), 1000 * 10**6, user);
         
         dai.approve(address(manager), 1000 * 10**18);
-        manager.deposit(address(dai), 1000 * 10**18);
+        manager.deposit(address(dai), 1000 * 10**18, user);
         vm.stopPrank();
 
         // Admin rebalances: 500 USDT (6 decimals) for 500 DAI (18 decimals)
@@ -1293,7 +1376,7 @@ contract PUSDManagerTest is Test {
         usdtEth.mint(user, 1000 * 10**6);
         vm.startPrank(user);
         usdtEth.approve(address(manager), 1000 * 10**6);
-        manager.deposit(address(usdtEth), 1000 * 10**6);
+        manager.deposit(address(usdtEth), 1000 * 10**6, user);
         vm.stopPrank();
 
         usdcEth.mint(admin, 500 * 10**6);
