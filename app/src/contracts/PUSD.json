@@ -1,107 +1,806 @@
-
-╭-------------+-----------------------------------------------------------------+--------------------------------------------------------------------╮
-| Type        | Signature                                                       | Selector                                                           |
-+====================================================================================================================================================+
-| event       | Approval(address,address,uint256)                               | 0x8c5be1e5ebec7d5bd14f71427d1e84f3dd0314c0f7b2291e5b200ac8c7c3b925 |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | Burned(address,uint256,address)                                 | 0x4bec313b95a1f7373890b5d9dce4c4737945f27093ca8f3e357bec1219299eaf |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | Initialized(uint64)                                             | 0xc7f505b2f371ae2175ee4913f4499e1f2633a7b5936321eed1cdaeb6115181d2 |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | Minted(address,uint256,address)                                 | 0xfd1ba5519feb014ad2f631cbd516bd3cec96be935749391554d122972593e7bf |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | RoleAdminChanged(bytes32,bytes32,bytes32)                       | 0xbd79b86ffe0ab8e8776151514217cd7cacd52c909f66475c3af44e129f0b00ff |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | RoleGranted(bytes32,address,address)                            | 0x2f8788117e7eff1d82e926ec794901d17c78024a50270940304540a733656f0d |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | RoleRevoked(bytes32,address,address)                            | 0xf6391f5c32d9c69d2a47ea670b442974b53935d1edc7fd64eb21e047a839171b |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | Transfer(address,address,uint256)                               | 0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| event       | Upgraded(address)                                               | 0xbc7cd75a20ee27fd9adebab32041f755214dbc6bffa90cc0225b39da2e5c2d3b |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | AccessControlBadConfirmation()                                  | 0x6697b232                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | AccessControlUnauthorizedAccount(address,bytes32)               | 0xe2517d3f                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | AddressEmptyCode(address)                                       | 0x9996b315                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC1967InvalidImplementation(address)                           | 0x4c9c8ce3                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC1967NonPayable()                                             | 0xb398979f                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC20InsufficientAllowance(address,uint256,uint256)             | 0xfb8f41b2                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC20InsufficientBalance(address,uint256,uint256)               | 0xe450d38c                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC20InvalidApprover(address)                                   | 0xe602df05                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC20InvalidReceiver(address)                                   | 0xec442f05                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC20InvalidSender(address)                                     | 0x96c6fd1e                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | ERC20InvalidSpender(address)                                    | 0x94280d62                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | FailedCall()                                                    | 0xd6bda275                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | InvalidInitialization()                                         | 0xf92ee8a9                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | NotInitializing()                                               | 0xd7e6bcf8                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | UUPSUnauthorizedCallContext()                                   | 0xe07c8dba                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| error       | UUPSUnsupportedProxiableUUID(bytes32)                           | 0xaa1d49a4                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | BURNER_ROLE() view returns (bytes32)                            | 0x282c51f3                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | DEFAULT_ADMIN_ROLE() view returns (bytes32)                     | 0xa217fddf                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | MINTER_ROLE() view returns (bytes32)                            | 0xd5391393                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | UPGRADER_ROLE() view returns (bytes32)                          | 0xf72c0d8b                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | UPGRADE_INTERFACE_VERSION() view returns (string)               | 0xad3cb1cc                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | allowance(address,address) view returns (uint256)               | 0xdd62ed3e                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | approve(address,uint256) nonpayable returns (bool)              | 0x095ea7b3                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | balanceOf(address) view returns (uint256)                       | 0x70a08231                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | burn(address,uint256) nonpayable                                | 0x9dc29fac                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | decimals() view returns (uint8)                                 | 0x313ce567                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | getRoleAdmin(bytes32) view returns (bytes32)                    | 0x248a9ca3                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | grantRole(bytes32,address) nonpayable                           | 0x2f2ff15d                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | hasRole(bytes32,address) view returns (bool)                    | 0x91d14854                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | initialize(address) nonpayable                                  | 0xc4d66de8                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | mint(address,uint256) nonpayable                                | 0x40c10f19                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | name() view returns (string)                                    | 0x06fdde03                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | proxiableUUID() view returns (bytes32)                          | 0x52d1902d                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | renounceRole(bytes32,address) nonpayable                        | 0x36568abe                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | revokeRole(bytes32,address) nonpayable                          | 0xd547741f                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | supportsInterface(bytes4) view returns (bool)                   | 0x01ffc9a7                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | symbol() view returns (string)                                  | 0x95d89b41                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | totalSupply() view returns (uint256)                            | 0x18160ddd                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | transfer(address,uint256) nonpayable returns (bool)             | 0xa9059cbb                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | transferFrom(address,address,uint256) nonpayable returns (bool) | 0x23b872dd                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| function    | upgradeToAndCall(address,bytes) payable                         | 0x4f1ef286                                                         |
-|-------------+-----------------------------------------------------------------+--------------------------------------------------------------------|
-| constructor | constructor() nonpayable                                        |                                                                    |
-╰-------------+-----------------------------------------------------------------+--------------------------------------------------------------------╯
-
+[
+  {
+    "type": "constructor",
+    "inputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "BURNER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "DEFAULT_ADMIN_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "MINTER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "UPGRADER_ROLE",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "UPGRADE_INTERFACE_VERSION",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "allowance",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "approve",
+    "inputs": [
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "balanceOf",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "burn",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "decimals",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint8",
+        "internalType": "uint8"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "getRoleAdmin",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "grantRole",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "hasRole",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "initialize",
+    "inputs": [
+      {
+        "name": "admin",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "mint",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "name",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "proxiableUUID",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "renounceRole",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "callerConfirmation",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "revokeRole",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "supportsInterface",
+    "inputs": [
+      {
+        "name": "interfaceId",
+        "type": "bytes4",
+        "internalType": "bytes4"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "symbol",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "string",
+        "internalType": "string"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "totalSupply",
+    "inputs": [],
+    "outputs": [
+      {
+        "name": "",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "stateMutability": "view"
+  },
+  {
+    "type": "function",
+    "name": "transfer",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "transferFrom",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ],
+    "outputs": [
+      {
+        "name": "",
+        "type": "bool",
+        "internalType": "bool"
+      }
+    ],
+    "stateMutability": "nonpayable"
+  },
+  {
+    "type": "function",
+    "name": "upgradeToAndCall",
+    "inputs": [
+      {
+        "name": "newImplementation",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "data",
+        "type": "bytes",
+        "internalType": "bytes"
+      }
+    ],
+    "outputs": [],
+    "stateMutability": "payable"
+  },
+  {
+    "type": "event",
+    "name": "Approval",
+    "inputs": [
+      {
+        "name": "owner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "spender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Burned",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "burner",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Initialized",
+    "inputs": [
+      {
+        "name": "version",
+        "type": "uint64",
+        "indexed": false,
+        "internalType": "uint64"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Minted",
+    "inputs": [
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "amount",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      },
+      {
+        "name": "minter",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoleAdminChanged",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "previousAdminRole",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "newAdminRole",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoleGranted",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "RoleRevoked",
+    "inputs": [
+      {
+        "name": "role",
+        "type": "bytes32",
+        "indexed": true,
+        "internalType": "bytes32"
+      },
+      {
+        "name": "account",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "sender",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Transfer",
+    "inputs": [
+      {
+        "name": "from",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "to",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      },
+      {
+        "name": "value",
+        "type": "uint256",
+        "indexed": false,
+        "internalType": "uint256"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "event",
+    "name": "Upgraded",
+    "inputs": [
+      {
+        "name": "implementation",
+        "type": "address",
+        "indexed": true,
+        "internalType": "address"
+      }
+    ],
+    "anonymous": false
+  },
+  {
+    "type": "error",
+    "name": "AccessControlBadConfirmation",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "AccessControlUnauthorizedAccount",
+    "inputs": [
+      {
+        "name": "account",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "neededRole",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "AddressEmptyCode",
+    "inputs": [
+      {
+        "name": "target",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC1967InvalidImplementation",
+    "inputs": [
+      {
+        "name": "implementation",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC1967NonPayable",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "ERC20InsufficientAllowance",
+    "inputs": [
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "allowance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "needed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InsufficientBalance",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      },
+      {
+        "name": "balance",
+        "type": "uint256",
+        "internalType": "uint256"
+      },
+      {
+        "name": "needed",
+        "type": "uint256",
+        "internalType": "uint256"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidApprover",
+    "inputs": [
+      {
+        "name": "approver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidReceiver",
+    "inputs": [
+      {
+        "name": "receiver",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidSender",
+    "inputs": [
+      {
+        "name": "sender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "ERC20InvalidSpender",
+    "inputs": [
+      {
+        "name": "spender",
+        "type": "address",
+        "internalType": "address"
+      }
+    ]
+  },
+  {
+    "type": "error",
+    "name": "FailedCall",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "InvalidInitialization",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "NotInitializing",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UUPSUnauthorizedCallContext",
+    "inputs": []
+  },
+  {
+    "type": "error",
+    "name": "UUPSUnsupportedProxiableUUID",
+    "inputs": [
+      {
+        "name": "slot",
+        "type": "bytes32",
+        "internalType": "bytes32"
+      }
+    ]
+  }
+]

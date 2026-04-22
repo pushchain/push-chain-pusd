@@ -1,0 +1,49 @@
+/*
+ * Direction C — brutalist editorial tokens.
+ * Single source of truth for color, typography, rhythm.
+ * Any stray hex in a component file is a bug.
+ */
+
+:root {
+  /* --- Palette --- */
+  --c-cream:      #f3eee4;   /* page bg */
+  --c-paper:      #faf6ec;   /* card bg */
+  --c-ink:        #0f0d0a;   /* espresso — primary text, rules */
+  --c-ink-dim:    #4a4540;   /* body, secondary */
+  --c-ink-mute:   #8a847b;   /* metadata, captions */
+  --c-rule:       #1a1713;   /* 1px hairlines */
+  --c-magenta:    #dd44b9;   /* editorial accent (CTAs, live state) */
+  --c-gold:       #d4b47a;   /* numeric accent (balances, APY later) */
+  --c-oxblood:    #7a2a2a;   /* errors, invariant violation */
+  --c-jade:       #2a6b52;   /* success, in-range, I-01 holds */
+
+  /* --- Typography --- */
+  --f-display: 'Fraunces', 'Charter', 'Georgia', serif;
+  --f-body:    'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --f-mono:    'IBM Plex Mono', 'JetBrains Mono', ui-monospace, monospace;
+
+  /* --- Rhythm --- */
+  --grid: 12;
+  --gutter: 24px;
+  --col-max: 1200px;
+  --rule-thin: 1px solid var(--c-rule);
+  --rule-med:  2px solid var(--c-ink);
+  --rule-bold: 4px solid var(--c-ink);
+
+  /* --- Radius — ZERO is the rule --- */
+  --r-0: 0;       /* default for every card, button, input */
+  --r-sm: 2px;    /* only for pills/tags that need slight softening */
+
+  /* --- Push UI-kit bridge --- */
+  --pw-core-bg-primary-color: var(--c-cream);
+  --pw-core-bg-secondary-color: var(--c-paper);
+  --pw-core-text-primary-color: var(--c-ink);
+  --pw-core-brand-primary-color: var(--c-magenta);
+  --pw-core-btn-border-radius: var(--r-0);
+  --pw-core-modal-border-radius: var(--r-0);
+  --pwauth-btn-connect-bg-color: var(--c-ink);
+  --pwauth-btn-connect-text-color: var(--c-cream);
+  --pwauth-btn-connect-border-radius: var(--r-0);
+  --pwauth-btn-connected-bg-color: var(--c-paper);
+  --pwauth-btn-connected-text-color: var(--c-ink);
+}

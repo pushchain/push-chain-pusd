@@ -1,246 +1,56 @@
-== Logs ==
-  === Starting PUSD Deployment ===
-  Final admin address: 0xB59Cdc85Cacd15097ecE4C77ed9D225014b4D56D
-  Deployer address: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
-  
-1. Deploying PUSD Implementation...
-     PUSD Implementation: 0x9d4454B023096f34B160D6B654540c56A1F81688
-  
-2. Deploying PUSD Proxy...
-     PUSD Proxy (Token Address): 0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00
-  
-3. Deploying PUSDManager Implementation...
-     PUSDManager Implementation: 0x36C02dA8a0983159322a80FFE9F24b1acfF8B570
-  
-4. Deploying PUSDManager Proxy...
-     PUSDManager Proxy: 0x809d550fca64d94Bd9F66E60752A544199cfAC3D
-  
-5. Granting roles to PUSDManager...
-     Granted MINTER_ROLE
-     Granted BURNER_ROLE
-  
-6. Adding supported tokens...
-     Added USDT.eth
-     Added USDC.eth
-     Added USDT.sol
-     Added USDC.sol
-     Added USDT.base
-     Added USDC.base
-     Added USDT.arb
-     Added USDC.arb
-     Added USDT.bnb
-  
-7. Setting fees...
-     Base fee set to 0.05%
-     Preferred fee range: 0.1% - 0.5%
-  
-8. Transferring admin roles to final admin...
-     Granted PUSD admin roles to: 0xB59Cdc85Cacd15097ecE4C77ed9D225014b4D56D
-     Deployer renounced PUSD admin roles
-     Granted PUSDManager admin roles to: 0xB59Cdc85Cacd15097ecE4C77ed9D225014b4D56D
-     Deployer renounced PUSDManager admin roles
-  
-=== Deployment Complete ===
-  
+## Deployment 3 — New wallet
+Date: 2026-04-22
+Chain: Push Chain Testnet (42101)
+RPC: https://evm.donut.rpc.push.org/
+Admin: 0xA1c1AF949C5752E9714cFE54f444cE80f078069A
+Deployer: 0xA1c1AF949C5752E9714cFE54f444cE80f078069A
+
 Contract Addresses:
-  -------------------
-  PUSD Token: 0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00
-  PUSDManager: 0x809d550fca64d94Bd9F66E60752A544199cfAC3D
-  Admin: 0xB59Cdc85Cacd15097ecE4C77ed9D225014b4D56D
-  
-Supported Tokens: 9
-  
-Save these addresses to app/.env.local:
-  VITE_PUSD_ADDRESS= 0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00
-  VITE_PUSD_MANAGER_ADDRESS= 0x809d550fca64d94Bd9F66E60752A544199cfAC3D
+  PUSD Implementation: 0x8b931D2844214E9f654b90A15B572b5d97c8ff8F  (verified)
+  PUSD Proxy (Token):  0x488d080e16386379561a47a4955d22001d8a9d89
+  PUSDManager Impl:    0xe130E519B2A49d8D364FC326Ba943F2D27e79Cb5  (verified)
+  PUSDManager Proxy:   0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46
+
+Explorer:
+  - PUSD: https://donut.push.network/address/0x488d080e16386379561a47a4955d22001d8a9d89
+  - PUSDManager: https://donut.push.network/address/0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46
+
+Frontend env:
+  VITE_PUSD_ADDRESS=0x488d080e16386379561a47a4955d22001d8a9d89
+  VITE_PUSD_MANAGER_ADDRESS=0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46
   VITE_CHAIN_ID=42101
   VITE_RPC_URL=https://evm.donut.rpc.push.org/
 
-## Setting up 1 EVM.
+---
 
-==========================
+## Deployment 2 — Fresh deploy with recipient param on deposit/redeem
+Date: 2026-04-22
+Chain: Push Chain Testnet (42101)
+RPC: https://evm.donut.rpc.push.org/
+Admin: 0xB59Cdc85Cacd15097ecE4C77ed9D225014b4D56D
+Deployer: 0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266
 
-Chain 42101
+Contract Addresses:
+  PUSD Implementation: 0x8198f5d8F8CfFE8f9C413d98a0A55aEB8ab9FbB7  (verified)
+  PUSD Proxy (Token):  0x0355B7B8cb128fA5692729Ab3AAa199C1753f726
+  PUSDManager Impl:    0x202CCe504e04bEd6fC0521238dDf04Bc9E8E15aB  (verified)
+  PUSDManager Proxy:   0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8
 
-Estimated gas price: 2.125 gwei
+Explorer:
+  - PUSD: https://donut.push.network/address/0x0355B7B8cb128fA5692729Ab3AAa199C1753f726
+  - PUSDManager: https://donut.push.network/address/0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8
 
-Estimated total gas used for script: 11830040
+Frontend env:
+  VITE_PUSD_ADDRESS=0x0355B7B8cb128fA5692729Ab3AAa199C1753f726
+  VITE_PUSD_MANAGER_ADDRESS=0xf4B146FbA71F41E0592668ffbF264F1D186b2Ca8
+  VITE_CHAIN_ID=42101
+  VITE_RPC_URL=https://evm.donut.rpc.push.org/
 
-Estimated amount required: 0.025138835 ETH
+Changes since last deployment:
+  - deposit() now requires explicit non-zero recipient address
+  - redeem() now requires explicit non-zero recipient address
+  - Redeemed event includes recipient as 5th indexed field
+  - 60/60 tests passing
 
-==========================
+---
 
-##### 42101
-✅  [Success] Hash: 0xa92021f33ef69e94b160dd902993ce42d2b6edb0931677b16eb4548a352a4ce4
-Contract Address: 0x9d4454B023096f34B160D6B654540c56A1F81688
-Block: 9377062
-Paid: 0.001656075375 ETH (1472067 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x1fe895f87747721ca7e8ad68995702a42ef349c5520be84c0082793c30e787d9
-Contract Address: 0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00
-Block: 9377064
-Paid: 0.000279842625 ETH (248749 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xae5218055764198088812a806141ff1a1af5c37ea8703dd11522f371e52bfd2c
-Contract Address: 0x36C02dA8a0983159322a80FFE9F24b1acfF8B570
-Block: 9377066
-Paid: 0.005579402625 ETH (4959469 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x1a1878ed9f8b1e8da1af233c3863b38a48bb9b582043a9bd63678c04e86d10a5
-Contract Address: 0x809d550fca64d94Bd9F66E60752A544199cfAC3D
-Block: 9377068
-Paid: 0.000306779625 ETH (272693 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x6f12fad24a07c223dc82fe4642e991a4498859e30552d978e2c906a46118af93
-Block: 9377070
-Paid: 0.000063608625 ETH (56541 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xb67719abbe536d715b005ee361ea7fe005ea283c112be560f9dc8e89764aaf2f
-Block: 9377072
-Paid: 0.000063595125 ETH (56529 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x4148418814f9861a1d5a49118e2d9acc9c1df0c0655f9bc852b2c0a16f78b96e
-Block: 9377074
-Paid: 0.00016868925 ETH (149946 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x8b817ccd730133b1d6485c07096e945a397d668a9d8b5e27bdaeebcadab2ede0
-Block: 9377076
-Paid: 0.00017185275 ETH (152758 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xbe21912efce4aa6270f9641b89c2818b836e1ecf1ad6172d5e473f1559d95c8b
-Block: 9377078
-Paid: 0.00017181225 ETH (152722 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xb6b20943a01ab5dde8a6cc699ba64ce442ca4b31ea518a1acad8028b2056b476
-Block: 9377080
-Paid: 0.00017181225 ETH (152722 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xc645bcaa6c3c74abe0d1acf5a56da3d7d9cfa156e7624c2ff4e2a8f1714190c8
-Block: 9377082
-Paid: 0.00017181225 ETH (152722 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xdf6bfa954f9672cb8c9fb5e01b69c84ea20cdddba2ea30c8bff3926d4ffaf714
-Block: 9377084
-Paid: 0.00017181225 ETH (152722 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x2fbfbc3dbc026c4d0bd2edec1c79091070dfa65bc97eeb30ac12dfa04ba6a121
-Block: 9377086
-Paid: 0.00017185275 ETH (152758 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xf89ce30a60068b5d8e7d2045d16af67f7c54fe0757aea7fe9526428fe332ab61
-Block: 9377088
-Paid: 0.00017185275 ETH (152758 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x23e3c70f63f9e2b59d9e80b859d8d7699b4f5be102f84740e021856a03b1e2de
-Block: 9377090
-Paid: 0.00017178525 ETH (152698 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xb929dd9aa94b7517d718da4d5b98035a3fc2aff19c36e62913a4e014cfc6002b
-Block: 9377092
-Paid: 0.0000588645 ETH (52324 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x16854870de3ef679a4c0883c22586bf3d41f75b2466f0f9b551d6a36b507a848
-Block: 9377094
-Paid: 0.000084621375 ETH (75219 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xbd6c36f8782b42a300f7a170ab8079e197b8f4e4469e5f3fb5de242a9f10b18a
-Block: 9377096
-Paid: 0.000063176625 ETH (56157 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0xd263facb9b2a2d630e3c5d393c2fa80558609227550f5be0d046b26eb39e40b1
-Block: 9377098
-Paid: 0.000063608625 ETH (56541 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x4760cad1049cdcdc172e65368695531b06cfe243672cdbb3ccb104f02f1dd8dd
-Block: 9377100
-Paid: 0.000033332625 ETH (29629 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x8e9ff96bb294bd004a044bd509805fba18f8890131fa004dffb56e5244abcf30
-Block: 9377102
-Paid: 0.000033764625 ETH (30013 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x153eb91df0bd63626fceaec122d4463031e0aefb329f7f7945623ea1676f9a4c
-Block: 9377104
-Paid: 0.00006327675 ETH (56246 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x29905d9805b83beb8527083e9d7ce444b383e3b327b5862a83868d200f0ff5e7
-Block: 9377106
-Paid: 0.00006370875 ETH (56630 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x5f9aa0a01423ef6b32adb93d37156e1b3cddac4085758d6620e4ee97a1b92dd8
-Block: 9377108
-Paid: 0.000033408 ETH (29696 gas * 1.125 gwei)
-
-
-##### 42101
-✅  [Success] Hash: 0x79f73497cfd02539655901782fe65c3ddc39bc08b438b9c9b17cac80d2b31962
-Block: 9377110
-Paid: 0.00003384 ETH (30080 gas * 1.125 gwei)
-
-✅ Sequence #1 on 42101 | Total Paid: 0.010024187625 ETH (8910389 gas * avg 1.125 gwei)
-                                                                                                                                                                                                                   
-
-==========================
-
-ONCHAIN EXECUTION COMPLETE & SUCCESSFUL.
-
-
-  - PUSD: https://donut.push.network/address/0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00
-  - PUSDManager: https://donut.push.network/address/0x809d550fca64d94Bd9F66E60752A544199cfAC3D
-  ┌────────────────────────────┬────────────────────────────────────────────┬──────────────────┐                                                                                                                   
-  │          Contract          │                  Address                   │      Status      │                                                                                                                   
-  ├────────────────────────────┼────────────────────────────────────────────┼──────────────────┤
-  │ PUSD Implementation        │ 0x9d4454B023096f34B160D6B654540c56A1F81688 │ Verified         │                                                                                                                   
-  ├────────────────────────────┼────────────────────────────────────────────┼──────────────────┤                                                                                                                   
-  │ PUSD Proxy (Token)         │ 0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00 │ Verified         │                                                                                                                   
-  ├────────────────────────────┼────────────────────────────────────────────┼──────────────────┤
-  │ PUSDManager Implementation │ 0x36C02dA8a0983159322a80FFE9F24b1acfF8B570 │ Verified         │
-  ├────────────────────────────┼────────────────────────────────────────────┼──────────────────┤
-  │ PUSDManager Proxy          │ 0x809d550fca64d94Bd9F66E60752A544199cfAC3D │ Already verified │
-  └────────────────────────────┴────────────────────────────────────────────┴──────────────────┘
