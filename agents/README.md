@@ -16,7 +16,7 @@ design docs in [`/docs`](../docs/).
 | [pusd.context.md](pusd.context.md) | `PUSD.sol` — the boring ERC-20 settlement token. |
 | [pusdmanager.context.md](pusdmanager.context.md) | `PUSDManager.sol` — the reserve. Slices `parReserve` + `yieldShareReserve`. |
 | [pusdplus.context.md](pusdplus.context.md) | `PUSDPlus.sol` — the ERC-4626 yield wrapper over PUSD. |
-| [pusdliquidity.context.md](pusdliquidity.context.md) | `PUSDLiquidity.sol` — the strategy engine owned by PUSD+. |
+| [pusdliquidity.context.md](pusdliquidity.context.md) | `PUSDLiquidity.sol` — the Uniswap V3 LP engine owned by PUSD+. |
 | [invariants.context.md](invariants.context.md) | Structured invariant list with Foundry stubs for fuzz/formal tooling. |
 
 ## How these files differ from /docs

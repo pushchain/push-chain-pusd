@@ -2,8 +2,8 @@
 
 Dense reference for AI-assisted work on `contracts/src/PUSDPlus.sol`. New in v2.
 
-> ERC-4626 yield-bearing wrapper over PUSD. Holders earn blended yield from
-> rate-bearing reserve wrappers and `PUSDLiquidity` strategies. See
+> ERC-4626 yield-bearing wrapper over PUSD. Holders earn yield from Uniswap V3
+> USDC/USDT LP fees collected by `PUSDLiquidity`. See
 > [ADR 0003 §2](../docs/design/decisions/0003-product-architecture.md#2--four-contracts-clean-separation).
 
 ## File facts
@@ -82,7 +82,7 @@ Returns `pusd`.
 function totalAssets() public view override returns (uint256) {
     // Idle PUSD held directly by this vault
     uint256 idle = IERC20(pusd).balanceOf(address(this));
-    // PUSD-equivalent claim on yieldShareReserve + deployed strategies
+    // PUSD-equivalent claim on yieldShareReserve + deployed UniV3 LP value
     uint256 claim = IPUSDLiquidity(pusdLiquidity).netAssetsInPUSD();
     return idle + claim;
 }

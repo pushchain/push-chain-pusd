@@ -37,7 +37,7 @@ Use OpenZeppelin `AccessControlUpgradeable` on all contracts with the following 
 | Role | Holder at launch | Capability |
 |---|---|---|
 | `DEFAULT_ADMIN_ROLE` | Protocol multisig | Grant / revoke all roles |
-| `ADMIN_ROLE` | Protocol multisig | Token config, fees, rebalance, sweep, set rate-bearing wrappers |
+| `ADMIN_ROLE` | Protocol multisig | Token config, fees, rebalance, sweep. (Rate-bearing-wrapper setter exists on the contract but is reserved — must remain `address(0)` at v2 launch; see ADR 0003.) |
 | `VAULT_ROLE` | PUSDPlus (only) | Call `mintForVault(...)` and `redeemForVault(...)` |
 | `UPGRADER_ROLE` | 48h TimelockController | Authorise UUPS upgrade |
 
@@ -55,9 +55,10 @@ Use OpenZeppelin `AccessControlUpgradeable` on all contracts with the following 
 | Role | Holder at launch | Capability |
 |---|---|---|
 | `DEFAULT_ADMIN_ROLE` | Protocol multisig | Grant / revoke all roles |
-| `ADMIN_ROLE` | Protocol multisig | Add/remove strategy adapters, set `maxDeployableBps` (bounded by hard cap) |
-| `REBALANCER_ROLE` | Operator hot wallet or keeper | Deploy/unwind into allowed strategies within cap |
-| `VAULT_ROLE` | PUSDPlus (only) | Pull capital for withdraws; report must-hold floor |
+| `ADMIN_ROLE` | Protocol multisig | Set `maxDeployableBps` / `emergencyLiquidityBps` / `lpSwapSlippageBps` (each bounded by hard caps); swap the UniV3 pool (only while positions.length == 0); swap the `UniV3Router`; recover dust |
+| `REBALANCER_ROLE` | Operator hot wallet or keeper | Open, adjust, and close UniV3 positions within caps |
+| `VAULT_ROLE` | PUSDPlus (only) | Pull capital for withdraws; push capital on new deposits |
+| `PAUSER_ROLE` | Protocol multisig + incident responder | Pause new deployment (redemptions still flow) |
 | `UPGRADER_ROLE` | 48h TimelockController | Authorise UUPS upgrade |
 
 ---
@@ -69,7 +70,7 @@ Use OpenZeppelin `AccessControlUpgradeable` on all contracts with the following 
 `Ownable` provides a single `owner` address with full control. This conflates token-management permissions with upgrade permissions. With `AccessControl`:
 - `MINTER_ROLE` can be held by `PUSDManager` without that contract also being able to upgrade `PUSD`.
 - `UPGRADER_ROLE` can be held by a timelock without affecting day-to-day operations.
-- A keeper can hold `REBALANCER_ROLE` on `PUSDLiquidity` without gaining adapter-whitelist power.
+- A keeper can hold `REBALANCER_ROLE` on `PUSDLiquidity` without gaining cap-raising or pool-swap power.
 
 ### Why separate `ADMIN_ROLE` from `DEFAULT_ADMIN_ROLE`?
 

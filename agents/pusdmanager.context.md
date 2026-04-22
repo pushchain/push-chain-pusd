@@ -64,9 +64,11 @@ struct TokenInfo {
     uint16 surplusHaircutBps;      // 0..4000 (max 40%)
     string name;
     string chainNamespace;
-    // v2 additions:
-    address rateBearingWrapper;    // e.g. sDAI; address(0) if none
-    address unwrapAdapter;         // converter wrapper -> base
+    // v2 additions: reserve composition rate-bearing wrappers are out of scope
+    // for v2 (no sDAI/sUSDS/USDY available on Push Chain). Reserved slots kept
+    // for future wiring; both must remain address(0) at launch.
+    address rateBearingWrapper;    // reserved; address(0) at v2 launch
+    address unwrapAdapter;         // reserved; address(0) at v2 launch
 }
 ```
 

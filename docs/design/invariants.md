@@ -198,10 +198,15 @@ PUSDLiquidity.initialize           requires vault, manager, admin all != 0
 PUSDLiquidity.totalDeployedInPUSD()
   <= maxDeployableBps * PUSDPlus.totalAssets() / 10_000
 
-and maxDeployableBps <= 3_500 (hard ceiling)
+and maxDeployableBps <= 5_000 (hard ceiling)
+
+PUSDLiquidity.idleInPUSD()
+  >= emergencyLiquidityBps * yieldShareReserveInPUSD / 10_000
+
+PUSDLiquidity.positions.length <= 10 (MAX_POSITIONS)
 ```
 
-Enforced in both `deployToStrategy` (entry check) and the `invariant_*` fuzz suite. Raising the cap requires governance + a new ADR.
+Enforced at every `mintPosition` / `increaseLiquidity` entry and in the `invariant_*` fuzz suite. Raising `maxDeployableBps` above `5_000` requires governance + a new ADR.
 
 **Foundry stub**
 ```solidity
@@ -209,7 +214,32 @@ function invariant_deployCap() public {
     uint256 deployed = liquidity.totalDeployedInPUSD();
     uint256 allowed  = liquidity.maxDeployableBps() * pusdPlus.totalAssets() / 10_000;
     assertLe(deployed, allowed, "I-12: deployed > allowed");
-    assertLe(liquidity.maxDeployableBps(), 3_500, "I-12: cap > hard ceiling");
+    assertLe(liquidity.maxDeployableBps(), 5_000, "I-12: cap > hard ceiling");
+    assertLe(liquidity.positionCount(), 10, "I-12: position count > cap");
+}
+```
+
+---
+
+## I-13 — LP Accounting Drift  *(new, v2)*
+
+The NAV reported by `PUSDLiquidity.netAssetsInPUSD()` must track the reconstructed value of idle balances, on-chain position value (`positionValue(tokenId)` via Uniswap V3 `LiquidityAmounts`), and uncollected fees within 10 bps. A larger gap means the LP's self-reported NAV has drifted from what the chain actually owes the protocol — PUSD+ minting must pause until reconciled.
+
+```
+reported := PUSDLiquidity.netAssetsInPUSD()
+true     := idleInPUSD + Σ positionValue(positions[i].tokenId).valueInPUSD + uncollectedFeesInPUSD
+
+|reported − true| / reported <= 10 bps  (NAV_DRIFT_TOLERANCE_BPS)
+```
+
+**Foundry stub**
+```solidity
+function invariant_lpAccountingDrift() public {
+    uint256 reported = liquidity.netAssetsInPUSD();
+    uint256 trueNAV  = _reconstructNAV(liquidity);
+    if (reported == 0) return;
+    uint256 diff = reported > trueNAV ? reported - trueNAV : trueNAV - reported;
+    assertLe(diff * 10_000 / reported, 10, "I-13: LP accounting drifted > 10 bps");
 }
 ```
 
@@ -235,4 +265,5 @@ function invariant_deployCap() public {
 | I-09  | transition | REMOVED is terminal |
 | I-10  | per-tx     | Reentrancy safety, cross-contract DAG |
 | I-11  | per-tx     | Zero-address guards |
-| I-12  | global     | Strategy deploy cap (new) |
+| I-12  | global     | LP deploy cap + idle floor + position count (new) |
+| I-13  | global     | LP accounting drift ≤ 10 bps (new) |

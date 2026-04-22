@@ -37,9 +37,10 @@ The authoritative design intent is in [ADR 0003](decisions/0003-product-architec
             ▼
   ┌────────────────────────────────────┐
   │          PUSDLiquidity             │
-  │  holds unwrapped stablecoins       │
-  │  and LP tokens; never holds PUSD   │
-  │  deploys via IStrategyAdapter      │
+  │  holds USDC/USDT and UniV3 NFT     │
+  │  positions; never holds PUSD       │
+  │  deploys via INonfungiblePosition- │
+  │  Manager + UniV3Router             │
   │                                    │
   │  netAssetsInPUSD() → uint256       │
   └────────────────────────────────────┘
@@ -134,13 +135,14 @@ struct TokenInfo {
     string name;
     string chainNamespace;
 
-    // v2 additions — for rate-bearing reserve composition
-    address rateBearingWrapper;   // e.g. sDAI address; address(0) if none
-    address unwrapAdapter;         // adapter that converts rate-bearing → base
+    // v2 slots — reserved. Rate-bearing wrappers are out of scope for v2 launch
+    // (no sDAI/sUSDS/USDY available on Push Chain). Must be address(0) at launch.
+    address rateBearingWrapper;   // reserved (0) at v2 launch
+    address unwrapAdapter;         // reserved (0) at v2 launch
 }
 ```
 
-If `rateBearingWrapper != address(0)`, PUSDManager may hold the yield-share slice for this token in the wrapped form. Deposit always accepts the base token; wrapping/unwrapping happens inside the Manager.
+At v2 launch both reserved slots must be `address(0)`. When a rate-bearing wrapper is bridged to Push Chain, a follow-up ADR can wire `setRateBearingWrapper` back on — the Solidity slots stay where they are to preserve upgrade safety.
 
 ### Roles (per ADR 0002)
 
@@ -256,20 +258,32 @@ This is the standard Yearn-style HWM model. It means existing holders are never 
 
 ---
 
-## PUSDLiquidity.sol — the strategy engine
+## PUSDLiquidity.sol — the Uniswap V3 LP engine
 
-Owned by PUSDPlus. Holds unwrapped stablecoins pulled from `yieldShareReserve` and deploys them via pluggable `IStrategyAdapter` instances.
+Owned by PUSDPlus. Holds USDC/USDT pulled from `yieldShareReserve` and opens concentrated-liquidity positions on a single Uniswap V3 USDC/USDT pool on Push Chain. The contract wraps `INonfungiblePositionManager` for position lifecycle and an internal `UniV3Router` for slippage-bounded swaps during unwind.
 
 ### Storage
 
 ```
-pusdPlus           : address
-pusdManager        : address
+pusdPlus                : address
+pusdManager             : address
+npm                     : INonfungiblePositionManager
+router                  : UniV3Router
+usdc                    : address
+usdt                    : address
+poolUsdcUsdt            : address
 
-maxDeployableBps   : uint256   (≤ 3500; launch 2500)
-strategies         : IStrategyAdapter[]
-strategyEnabled    : mapping(address => bool)
-strategyCapBps     : mapping(address => uint16)   // per-strategy sub-cap
+maxDeployableBps        : uint16     (≤ HARD_CAP_BPS = 5000; launch 3000)
+emergencyLiquidityBps   : uint16     (default 3000 — min idle % of yieldShareReserve)
+lpSwapSlippageBps       : uint16     (default 50 — max swap slippage per rebalance)
+
+positions               : Position[] (length ≤ MAX_POSITIONS = 10)
+positionByTokenId       : mapping(uint256 => uint256)   // tokenId → index + 1
+```
+
+Position record:
+```solidity
+struct Position { uint256 tokenId; address pool; int24 tickLower; int24 tickUpper; bool active; }
 ```
 
 ### Roles
@@ -277,9 +291,10 @@ strategyCapBps     : mapping(address => uint16)   // per-strategy sub-cap
 | Role | Holder | |
 |---|---|---|
 | `DEFAULT_ADMIN_ROLE` | Multisig | |
-| `ADMIN_ROLE` | Multisig | add/remove adapters, set caps |
-| `REBALANCER_ROLE` | Operator / keeper | rebalance within caps |
+| `ADMIN_ROLE` | Multisig | set caps, pool, router |
+| `REBALANCER_ROLE` | Operator / keeper | open/adjust/close positions |
 | `VAULT_ROLE` | PUSDPlus | pull capital on user withdraws |
+| `PAUSER_ROLE` | Multisig + incident responder | pause new deployment only |
 | `UPGRADER_ROLE` | 48h Timelock | |
 
 ### External surface
@@ -289,51 +304,48 @@ strategyCapBps     : mapping(address => uint16)   // per-strategy sub-cap
 function netAssetsInPUSD() external view returns (uint256);
 ```
 
-Sums the PUSD-equivalent value held in this contract + every enabled adapter's `balanceInPUSD()`. Normalised to PUSD 6-decimal units via the same decimal helpers used in PUSDManager.
+Sums `idleInPUSD + Σ positionValue(positions[i].tokenId).valueInPUSD + uncollectedFeesInPUSD`. `positionValue` derives from `npm.positions(tokenId)` + `pool.slot0.sqrtPriceX96` via `LiquidityAmounts`. All numbers normalise to PUSD 6-decimal units using the same helpers as PUSDManager.
 
 **Operations (`REBALANCER_ROLE`)**
 ```solidity
-function deployToStrategy(address adapter, address token, uint256 amount) external;
-function withdrawFromStrategy(address adapter, uint256 amount) external;
-function harvestAll() external;   // claim rewards, swap to stable, report
+function mintPosition(address pool, int24 tickLower, int24 tickUpper,
+    uint256 amount0, uint256 amount1, uint256 minAmount0, uint256 minAmount1)
+    external whenNotPaused returns (uint256 tokenId);
+
+function increaseLiquidity(uint256 tokenId, uint256 amount0, uint256 amount1,
+    uint256 minAmount0, uint256 minAmount1) external whenNotPaused;
+
+function decreaseLiquidity(uint256 tokenId, uint128 liquidity,
+    uint256 minAmount0, uint256 minAmount1)
+    external returns (uint256 amount0, uint256 amount1);
+
+function collectFees(uint256 tokenId)
+    external returns (uint256 amount0, uint256 amount1);
+
+function closePosition(uint256 tokenId, uint256 minAmount0, uint256 minAmount1) external;
 ```
 
-All deploys are bounded by: `totalDeployedInPUSD() + marginalNewDeployInPUSD <= maxDeployableBps * PUSDPlus.totalAssets() / 10000`.
+All mints/increases are bounded by both `maxDeployableBps` (global) and `emergencyLiquidityBps` (idle floor).
 
 **Vault-facing**
 ```solidity
 function pullForWithdraw(address token, uint256 amount, address recipient)
     external onlyRole(VAULT_ROLE) returns (uint256 delivered);
+
+function pushForDeploy(address token, uint256 amount) external onlyRole(VAULT_ROLE);
 ```
 
-Called by `PUSDPlus.redeemToStable` when `PUSDManager.yieldShareReserve[token]` is below the required amount. PUSDLiquidity unwinds the smallest adapter that satisfies the request, transfers to `recipient`, and reports the amount delivered. If it cannot meet the request in full, the vault falls back to queueing (future ADR 0005).
+`pullForWithdraw` algorithm: (1) if idle suffices, transfer. (2) else `decreaseLiquidity` from `positions[]` in insertion order + `collectFees`, using legs directly when possible. (3) if the legs don't match `token`, route the surplus leg through `router.swapExactInput` capped at `lpSwapSlippageBps`. (4) if `delivered < amount`, revert `InsufficientLiquidity`; a future ADR introduces an async queue.
 
 **Admin**
 ```solidity
-function setMaxDeployableBps(uint16 bps) external onlyRole(ADMIN_ROLE);   // <= 3500
-function addStrategy(address adapter, uint16 capBps) external onlyRole(ADMIN_ROLE);
-function removeStrategy(address adapter) external onlyRole(ADMIN_ROLE);
-function emergencyUnwind(address adapter) external onlyRole(ADMIN_ROLE);
+function setMaxDeployableBps(uint16 bps) external;          // <= HARD_CAP_BPS (5000)
+function setEmergencyLiquidityBps(uint16 bps) external;     // <= 5000
+function setLpSwapSlippageBps(uint16 bps) external;         // <= 100
+function setPool(address pool) external;                    // only while positions.length == 0
+function setRouter(UniV3Router newRouter) external;
+function recoverDust(address token, address to, uint256 amount) external;
 ```
-
-### IStrategyAdapter
-
-```solidity
-interface IStrategyAdapter {
-    function deposit(address token, uint256 amount) external returns (uint256 sharesOrLP);
-    function withdraw(uint256 amount) external returns (address token, uint256 delivered);
-    function balanceInPUSD() external view returns (uint256);
-    function harvest() external returns (uint256 rewardsInPUSD);
-    function underlyingTokens() external view returns (address[] memory);
-}
-```
-
-Launch adapters:
-- `AaveV3SupplyAdapter` (USDC, USDT)
-- `Curve3poolLPAdapter`
-- `MorphoSupplyAdapter` (per whitelisted market)
-
-Each is a short contract — typically under 250 lines — with its own unit tests.
 
 ---
 

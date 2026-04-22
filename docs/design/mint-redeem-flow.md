@@ -91,7 +91,7 @@ Why the haircut is waived on the vault path: the haircut exists to deter churn o
 
 ### What the vault earns
 
-The deposited capital now sits in `yieldShareReserve[token]`. PUSDLiquidity can pull up to 35% of PUSD+ total assets for active strategies. The remainder stays in PUSDManager, ideally in a rate-bearing wrapper (sDAI, USDY, etc.) to earn passive yield.
+The deposited capital now sits in `yieldShareReserve[token]`. PUSDLiquidity can pull up to 50% of PUSD+ total assets (launch value 30%) into the Uniswap V3 USDC/USDT position. The remainder stays idle in PUSDManager as plain USDC/USDT — rate-bearing reserve composition is out of scope until sDAI/sUSDS/USDY land on Push Chain.
 
 ---
 
@@ -155,8 +155,10 @@ Burns PUSD+ shares and returns stablecoin from `yieldShareReserve`, drawing on `
 │        yieldShareReserve[token] = 0                 │
 │        PUSDLiquidity.pullForWithdraw(               │
 │            token, shortfall, user)                  │
-│        // PUSDLiquidity unwinds smallest-hit        │
-│        // adapter and sends token directly to user  │
+│        // PUSDLiquidity decreases its UniV3         │
+│        // position(s), collects fees, swaps the     │
+│        // surplus leg if needed (≤ slippage cap),   │
+│        // and sends `token` directly to user        │
 │  ─ return needInToken                               │
 └─────────────────────────────────────────────────────┘
 ```
@@ -164,8 +166,8 @@ Burns PUSD+ shares and returns stablecoin from `yieldShareReserve`, drawing on `
 ### Instant vs. async
 
 - **Instant** whenever `yieldShareReserve[token] + PUSDLiquidity.idleBalance(token) >= needInToken`.
-- **Instant** whenever the requested amount can be satisfied by unwinding a single adapter (e.g. Aave v3 supply withdraws are atomic).
-- **Async** only when the requested amount exceeds instant capacity. In that case, launch ships with a conservative fallback: the call reverts with `InsufficientLiquidity()`, and the frontend shows an "Unwinding strategies — try again in ~10 min" state. PUSDLiquidity's keeper unwinds proactively.
+- **Instant** whenever the LP can `decreaseLiquidity` + optionally `swapExactInput` within `lpSwapSlippageBps` to produce `needInToken` in a single transaction.
+- **Async** only when the requested amount exceeds instant LP capacity or would violate the swap-slippage ceiling. Launch ships a conservative fallback: the call reverts with `InsufficientLiquidity()`, and the frontend shows an "Unwinding LP — try again in ~10 min" state. PUSDLiquidity's keeper unwinds or re-centers proactively.
 - A future ADR (0005 candidate) introduces an ERC-7540-style queue for truly large withdraws.
 
 ### PUSD+ never allows withdraw below par
@@ -192,10 +194,10 @@ Note: this is the v1 formula but scoped to `parReserve` instead of the whole bal
 availableForVaultWithdraw(token) =
     yieldShareReserve[token]
   + PUSDLiquidity.idleBalance(token)
-  + sum over adapters of instantUnwindCapacity(token)
+  + lpUnwindCapacity(token)
 ```
 
-`instantUnwindCapacity` is per-adapter; e.g. Aave v3 returns a large number (essentially min(supplied, protocol liquidity)); Curve LP returns the LP-equivalent of the pool's current depth for that token.
+`lpUnwindCapacity(token)` = the amount of `token` recoverable from the live positions by calling `decreaseLiquidity` on all of them and then optionally swapping the other leg through `UniV3Router` within `lpSwapSlippageBps`. In practice this is bounded above by the position's own liquidity plus what the pool's reserves of `token` can deliver at the slippage ceiling.
 
 ---
 

@@ -63,7 +63,7 @@ Unresolved design questions that require a decision before v2 can be considered 
 
 **Recommendation:** Ship Option 1 at launch. Option 2 is a natural follow-up (ADR 0005 candidate). Option 3 adds mechanism complexity that is not justified until live redemption patterns observed.
 
-**Blocking:** No. Launch-OK without a queue, because the 35% deploy cap + Aave-preferred adapter allocations imply almost all redeems can be served instantly.
+**Blocking:** No. Launch-OK without a queue, because the 30% launch cap + 30% idle-liquidity floor means at least 70% of PUSD+ net assets are either idle in the Manager or recoverable via a single `decreaseLiquidity` transaction — enough to absorb realistic redeem flow without pausing.
 
 ---
 
@@ -82,33 +82,34 @@ Unresolved design questions that require a decision before v2 can be considered 
 
 ---
 
-## OQ-09 — Launch strategy mix  *(new, v2)*
+## OQ-09 — Launch LP parameters  *(new, v2)*
 
-**Question:** Which adapters ship at launch, and with what sub-caps?
+**Question:** What tick range, fee tier, and position size should the v2 LP open with?
 
 **Baseline proposal:**
-- `AaveV3SupplyAdapter(USDC)` — sub-cap 15% of PUSD+ TA
-- `AaveV3SupplyAdapter(USDT)` — sub-cap 10%
-- `MorphoSupplyAdapter(USDC-WBTC 90LTV)` — sub-cap 5%
-- `Curve3poolLPAdapter` — sub-cap 5%
+- Pool: USDC/USDT on Push Chain, fee tier `100` (0.01%).
+- Initial range: ±50 bps around $1 parity.
+- Initial deposit: 30% of PUSD+ total assets at launch, split 50/50 between USDC and USDT (re-split as the pool price dictates).
+- Re-center trigger: keeper re-centers if `slot0.tick` moves > 30 bps from the position midpoint for more than `rebalanceCooldown` (default 6 hours).
+- Swap-slippage ceiling on rebalance: 50 bps.
 
-Sum: 35% (at the hard cap). Launch value of `maxDeployableBps` is 25%, so these sub-caps are ceilings, not the initial allocation.
-
-**Status:** Target for an ADR before launch (ADR 0006 candidate).
+**Status:** Target for an ADR before launch (ADR 0006 candidate). Expect to iterate once live fee/volume data exists.
 
 ---
 
-## OQ-10 — Rate-bearing wrapper selection  *(new, v2)*
+## OQ-10 — When to add rate-bearing reserve composition  *(deferred until assets are on-chain)*
 
-**Question:** Which rate-bearing wrappers hold `yieldShareReserve` at launch?
+**Question:** When sDAI, sUSDS, USDY, sUSDe, or scrvUSD are bridged to Push Chain, which should be whitelisted as `rateBearingWrapper` entries on `PUSDManager`?
 
-**Candidates:** sDAI, USDY (Ondo), sUSDe (Ethena), scrvUSD, sUSDS.
+**Status:** Parked. None of these assets exist on Push Chain Donut Testnet today. The Solidity storage slots (`rateBearingWrapper`, `unwrapAdapter`) are already reserved in `TokenInfo` but must remain `address(0)` at v2 launch. When any of them are bridged with a trusted oracle, an ADR revisits this question — likely sDAI and sUSDS first (both T-bill / MakerDAO collateralised).
 
-**Tradeoffs:** sDAI and sUSDS are maximally safe (collateralised by T-bills + MakerDAO equity). USDY is direct T-bill exposure but has a permissioning story that may not fit all deploy environments. sUSDe is higher-yield but delta-neutral ETH funding-based — policy decision whether to include.
+---
 
-**Recommendation:** Launch with sDAI + sUSDS only. Add sUSDe and USDY after 30 days live, behind a dedicated ADR. scrvUSD waits until Curve integration lands.
+## OQ-11 — When to add a second strategy venue  *(deferred)*
 
-**Status:** Target for an ADR before launch (ADR 0007 candidate).
+**Question:** Should PUSDLiquidity integrate a second venue (Aave, Morpho, Curve, or equivalent) once one is live on Push Chain?
+
+**Status:** Parked. No lending markets or alternative DEXes exist on Push Chain Donut Testnet today. The `PUSDLiquidity` interface is a bespoke UniV3 manager rather than a generic adapter pattern — adding a second venue will require a follow-up ADR and either a second engine contract or an interface refactor. Revisit when the alternative is actually deployable.
 
 ---
 

@@ -1,21 +1,34 @@
 # PUSD — Push USD
 
-> PUSD is the native USD stablecoin for Push Chain. It ships as a two-tier product:
-> a boring par-backed token (PUSD) for payments and settlement, and an ERC-4626 yield
-> wrapper (PUSD+) that delivers blended stablecoin yield to holders. The frontend
-> defaults to PUSD+; plain PUSD is one toggle away for integrators.
+> PUSD is the native USD stablecoin for Push Chain. It ships in two versions:
+> **v1 (live on Donut Testnet today)** — a single par-backed ERC-20 with idle
+> USDC/USDT reserves. **v2 (in engineering)** — the same PUSD plus an ERC-4626
+> yield wrapper (PUSD+) whose yield comes from a Uniswap V3 USDC/USDT LP position.
+> Uniswap V3 is the sole execution venue; there are no Aave, Morpho, or Curve
+> deployments on Push Chain today.
 
 The authoritative architecture is [ADR 0003](docs/design/decisions/0003-product-architecture.md).
+Live deployment status is [v1-deployment.md](docs/design/v1-deployment.md).
 Design docs live in `/docs`. Machine-readable context for coding agents lives in `/agents`.
 Solidity contracts live in `/contracts/src`. The frontend lives in `/app`.
 
-## Docs
+## v1 — Live on Donut Testnet
+
+- [v1 deployment status](docs/design/v1-deployment.md): Addresses, supported tokens, fee config, invariants, go-live checklist. Single source of truth for what is on-chain today.
+- [v1 frontend plan](docs/design/v1-frontend-plan.md): Direction C brutalist editorial plan layered over the existing `/app` skeleton. Mint + Redeem + Reserves + History + invariants ribbon.
+
+## v2 — In engineering
+
+- [v2 contracts plan](docs/design/v2-contracts-plan.md): Engineering plan for PUSD+, PUSDLiquidity, UniV3 integration, timelock, phased rollout.
+- [v2 frontend plan](docs/design/v2-frontend-plan.md): Frontend extensions for PUSD+ mint/unwrap, LP position rail, pool peg chart, I-13 drift check.
+
+## Design Docs
 
 - [Docs index](docs/README.md): Start here.
 - [Overview](docs/design/overview.md): One-page product summary — what PUSD is, what PUSD+ is, how they relate.
 - [Architecture](docs/design/architecture.md): Four-contract layout — PUSD, PUSDManager, PUSD+, PUSDLiquidity. Roles, storage, reserve slicing.
 - [Mint & redeem flow](docs/design/mint-redeem-flow.md): The three redemption paths (preferred → basket → emergency) and the atomic PUSD+ mint/wrap flow.
-- [Invariants](docs/design/invariants.md): Protocol safety properties — I-01 through I-12.
+- [Invariants](docs/design/invariants.md): Protocol safety properties — I-01 through I-13.
 - [Risks](docs/design/risks.md): Failure modes and mitigations.
 - [Open questions](docs/design/open-questions.md): Unresolved design questions.
 
@@ -23,7 +36,7 @@ Solidity contracts live in `/contracts/src`. The frontend lives in `/app`.
 
 - [ADR 0001 — Why PUSDManager exists](docs/design/decisions/0001-why-pusdmanager-exists.md): Separation of token and reserve logic.
 - [ADR 0002 — Access control model](docs/design/decisions/0002-access-control-model.md): Role layout across all four contracts.
-- [ADR 0003 — Product architecture (two-tier)](docs/design/decisions/0003-product-architecture.md): The authoritative v2 architecture decision. PUSD boring + PUSD+ yield-bearing ERC-4626 wrapper, PUSDLiquidity owned by PUSD+, par/yield-share accounting.
+- [ADR 0003 — Product architecture (two-tier)](docs/design/decisions/0003-product-architecture.md): The authoritative v2 architecture decision. PUSD boring + PUSD+ yield-bearing ERC-4626 wrapper, PUSDLiquidity owned by PUSD+ deploying into Uniswap V3, par/yield-share accounting.
 
 ## Agent Context (Machine-Readable)
 

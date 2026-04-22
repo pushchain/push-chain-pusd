@@ -221,13 +221,14 @@ PUSD.burn(from, _)                    requires from != 0
 PUSDManager.initialize                requires _pusd != 0
 PUSDManager.setPUSDPlus(v)            requires v != 0
 PUSDManager.setTreasuryReserve(a)     requires a != 0
-PUSDManager.setRateBearingWrapper(t,w,a)  requires w != 0 || adapter unset (0 clears)
+PUSDManager.setRateBearingWrapper(t,w,a)  v2 launch: w must be 0 (reserved)
 
 PUSDPlus.initialize                   requires asset, manager, admin != 0
 PUSDPlus.setPerformanceFeeRecipient(r) requires r != 0 (else disable)
 
-PUSDLiquidity.initialize              requires vault, manager, admin != 0
-PUSDLiquidity.addStrategy(adapter,_)  requires adapter != 0
+PUSDLiquidity.initialize              requires vault, manager, npm, router, pool, usdc, usdt, admin != 0
+PUSDLiquidity.setPool(p)              requires p != 0 && positions.length == 0
+PUSDLiquidity.setRouter(r)            requires r != 0
 ```
 
 ---
@@ -241,11 +242,12 @@ contracts: [PUSDLiquidity, PUSDPlus]
 PUSDLiquidity.totalDeployedInPUSD()
   <= PUSDLiquidity.maxDeployableBps() * PUSDPlus.totalAssets() / 10_000
 
-PUSDLiquidity.maxDeployableBps() <= PUSDLiquidity.HARD_CAP_BPS (= 3500)
+PUSDLiquidity.maxDeployableBps() <= PUSDLiquidity.HARD_CAP_BPS (= 5000)
 
-∀ adapter ∈ strategies:
-  strategyDeployedPUSD[adapter]
-    <= strategyCapBps[adapter] * PUSDPlus.totalAssets() / 10_000
+PUSDLiquidity.idleInPUSD()
+  >= PUSDLiquidity.emergencyLiquidityBps() * yieldShareReserveInPUSD / 10_000
+
+PUSDLiquidity.positions.length <= PUSDLiquidity.MAX_POSITIONS (= 10)
 ```
 
 **Foundry stub**
@@ -255,6 +257,38 @@ function invariant_deployCap() public {
     uint256 allowed  = liquidity.maxDeployableBps() * pusdPlus.totalAssets() / 10_000;
     assertLe(deployed, allowed, "I-12: deployed > global cap");
     assertLe(liquidity.maxDeployableBps(), liquidity.HARD_CAP_BPS(), "I-12: cap > hard ceiling");
+    assertLe(liquidity.positionCount(), liquidity.MAX_POSITIONS(), "I-12: position count > cap");
+}
+```
+
+---
+
+## I-13 — LP Accounting Drift  *(new, v2)*
+
+```
+type: global
+contracts: [PUSDLiquidity]
+
+netReported := PUSDLiquidity.netAssetsInPUSD()
+netTrue     := idleInPUSD
+             + Σ positionValue(positions[i].tokenId).valueInPUSD
+             + uncollectedFeesInPUSD
+
+|netReported − netTrue| / netReported <= NAV_DRIFT_TOLERANCE_BPS (= 10 bps)
+```
+
+If drift exceeds the bound, `PUSDPlus` minting MUST pause until the contract is
+reconciled. This catches oracle drift (slot0 manipulation), unclaimed-fee
+staleness, and NPM-interface mismatches.
+
+**Foundry stub**
+```solidity
+function invariant_lpAccountingDrift() public {
+    uint256 netReported = liquidity.netAssetsInPUSD();
+    uint256 netTrue     = _reconstructNAV(liquidity);  // helper sums idle + positions + fees
+    uint256 diff        = netReported > netTrue ? netReported - netTrue : netTrue - netReported;
+    if (netReported == 0) return;
+    assertLe(diff * 10_000 / netReported, 10, "I-13: LP accounting drifted > 10 bps");
 }
 ```
 
@@ -269,12 +303,16 @@ function invariant_deployCap() public {
 ## Fuzz setup notes
 
 - Handler contract exposes: `deposit`, `redeem`, `rebalance`, `setTokenStatus`, `sweepAllSurplus`,
-  `depositStable` (vault), `redeemToStable` (vault), `deployToStrategy`,
-  `withdrawFromStrategy`, `harvestAll`, and token transfers on a mock set of stablecoins.
+  `depositStable` (vault), `redeemToStable` (vault), `mintPosition`, `increaseLiquidity`,
+  `decreaseLiquidity`, `collectFees`, `closePosition`, and token transfers on a mock set of
+  stablecoins plus a mock Uniswap V3 USDC/USDT pool with controllable tick drift.
 - Ghost variables:
   - `gm_cumulativePUSDMinted`, `gm_cumulativePUSDBurned`
   - `gm_parDepositsPerToken`, `gm_parRedeemsPerToken`
   - `gm_vaultDepositsPerToken`, `gm_vaultRedeemsPerToken`
-  - `gm_strategyDeploysPerAdapter`, `gm_strategyWithdrawsPerAdapter`
-- Key post-assertions per handler step: I-01, I-01b, I-02, I-05, I-12.
-- Stress scenario: mass redeem of PUSD+ while strategies deployed at near-cap — exercises R-09 and `InsufficientLiquidity` fallback.
+  - `gm_positionMints`, `gm_positionCloses`, `gm_feeCollections`
+  - `gm_swapSlippageMaxBps`
+- Key post-assertions per handler step: I-01, I-01b, I-02, I-05, I-12, I-13.
+- Stress scenarios:
+  - Mass PUSD+ redeem while positions are deployed at near-cap and pool tick is at the range edge — exercises R-09 and `InsufficientLiquidity` fallback.
+  - Adversarial tick drift pushing `slot0` outside `[tickLower, tickUpper]` while the redeemer requests the leg the position is now 100% in — exercises the swap-through path with `lpSwapSlippageBps` cap.

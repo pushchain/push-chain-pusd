@@ -12,12 +12,16 @@ push-chain-pusd/
 ├── docs/                                Human-readable design docs
 │   ├── README.md                        Docs index
 │   ├── design/
+│   │   ├── v1-deployment.md             Live state on Donut Testnet (addresses, config) (NEW)
+│   │   ├── v1-frontend-plan.md          Direction C frontend plan for v1 (NEW)
+│   │   ├── v2-contracts-plan.md         Engineering plan for v2 contracts (UniV3) (NEW)
+│   │   ├── v2-frontend-plan.md          Engineering plan for v2 frontend (PUSD+ UI) (NEW)
 │   │   ├── overview.md                  One-page product summary (v2 two-tier)
 │   │   ├── architecture.md              Per-contract spec: storage, roles, wiring
 │   │   ├── mint-redeem-flow.md          Deposit/wrap/redeem/unwrap flow diagrams
-│   │   ├── invariants.md                Safety properties I-01 through I-12
+│   │   ├── invariants.md                Safety properties I-01 through I-13
 │   │   ├── risks.md                     Failure modes R-01 through R-09
-│   │   ├── open-questions.md            Unresolved design questions (OQ-03..OQ-10)
+│   │   ├── open-questions.md            Unresolved design questions (OQ-03..OQ-11)
 │   │   └── decisions/
 │   │       ├── 0001-why-pusdmanager-exists.md       ADR: token/reserve separation
 │   │       ├── 0002-access-control-model.md          ADR: role layout for 4 contracts
@@ -44,27 +48,25 @@ push-chain-pusd/
 │   │   ├── PUSD.sol                     Upgradeable ERC-20; mint/burn by role
 │   │   ├── PUSDManager.sol              Reserve manager (v2: par + yield-share slices)
 │   │   ├── PUSDPlus.sol                 ERC-4626 yield wrapper over PUSD (NEW)
-│   │   ├── PUSDLiquidity.sol            Strategy engine owned by PUSD+ (NEW)
-│   │   ├── adapters/                    IStrategyAdapter implementations (NEW)
-│   │   │   ├── AaveV3SupplyAdapter.sol
-│   │   │   ├── Curve3poolLPAdapter.sol
-│   │   │   └── MorphoSupplyAdapter.sol
+│   │   ├── PUSDLiquidity.sol            Uniswap V3 LP engine owned by PUSD+ (NEW)
+│   │   ├── univ3/                       Uniswap V3 integration (NEW)
+│   │   │   ├── UniV3PositionManager.sol Internal NPM wrapper + position bookkeeping
+│   │   │   └── UniV3Router.sol          Slippage-bounded swap wrapper
 │   │   └── interfaces/
 │   │       ├── IPUSD.sol
 │   │       ├── IPUSDManager.sol
 │   │       ├── IPUSDPlus.sol            (NEW)
-│   │       ├── IPUSDLiquidity.sol       (NEW)
-│   │       └── IStrategyAdapter.sol     (NEW)
+│   │       └── IPUSDLiquidity.sol       (NEW)
 │   ├── script/
 │   │   ├── DeployPUSD.s.sol             PUSD only
 │   │   ├── DeployAndConfigure.s.sol     All four contracts, roles wired, timelock applied
-│   │   ├── AddSupportedTokens.s.sol     Adds initial token list with rateBearingWrapper
-│   │   └── AddStrategies.s.sol          Adds initial adapters to PUSDLiquidity (NEW)
+│   │   ├── AddSupportedTokens.s.sol     Adds initial token list
+│   │   └── OpenInitialPosition.s.sol    Seeds first USDC/USDT UniV3 position (NEW)
 │   ├── test/
 │   │   ├── unit/                        Per-contract unit tests
-│   │   ├── integration/                 Four-contract integration flows
-│   │   ├── invariant/                   Foundry invariant tests (I-01 to I-12)
-│   │   └── fork/                        Mainnet-fork tests for adapters
+│   │   ├── integration/                 Four-contract integration flows (incl. LPDrift, OutOfRange, VaultRedeemWithUnwind)
+│   │   ├── invariant/                   Foundry invariant tests (I-01 to I-13)
+│   │   └── fork/                        Mainnet-fork tests for the UniV3 path
 │   ├── broadcast/                       Foundry broadcast artefacts
 │   ├── foundry.toml                     solc + remappings + ffi config
 │   ├── remappings.txt
@@ -94,10 +96,10 @@ push-chain-pusd/
 | Understand the two-tier decision | `docs/design/decisions/0003-product-architecture.md` |
 | Understand mint/redeem | `docs/design/mint-redeem-flow.md` + `contracts/src/PUSDManager.sol` |
 | Understand the wrapper | `agents/pusdplus.context.md` + `contracts/src/PUSDPlus.sol` |
-| Understand strategy deployment | `agents/pusdliquidity.context.md` + `contracts/src/PUSDLiquidity.sol` |
+| Understand LP deployment | `agents/pusdliquidity.context.md` + `contracts/src/PUSDLiquidity.sol` |
 | Deploy the protocol | `contracts/script/DeployAndConfigure.s.sol` |
 | Add a supported token | `contracts/script/AddSupportedTokens.s.sol` |
-| Add a strategy adapter | `contracts/script/AddStrategies.s.sol` + subclass `IStrategyAdapter` |
+| Seed the first LP position | `contracts/script/OpenInitialPosition.s.sol` |
 | Frontend work | `app/src/App.tsx`, `app/src/components/` |
 | Check deployed addresses | `contracts/deployed.txt` |
 | Write invariant tests | `contracts/test/invariant/` + `agents/invariants.context.md` |

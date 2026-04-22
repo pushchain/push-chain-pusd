@@ -2,11 +2,11 @@
 
 Blueprint for the PUSD dApp frontend. Pairs with [ADR 0003](decisions/0003-product-architecture.md) and the [v2 contracts plan](v2-contracts-plan.md).
 
-> **Design direction.** Direction C — brutalist editorial. Cream `#f3eee4` background, Fraunces serif for display, IBM Plex Mono for numerics, magenta `#dd44b9` as a single accent. See `mockup-c-brutalist.html` at the repo root for the visual reference.
+> **Design direction.** Direction C — brutalist editorial. Cream `#f3eee4` background, Fraunces serif for display, IBM Plex Mono for numerics, magenta `#dd44b9` as a single accent. See `mockup-c-brutalist.html` at the repo root for the visual reference. Direction C is already established in v1 (`docs/design/v1-frontend-plan.md`) — v2 inherits every token, adds surfaces for PUSD+ and Uniswap V3 LP state.
 >
-> **Scope.** React + Vite SPA. Connects via `@pushchain/ui-kit` (`PushUniversalWalletProvider`). Default flow mints **PUSD+**; plain **PUSD** is one toggle away. Reads pulled from RPC via viem; writes via `pushChainClient.universal.sendTransaction`.
+> **Scope.** React + Vite SPA. Connects via `@pushchain/ui-kit` (`PushUniversalWalletProvider`). Default flow mints **PUSD+**; plain **PUSD** is one toggle away. Reads pulled from RPC via viem; writes via `pushChainClient.universal.sendTransaction`. Liquidity venue is Uniswap V3 on Push Chain — one USDC/USDT pool at launch.
 >
-> **Non-goals.** Mobile-native app. In-app on-ramp. Governance UI (there is no governance token at launch).
+> **Non-goals.** Mobile-native app. In-app on-ramp. Governance UI (there is no governance token at launch). Cross-chain LP visualisation (same-chain only at launch, deferred to v2.1).
 
 ---
 
@@ -38,7 +38,7 @@ app/
     │   │
     │   ├── mint/
     │   │   ├── MintCard.tsx        Composite card: token picker, amount, PUSD/PUSD+ toggle, submit
-    │   │   ├── TokenPicker.tsx     Source stablecoin dropdown (USDC / USDT / DAI / USDS / crvUSD)
+    │   │   ├── TokenPicker.tsx     Source stablecoin dropdown — 9 USDC/USDT origins (same as v1)
     │   │   ├── AmountInput.tsx     Big brutalist numeric input; mono; no borders, underline only
     │   │   ├── ModeToggle.tsx      "MINT & EARN (PUSD+)" | "PLAIN PUSD" segmented control
     │   │   └── QuoteBlock.tsx      "You will receive" block: shares@pps, fees, ETA, source slice
@@ -46,13 +46,13 @@ app/
     │   ├── redeem/
     │   │   ├── RedeemCard.tsx      Unified: switches to Unwrap flow when input token is PUSD+
     │   │   ├── RouteExplainer.tsx  Shows active path: Preferred / Basket / Emergency (for PUSD)
-    │   │   └── UnwindBudget.tsx    For PUSD+: shows idle + instant-unwind + remaining cap info
+    │   │   └── UnwindBudget.tsx    For PUSD+: idle + instant-unwind + LP-unwind cost info
     │   │
     │   ├── reserves/
     │   │   ├── ReserveTable.tsx    Two-column table: parReserve vs yieldShareReserve per token
-    │   │   ├── StrategyRail.tsx    Horizontal strip of deployed strategies with % of cap
+    │   │   ├── PositionRail.tsx    LP position cards: pool, tick range, in-range, fees, share of yield slice
     │   │   ├── PPSChart.tsx        PUSD+ pps over time (line, mono style)
-    │   │   └── Invariants.tsx      Live ribbon: I-01 OK / I-01b OK / I-12 OK
+    │   │   └── Invariants.tsx      Live ribbon: I-01 OK / I-01b OK / I-12 OK / I-13 OK
     │   │
     │   ├── common/
     │   │   ├── Metric.tsx          Big number + small label, mono font
@@ -70,23 +70,28 @@ app/
     │   ├── usePUSDConfig.ts        Read MAX_TOKENS, baseFee, preferredFee, vaultHaircut
     │   ├── useSupportedTokens.ts   Read tokenList + TokenInfo for each
     │   ├── useReserveSlices.ts     Read parReserveOf / yieldShareReserveOf per token
+    │   ├── useLPPositions.ts       PUSDLiquidity.positions → pool, range, in-range flag, valuation, fees
+    │   ├── usePoolPrice.ts         Read spot tick / slot0 from the USDC/USDT UniV3 pool for peg display
     │   ├── usePPS.ts               Compute PUSD+ price-per-share from totalAssets/totalSupply
     │   ├── useUserBalances.ts      User's token balances, PUSD, PUSD+
     │   ├── useMintQuote.ts         Preview deposit: output shares + fees + route
     │   ├── useRedeemQuote.ts       Preview redeem: output token + route + slippage
-    │   ├── useTxHistory.ts         Local-storage-cached recent tx list
-    │   ├── useInvariantPulse.ts    Polls I-01, I-01b, I-12 every 15s for the live ribbon
+    │   ├── useUnwindCapacity.ts    For PUSD+ redeems: idle + per-position instant unwind
+    │   ├── useTxHistory.ts         Event-log cached recent tx list (no localStorage — in-memory only)
+    │   ├── useInvariantPulse.ts    Polls I-01 / I-01b / I-12 / I-13 every 15s for the live ribbon
     │   └── useContracts.ts         Returns viem contract clients keyed by network
     │
     ├── lib/
     │   ├── decimals.ts             normaliseToPUSD / convertFromPUSD mirroring on-chain math
     │   ├── format.ts               6d token / 18d share / bps-to-% / tx-hash-short helpers
     │   ├── viemClient.ts           Public client via donut rpc; wallet client from ui-kit signer
+    │   ├── univ3.ts                tick ↔ price, liquidity ↔ amounts, in-range helpers (ported from Uniswap V3 SDK math)
     │   └── abi/
     │       ├── PUSD.ts             Generated or hand-curated ABI const
     │       ├── PUSDManager.ts
     │       ├── PUSDPlus.ts
-    │       └── PUSDLiquidity.ts
+    │       ├── PUSDLiquidity.ts
+    │       └── UniV3Pool.ts        slot0, liquidity, ticks, observe for spot/TWAP peg reads
     │
     ├── contracts/
     │   ├── addresses.ts            Per-network address book (donut / mainnet)
@@ -287,7 +292,7 @@ Two cards side by side:
 One-paragraph serif pitch + feature bullets (backing, instant redeem, settlement-grade). CTA: "Mint plain PUSD →" (magenta underline on hover).
 
 **II. PUSD+ — the dollar that earns.**
-One-paragraph pitch + "Current yield (30d): X.XX% APY" + "Strategies deployed: X of 4". CTA: "Mint & earn →" (bolder magenta button).
+One-paragraph pitch + "Current fee APR (30d): X.XX%" + "LP positions active: X in range · Y out" + "Deployed: Z% of cap". CTA: "Mint & earn →" (bolder magenta button).
 
 Foot: the live invariant ribbon (see §5.3).
 
@@ -295,7 +300,7 @@ Foot: the live invariant ribbon (see §5.3).
 
 The flagship route. Default mode is PUSD+. One composite `MintCard` with:
 
-1. **TokenPicker** — USDC / USDT / DAI / USDS / crvUSD.
+1. **TokenPicker** — nine USDC/USDT origins (Ethereum Sepolia, Solana Devnet, Base Sepolia, Arbitrum Sepolia, BNB Testnet). Exactly the v1 set; v2 adds no new token classes.
 2. **AmountInput** — large mono with the ticker in ghost text (`123.456 USDC`).
 3. **ModeToggle** — segmented control: `MINT & EARN (PUSD+)` | `PLAIN PUSD`. PUSD+ is active by default.
 4. **QuoteBlock** — shows the full receipt:
@@ -320,8 +325,9 @@ For **plain PUSD**:
 
 For **PUSD+**:
 - Target stablecoin picker.
-- `UnwindBudget` box: "IDLE · $X.XXm · INSTANT UNWIND · $X.XXm · REMAINING CAP · $X.XXm". Shows whether the requested size is within instant capacity.
-- If request exceeds instant capacity: block the submit and show a banner ("Request exceeds instant-unwind capacity by $X.XX. Split your redeem or retry in ~10 min while the keeper unwinds.").
+- `UnwindBudget` box: "IDLE · $X.XXm · INSTANT UNWIND (LP) · $X.XXm · EST. SLIPPAGE · X bps". Shows whether the requested size is within instant capacity and the expected unwind cost.
+- Instant unwind capacity is computed from the sum of `(position.liquidity × tick-range)` across active LP positions at current pool price. Any position out-of-range contributes zero to the requested-token side.
+- If request exceeds instant capacity: block the submit and show a banner ("Request exceeds instant-unwind capacity by $X.XX. Split your redeem or retry in ~10 min while the keeper rebalances.").
 
 Submit UI matches `/mint`.
 
@@ -329,11 +335,28 @@ Submit UI matches `/mint`.
 
 Public transparency page. Readers can verify the live state of the protocol at any time. Three regions:
 
-**Region A — Reserve table.** Columns: Token · Status · Par Reserve · Yield-Share Reserve · Rate-Bearing Form · Accrued Fees · Accrued Haircut. One row per supported token. Status rendered as a `Tag`. Numbers mono, right-aligned.
+**Region A — Reserve table.** Columns: Token · Chain · Status · Par Reserve · Yield-Share Reserve · Accrued Fees · Accrued Haircut. One row per supported token (nine rows at launch — same USDC/USDT set as v1). Status rendered as a `Tag`. Numbers mono, right-aligned.
 
-**Region B — Strategy rail.** Horizontal strip (or vertical on mobile). Each enabled strategy shows: name, balance in PUSD, % of cap (bar), last harvest timestamp. Color: gold when gaining, espresso when steady, oxblood if in drawdown.
+**Region B — LP positions (`<PositionRail>`).** Vertical list — one card per active Uniswap V3 position. Each card shows:
 
-**Region C — PPS chart.** Mono-styled line chart of PUSD+ pps over 30d. No gradient fill; just a hairline. Annotates each performance-fee crystallisation as a small dotted vertical rule. Y-axis starts at 1.000, never zero.
+```
+POSITION #1   ·   USDC/USDT 0.01%   ·   IN RANGE
+────────────────────────────────────────────────
+TICKS            −50bps … +50bps around 1.0000
+VALUE            1,240,000 USDC + 1,240,000 USDT  ≈ 2.48m PUSD
+FEES ACCRUED     1,242.18 USDC + 1,238.44 USDT   (uncollected)
+SHARE OF YIELD   18.3% of PUSDPlus.totalAssets()
+7d FEE APR       4.12%
+NPM TOKEN        #481  ↗
+```
+
+- `IN RANGE` tag rendered jade; `OUT OF RANGE` oxblood; displays the last-in-range timestamp when out.
+- Multiple positions stack; default sort: deployed value descending.
+- If zero positions exist (contract just deployed, pre-LP): a single editorial panel explains the yield slice is fully idle and deployment is imminent.
+
+**Region C — Pool peg chart.** USDC:USDT spot price from the pool's `slot0.sqrtPriceX96` over 24h. A horizontal rule at parity; any deviation > 20 bps flags as a gold annotation. This is our "is the peg holding" dashboard.
+
+**Region D — PPS chart.** Mono-styled line chart of PUSD+ pps over 30d. No gradient fill; just a hairline. Annotates each performance-fee crystallisation as a small dotted vertical rule. Y-axis starts at 1.000, never zero.
 
 Foot: the live invariant ribbon.
 
@@ -371,13 +394,14 @@ Submit behaviour:
 Renders in the footer on every page.
 
 ```
-━━━ I-01 RESERVE OK · I-01b PUSD+ NAV 1.0142 · I-12 DEPLOYED 18.3% ━━━
+━━━ I-01 RESERVE OK · I-01b PUSD+ NAV 1.0142 · I-12 DEPLOYED 18.3% · I-13 LP ACCOUNTING OK ━━━
 ```
 
-All three values are pulled live (15s interval). If any check fails:
+All four values are pulled live (15s interval). If any check fails:
 - I-01 fails → full-page banner: "Reserve integrity check failed. Sitting back until we verify."
 - I-01b fails → banner: "PUSD+ NAV has drifted below 1.0. Redemption is paused."
-- I-12 fails → banner: "Strategy deployment exceeded cap. Keeper is unwinding."
+- I-12 fails → banner: "LP deployment exceeded cap. Keeper is unwinding."
+- I-13 fails → banner: "LP position valuation has drifted beyond tolerance. Re-reading pool state…"
 
 This is aggressive on purpose. If our own invariants break, we say so loudly.
 
@@ -440,10 +464,31 @@ interface RedeemQuote {
 
 // useInvariantPulse
 interface InvariantPulse {
-  i01: { ok: boolean; ratio: number };       // balance / slice-sum
+  i01:  { ok: boolean; ratio: number };       // balance / slice-sum
   i01b: { ok: boolean; pps: string };
-  i12: { ok: boolean; utilisation: number }; // % of cap
-  lastChecked: number;                         // ms epoch
+  i12:  { ok: boolean; utilisation: number };  // LP deployed as % of cap
+  i13:  { ok: boolean; driftBps: number };     // LP valuation drift from yieldShareReserve book
+  lastChecked: number;                          // ms epoch
+}
+
+// useLPPositions
+interface LPPosition {
+  tokenId: bigint;
+  pool: Address;
+  token0: { symbol: 'USDC' | 'USDT'; address: Address; decimals: number };
+  token1: { symbol: 'USDC' | 'USDT'; address: Address; decimals: number };
+  feeTier: 100 | 500 | 3000 | 10000;
+  tickLower: number;
+  tickUpper: number;
+  currentTick: number;
+  inRange: boolean;
+  amount0: bigint;
+  amount1: bigint;
+  uncollectedFees0: bigint;
+  uncollectedFees1: bigint;
+  valueInPUSD: bigint;                         // normalized 6dp
+  shareOfYield: number;                         // 0..1
+  sevenDayFeeAPR: number;                       // 0..1
 }
 ```
 
@@ -500,8 +545,8 @@ All hooks wired (tokens, reserves, pps, user balances). `/reserves` renders with
 **Phase 3 — Mint (1.5 weeks)**
 `/mint` flow end-to-end for both modes. Tx lifecycle + inline stamps. Approve-then-mint chaining.
 
-**Phase 4 — Redeem (1.5 weeks)**
-`/redeem` for plain PUSD (preferred / basket / emergency classification) and PUSD+ (unwind capacity + instant redeem). `InsufficientLiquidity` revert handled gracefully.
+**Phase 4 — Redeem + LP visualisation (2 weeks)**
+`/redeem` for plain PUSD (preferred / basket / emergency classification) and PUSD+ (unwind capacity + instant redeem). `InsufficientLiquidity` revert handled gracefully. `<PositionRail>` wired to `useLPPositions` with spot pool reads. Pool peg chart operational.
 
 **Phase 5 — Polish (1 week)**
 Visual regression green. a11y pass. Mobile tuning. Landing-page copy finalised with Prodigy.
@@ -509,7 +554,7 @@ Visual regression green. a11y pass. Mobile tuning. Landing-page copy finalised w
 **Phase 6 — Launch gates (0.5 week)**
 Deploy to preview → QA pass → production build → cut.
 
-**Total:** ~6.5 weeks frontend, runnable mostly in parallel with contracts Phases 3–5.
+**Total:** ~7 weeks frontend, runnable mostly in parallel with contracts Phases 3–5. The v1 frontend (`docs/design/v1-frontend-plan.md`) ships first; v2 extends that tree in place — every v1 component still lives in v2 and Direction C tokens carry through unchanged.
 
 ---
 
@@ -522,6 +567,8 @@ Deploy to preview → QA pass → production build → cut.
 | Wallet connection edge cases (Phantom via CEA first time) | Medium | Medium | Integration test covers the CEA-first-touch flow; helpful copy on the landing page |
 | Direction C readability on low-contrast screens | Medium | Medium | Contrast verified in §7.4; a single opt-in high-contrast toggle planned for v2.1 |
 | ERC-4626 quoting drift (`previewDeposit` differs from actual) | Low | Medium | Always re-quote at tx submission; show "estimated" label until confirmed |
+| UniV3 position valuation skew during volatile pool ticks | Medium | Medium | `useLPPositions` refreshes `slot0` with every call; `usePoolPrice` TWAPs 5m to smooth display; values marked with "estimated" pill until settlement |
+| LP out-of-range presentation causes user panic | Medium | Low | Clear editorial explainer on `/reserves` — "Out of range = not earning fees, not losing principal." |
 | Design direction change post-launch | Low | High | Tokens centralised in `styles/tokens.css`; swapping palette is a one-file edit |
 
 ---

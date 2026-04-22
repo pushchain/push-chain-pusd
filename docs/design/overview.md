@@ -28,8 +28,8 @@ PUSD (ERC-20)       — the boring token. 58 lines. Mint/burn gated by role.
 PUSDManager         — the reserve. Splits holdings into parReserve + yieldShareReserve.
                       Single source of truth for mint authority.
 PUSDPlus (ERC-4626) — the yield wrapper. Underlying is PUSD. NAV grows over time.
-PUSDLiquidity       — the strategy engine. Owned by PUSDPlus. Deploys up to 35% of
-                      PUSD+ assets into Aave / Curve / Morpho.
+PUSDLiquidity       — the LP engine. Owned by PUSDPlus. Deploys up to 50% of
+                      PUSD+ assets into a Uniswap V3 USDC/USDT position on Push Chain.
 ```
 
 See [architecture.md](architecture.md) for the storage layout, roles, and reserve slicing.
@@ -61,13 +61,11 @@ See [mint-redeem-flow.md](mint-redeem-flow.md) for the detailed paths.
 
 ## Where yield comes from
 
-Two levers, with intentionally asymmetric policy.
+One venue at v2 launch. `PUSDLiquidity` deploys up to **50%** of PUSD+ net assets as a concentrated USDC/USDT position on Uniswap V3 on Push Chain (100-bps fee tier, ±50 bps around parity). Launch value is **30%**; the 50% ceiling is in the contract and moving it requires a new ADR.
 
-**Lever 1 — Reserve composition (uncapped).** `PUSDManager`'s yield-share slice can be held in rate-bearing forms of the underlying stablecoin: `sDAI`, `USDY`, `sUSDe`, `scrvUSD`, `sUSDS`. Each is a stablecoin-denominated, public-NAV instrument. All of `yieldShareReserve` may be rate-bearing without increasing blow-up risk.
+The pool earns real swap fees (~3–5% on deployed capital at modest volume) and also provides the swap depth PUSD redemptions use when the preferred basket asset is thin in the Manager.
 
-**Lever 2 — Active strategies (capped at 35%).** `PUSDLiquidity` deploys up to 35% of PUSD+ net assets into Aave supply, Curve LPs, and Morpho markets. Launch value is **25%**; the **35% ceiling is in the contract and moving it requires a new ADR**.
-
-The cap protects redemption latency, not reserve integrity. See [ADR 0003 §4](decisions/0003-product-architecture.md).
+Rate-bearing reserve composition (sUSDS, sDAI, USDY, sUSDe, scrvUSD) is out of scope for v2 — none of those wrappers are on Push Chain today. Rate-bearing can return via a follow-up ADR when the underlying assets are bridged. See [ADR 0003 §4](decisions/0003-product-architecture.md).
 
 ---
 
@@ -88,7 +86,8 @@ Integrators who hold plain PUSD earn **zero yield**. That is correct — plain P
 - I-01 — Every non-removed token's balance covers `parReserve + yieldShareReserve + fees + haircut`.
 - I-01b — PUSD+ NAV is monotonically ≥ 1.0 PUSD/share, always.
 - I-03 — PUSD mint only via `PUSDManager.deposit()` or `PUSDManager.mintForVault()`.
-- I-12 — `PUSDLiquidity` total deployed ≤ `maxDeployableBps` (cap 35%) of PUSD+ assets.
+- I-12 — `PUSDLiquidity` total deployed ≤ `maxDeployableBps` (cap 50%, launch 30%) of PUSD+ assets.
+- I-13 — LP accounting drift between `netAssetsInPUSD()` and reconstructed NAV ≤ 10 bps.
 
 The full set is in [invariants.md](invariants.md).
 
