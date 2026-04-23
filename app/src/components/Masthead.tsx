@@ -10,8 +10,8 @@
  * On mobile the nav wraps to its own row and horizontally scrolls.
  */
 
-import { NavLink } from 'react-router-dom';
 import { PushUniversalAccountButton } from '@pushchain/ui-kit';
+import { NavLink } from 'react-router-dom';
 
 const DOCS_URL = 'https://pusd.push.org/docs';
 

@@ -24,6 +24,7 @@ import { DispatchFeed } from '../components/DispatchFeed';
 import { SloganBand } from '../components/SloganBand';
 import { Ticker } from '../components/Ticker';
 import { TokenPill } from '../components/TokenPill';
+import { useCountUp } from '../hooks/useCountUp';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useReserves } from '../hooks/useReserves';
@@ -71,6 +72,12 @@ export default function ReservesPage() {
     reserves.totalReserves > totalSupply ? reserves.totalReserves - totalSupply : 0n;
   const collateralRatio = formatPct(reserves.totalReserves, totalSupply, 2);
 
+  // Count-up on mount for the two top-of-page big numbers. Only the raw
+  // bigint is animated; the "RESERVES {…} ≥ SUPPLY {…}" subline stays static
+  // because we want the comparison to be instantly legible.
+  const supplyCounted = useCountUp(totalSupply);
+  const reservesCounted = useCountUp(reserves.totalReserves);
+
   const ratioClass = (() => {
     if (totalSupply === 0n) return 'stat__sub--delta-up';
     if (reserves.totalReserves < totalSupply) return 'stat__sub--delta-down';
@@ -117,7 +124,7 @@ export default function ReservesPage() {
             <div className="stat">
               <div className="stat__label">CIRCULATION</div>
               <div className="stat__value">
-                {supplyLoading ? '…' : formatAmount(totalSupply, 6, { maxFractionDigits: 0 })}{' '}
+                {supplyLoading ? '…' : formatAmount(supplyCounted, 6, { maxFractionDigits: 0 })}{' '}
                 <em>PUSD</em>
               </div>
               <div className="stat__sub">TOTAL SUPPLY · 6 DECIMALS</div>
@@ -126,7 +133,7 @@ export default function ReservesPage() {
               <div className="stat__label">COLLATERAL RATIO</div>
               <div className="stat__value">{reserves.loading || supplyLoading ? '…' : collateralRatio}</div>
               <div className={`stat__sub ${ratioClass}`}>
-                RESERVES {formatAmount(reserves.totalReserves, 6, { maxFractionDigits: 0 })}{' '}
+                RESERVES {formatAmount(reservesCounted, 6, { maxFractionDigits: 0 })}{' '}
                 ≥ SUPPLY {formatAmount(totalSupply, 6, { maxFractionDigits: 0 })}
               </div>
             </div>
@@ -140,7 +147,7 @@ export default function ReservesPage() {
             <div className="stat">
               <div className="stat__label">BASE REDEMPTION FEE</div>
               <div className="stat__value">
-                {stats.loading ? '…' : (stats.baseFeeBps / 100).toFixed(2)}
+                {stats.loading ? '… ' : (stats.baseFeeBps / 100).toFixed(2)}
                 <em>%</em>
               </div>
               <div className="stat__sub">MINT FREE · REDEEM {stats.baseFeeBps} BPS</div>

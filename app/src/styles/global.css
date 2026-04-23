@@ -171,6 +171,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .editorial-band__peg--down strong { color: var(--c-oxblood); }
 
 @media (max-width: 720px) {
+  .editorial-band__inner { padding-left: 16px; padding-right: 16px; }
   .editorial-band__right { gap: 12px; font-size: 9.5px; }
   .editorial-band__right > * + *::before { margin-right: 12px; }
 }
@@ -240,6 +241,43 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   display: flex;
   gap: 12px;
   align-items: center;
+}
+
+.masthead__stats {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.masthead__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.masthead__stat-label {
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.08em;
+  color: var(--c-ink-mute);
+  text-transform: uppercase;
+}
+
+.masthead__stat-value {
+  font-family: var(--f-mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--c-ink);
+  letter-spacing: 0.02em;
+}
+
+.masthead__stat-value--warn {
+  color: var(--c-magenta);
+}
+
+@media (max-width: 900px) {
+  .masthead__stats { display: none; }
 }
 
 .masthead__addr {
@@ -483,6 +521,56 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   border-top: var(--rule-med);
   border-bottom: var(--rule-med);
   background: var(--c-paper);
+  overflow: hidden;
+  /* Soft fade at both edges so the endless scroll doesn't look clipped. */
+  -webkit-mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 48px,
+    #000 calc(100% - 48px),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to right,
+    transparent 0,
+    #000 48px,
+    #000 calc(100% - 48px),
+    transparent 100%
+  );
+}
+
+/* Marquee — two identical tracks sit side-by-side; the outer wrapper
+   translates by -50% over a long duration, so when the first track
+   scrolls off-screen the second is already in position. Hovering pauses
+   the animation so the reader can read a number. */
+.ticker__marquee {
+  display: flex;
+  width: max-content;
+  animation: ticker-scroll 72s linear infinite;
+  will-change: transform;
+}
+
+.ticker:hover .ticker__marquee {
+  animation-play-state: paused;
+}
+
+.ticker__track {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 32px;
+  align-items: center;
+  padding: 12px 24px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+  white-space: nowrap;
+}
+
+@keyframes ticker-scroll {
+  0%   { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
 }
 
 .ticker__inner {
@@ -1976,5 +2064,154 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   .changelog__entry {
     grid-template-columns: 1fr;
     gap: 10px;
+  }
+}
+
+/* ==========================================================================
+   26. HERO ASCII BAND — animated manifold diagram under the hero
+   ========================================================================== */
+.ascii-band {
+  border-top: var(--rule-thin);
+  border-bottom: var(--rule-med);
+  background: var(--c-paper);
+  padding: 18px 0;
+}
+
+.ascii-band__kicker {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  color: var(--c-ink-mute);
+  text-transform: uppercase;
+  padding-bottom: 10px;
+  border-bottom: var(--rule-thin);
+  margin-bottom: 14px;
+}
+
+.ascii-band__pre {
+  font-family: var(--f-mono);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--c-ink);
+  margin: 0;
+  white-space: pre;
+  overflow-x: auto;
+  letter-spacing: 0;
+}
+
+.ascii-band__lane {
+  display: inline;
+}
+
+.ascii-band__label {
+  color: var(--c-ink);
+  font-weight: 500;
+  letter-spacing: 0.06em;
+}
+
+.ascii-band__dots {
+  color: var(--c-ink-mute);
+}
+
+.ascii-band__packet {
+  color: var(--c-magenta);
+  font-weight: 700;
+}
+
+.ascii-band__arrow {
+  color: var(--c-ink);
+  padding-left: 2px;
+}
+
+.ascii-band__rail {
+  color: var(--c-ink-mute);
+  padding-left: 2px;
+}
+
+.ascii-band__spout {
+  color: var(--c-ink-mute);
+}
+
+.ascii-band__brand {
+  color: var(--c-ink);
+  font-weight: 700;
+  letter-spacing: 0.18em;
+}
+
+.ascii-band__peg {
+  color: var(--c-jade);
+  animation: peg-breathe 4.2s ease-in-out infinite;
+}
+
+.ascii-band__peg--warn { color: var(--c-gold); }
+.ascii-band__peg--down { color: var(--c-oxblood); animation: none; }
+
+/* ==========================================================================
+   27. ANIMATIONS — micro-delights, all gated by prefers-reduced-motion
+   ========================================================================== */
+
+/* Peg breath — a slow, barely-there opacity drift on the live peg marker.
+   Communicates "live, watched, alive" without the distraction of a blink. */
+@keyframes peg-breathe {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0.55; }
+}
+
+.editorial-band__peg strong {
+  animation: peg-breathe 4.2s ease-in-out infinite;
+  display: inline-block;
+}
+
+/* Dispatch cards — each card fades up with a 60ms stagger (set inline as
+   animation-delay in DispatchFeed.tsx). "Fresh" is applied on mount, not
+   on poll-driven updates — the grid doesn't flicker on every 12s tick. */
+@keyframes dispatch-enter {
+  0%   { opacity: 0; transform: translateY(6px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+.dispatch__card--fresh {
+  animation: dispatch-enter 520ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* Button press — a 1px depth-shift on mouse-down so every CTA has a tactile
+   "clunk" instead of feeling like a flat link. Applies to any .btn variant. */
+.btn {
+  transition: transform 60ms ease-out, box-shadow 60ms ease-out;
+}
+
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+
+/* Distribution bar segments — subtle grow-in on the reserves detail view. */
+@keyframes dist-seg-grow {
+  from { transform: scaleX(0); }
+  to   { transform: scaleX(1); }
+}
+
+.dist-bar__seg {
+  transform-origin: left center;
+  animation: dist-seg-grow 720ms cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+/* ==========================================================================
+   28. REDUCED MOTION — disable everything above for users who've asked
+   ========================================================================== */
+@media (prefers-reduced-motion: reduce) {
+  .ticker__marquee,
+  .ascii-band__peg,
+  .editorial-band__peg strong,
+  .dispatch__card--fresh,
+  .dist-bar__seg {
+    animation: none !important;
+  }
+
+
+  .btn {
+    transition: none !important;
   }
 }

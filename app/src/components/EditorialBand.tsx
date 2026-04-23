@@ -10,10 +10,10 @@
  */
 
 import { useMemo } from 'react';
-import { useReserves } from '../hooks/useReserves';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
-import { deriveInvariantState } from '../lib/invariants';
+import { useReserves } from '../hooks/useReserves';
 import { formatAmount, formatPct } from '../lib/format';
+import { deriveInvariantState } from '../lib/invariants';
 
 function isoWeek(date: Date): number {
   const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
@@ -66,7 +66,7 @@ export function EditorialBand() {
   const supplyWhole = totalSupply / 1_000_000n;
   const ratioLabel = totalSupply === 0n
     ? '—'
-    : formatPct(reserves.totalReserves, totalSupply, 1);
+    : formatPct(reserves.totalReserves, totalSupply, 2);
 
   const pegGlyph = invariantState === 'violation' ? '✕' : invariantState === 'warning' ? '△' : '▲';
   const pegClass = invariantState === 'violation'
@@ -89,16 +89,15 @@ export function EditorialBand() {
           <span className={pegClass}>
             PEG <strong>$1.0000</strong> {pegGlyph}
           </span>
+          {/* <span>
+            RESERVES <strong>{reserves.loading ? '—' : formatAmount(reserves.totalReserves, 6, { maxFractionDigits: 0 })}</strong>
+          </span> */}
           <span>
             SUPPLY <strong>{supplyLoading ? '—' : `${shortNumber(supplyWhole)} PUSD`}</strong>
           </span>
           <span>
-            RATIO <strong>{reserves.loading || supplyLoading ? '—' : ratioLabel}</strong>
+            COLLATERAL <strong>{reserves.loading || supplyLoading ? '—' : ratioLabel}</strong>
           </span>
-          <span>
-            RESERVES <strong>{reserves.loading ? '—' : formatAmount(reserves.totalReserves, 6, { maxFractionDigits: 0 })}</strong>
-          </span>
-          <span>DONUT TESTNET</span>
         </div>
       </div>
     </div>

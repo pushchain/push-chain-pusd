@@ -88,7 +88,11 @@ export function DispatchFeed() {
         }
         const { head, body, foot } = describe(row);
         return (
-          <div key={`${row.txHash}:${row.logIndex}`} className="dispatch__card">
+          <div
+            key={`${row.txHash}:${row.logIndex}`}
+            className="dispatch__card dispatch__card--fresh"
+            style={{ animationDelay: `${i * 60}ms` }}
+          >
             <div className="dispatch__kicker">
               <span>
                 <span className={`dispatch__dot ${dotClass(row.type)}`} /> {head}
