@@ -12,7 +12,7 @@
 import { useMemo } from 'react';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useReserves } from '../hooks/useReserves';
-import { formatAmount, formatPct } from '../lib/format';
+import { formatPct } from '../lib/format';
 import { deriveInvariantState } from '../lib/invariants';
 
 function isoWeek(date: Date): number {

@@ -1,17 +1,18 @@
 /**
- * MintPage — /mint route. Thin wrapper around MintCard.
+ * MintPage — /mint route.
  *
- * Now owns its own container since App.tsx no longer wraps routes.
+ * Renders the unified ConvertPanel with the Mint tab active and the
+ * advanced recipient override + Push-chain route toggle surfaced.
  */
 
-import { MintCard } from '../components/MintCard';
+import { ConvertPanel } from '../components/ConvertPanel';
 
 export default function MintPage() {
   return (
     <div className="container">
       <section className="section">
-        <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          <MintCard />
+        <div style={{ maxWidth: 620, margin: '0 auto' }}>
+          <ConvertPanel initialMode="mint" advanced />
         </div>
       </section>
     </div>

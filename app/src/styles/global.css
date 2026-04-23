@@ -521,56 +521,6 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   border-top: var(--rule-med);
   border-bottom: var(--rule-med);
   background: var(--c-paper);
-  overflow: hidden;
-  /* Soft fade at both edges so the endless scroll doesn't look clipped. */
-  -webkit-mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 48px,
-    #000 calc(100% - 48px),
-    transparent 100%
-  );
-  mask-image: linear-gradient(
-    to right,
-    transparent 0,
-    #000 48px,
-    #000 calc(100% - 48px),
-    transparent 100%
-  );
-}
-
-/* Marquee — two identical tracks sit side-by-side; the outer wrapper
-   translates by -50% over a long duration, so when the first track
-   scrolls off-screen the second is already in position. Hovering pauses
-   the animation so the reader can read a number. */
-.ticker__marquee {
-  display: flex;
-  width: max-content;
-  animation: ticker-scroll 72s linear infinite;
-  will-change: transform;
-}
-
-.ticker:hover .ticker__marquee {
-  animation-play-state: paused;
-}
-
-.ticker__track {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 32px;
-  align-items: center;
-  padding: 12px 24px;
-  font-family: var(--f-mono);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--c-ink-mute);
-  white-space: nowrap;
-}
-
-@keyframes ticker-scroll {
-  0%   { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
 }
 
 .ticker__inner {
@@ -1230,6 +1180,61 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   color: var(--c-ink-mute);
   line-height: 1.6;
   margin: 0;
+}
+
+/* --- Route switch — choose between "from your wallet" and "from Push Chain" --- */
+.route-switch {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border: var(--rule-thin);
+  background: var(--c-cream);
+}
+
+.route-switch__label {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+}
+
+.route-switch__options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: var(--rule-thin);
+  background: var(--c-paper);
+}
+
+.route-switch__opt {
+  padding: 8px 12px;
+  background: var(--c-paper);
+  border: none;
+  border-right: var(--rule-thin);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.route-switch__opt:last-child { border-right: none; }
+.route-switch__opt:hover:not(:disabled) { background: var(--c-cream); }
+.route-switch__opt:disabled { opacity: 0.5; cursor: not-allowed; }
+.route-switch__opt.is-active {
+  background: var(--c-ink);
+  color: var(--c-cream);
+}
+
+@media (max-width: 520px) {
+  .route-switch { grid-template-columns: 1fr; }
 }
 
 /* --- card-shell for the dedicated /mint /redeem pages --- */
@@ -2202,7 +2207,6 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
    28. REDUCED MOTION — disable everything above for users who've asked
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
-  .ticker__marquee,
   .ascii-band__peg,
   .editorial-band__peg strong,
   .dispatch__card--fresh,

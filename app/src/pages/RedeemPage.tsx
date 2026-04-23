@@ -1,17 +1,18 @@
 /**
- * RedeemPage — /redeem route. Thin wrapper around RedeemCard.
+ * RedeemPage — /redeem route.
  *
- * Now owns its own container since App.tsx no longer wraps routes.
+ * Renders the unified ConvertPanel with the Redeem tab active and the
+ * advanced recipient + basket mode + cross-chain payout controls surfaced.
  */
 
-import { RedeemCard } from '../components/RedeemCard';
+import { ConvertPanel } from '../components/ConvertPanel';
 
 export default function RedeemPage() {
   return (
     <div className="container">
       <section className="section">
-        <div style={{ maxWidth: 640, margin: '0 auto' }}>
-          <RedeemCard />
+        <div style={{ maxWidth: 620, margin: '0 auto' }}>
+          <ConvertPanel initialMode="redeem" advanced />
         </div>
       </section>
     </div>
