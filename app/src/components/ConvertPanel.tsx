@@ -22,7 +22,7 @@
  */
 
 import { usePushChain, usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
 import { TOKENS, type ReserveToken } from '../contracts/tokens';
@@ -147,7 +147,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
   // What "balance" row should we display on the PAY input?
   const mintBalanceKnown =
-    mode === 'mint' && (isExternalRoute ? externalBal.available : true);
+    mode === 'mint' && !!account && (isExternalRoute ? externalBal.available : true);
   const balanceKnown = mode === 'redeem' || mintBalanceKnown;
 
   const balance = useMemo(() => {
@@ -183,6 +183,18 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     return (parsedAmount * BigInt(baseFeeBps)) / 10_000n;
   }, [mode, parsedAmount, baseFeeBps]);
   const receiveAmount = mode === 'mint' ? parsedAmount : parsedAmount - feeAmount;
+
+  // "Exact out" helper: solve for burn so that (burn - burn*fee%) = current parsedAmount.
+  const handleExactReceive = () => {
+    if (!amountValid || baseFeeBps === 0) return;
+    const divisor = 10_000n - BigInt(baseFeeBps);
+    const invertedBurn = (parsedAmount * 10_000n + divisor - 1n) / divisor; // ceiling div
+    const base = 10n ** BigInt(decimals);
+    const whole = invertedBurn / base;
+    const frac = invertedBurn % base;
+    const fracStr = frac.toString().padStart(decimals, '0').replace(/0+$/, '');
+    setAmount(fracStr ? `${whole}.${fracStr}` : whole.toString());
+  };
 
   // --- redeem recipient + advanced fields --------------------------------
   const [allowBasket, setAllowBasket] = useState(false);
@@ -241,6 +253,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
   // --- execution ---------------------------------------------------------
   const [stage, setStage] = useState<Stage>({ kind: 'idle' });
+  const [progressNote, setProgressNote] = useState('');
   const submitting =
     stage.kind === 'preparing' ||
     stage.kind === 'signing' ||
@@ -263,6 +276,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     ) as `0x${string}`;
 
     setStage({ kind: 'preparing' });
+    setProgressNote('');
 
     try {
       if (mode === 'mint') {
@@ -324,23 +338,34 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
       // Single-signature cascade: prepare both legs, compose them into one
       // Push Chain tx, and let universal.executeTransactions() handle it.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const params1 = {
+        to: '0x0000000000000000000000000000000000000000',
+        value: 0n,
+        data: legs,
+      };
+      console.log('[prepareTransaction] leg 1 params:', params1);
       const prepared1 = await pushChainClient.universal.prepareTransaction({
         to: '0x0000000000000000000000000000000000000000',
         value: 0n,
         data: legs,
-      } as any);
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       const preparedTxs = [prepared1];
 
       if (needsExternalRecipient) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const params2 = {
+          to: { address: externalRecipient, chain: destChain },
+          value: 0n,
+          data: '0x',
+          funds: { amount: receiveAmount, token: moveable },
+        };
+        console.log('[prepareTransaction] leg 2 params:', params2);
         const prepared2 = await pushChainClient.universal.prepareTransaction({
           to: { address: externalRecipient as `0x${string}`, chain: destChain },
           value: 0n,
           data: '0x',
           funds: { amount: receiveAmount, token: moveable },
-        } as any);
+        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
         preparedTxs.push(prepared2);
       }
 
@@ -348,11 +373,32 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       const cascade = await pushChainClient.universal.executeTransactions(preparedTxs);
       const initialHash = cascade.initialTxHash as `0x${string}`;
       setStage({ kind: 'broadcasting', hash: initialHash });
+      setProgressNote('Waiting for Push Chain confirmation…');
 
       // Track per-hop progress so the two-stage UI (broadcasting → paying-out
       // → confirmed) still works with a single signature.
       await cascade.wait({
         progressHook: (ev) => {
+          console.log('[progressHook] ev:', ev);
+          // Always update the progress note regardless of route.
+          if (ev.hopIndex === 0) {
+            setProgressNote(
+              ev.status === 'confirmed'
+                ? needsExternalRecipient
+                  ? `Confirmed on Push Chain · Sending to ${selected.chainLabel}…`
+                  : 'Confirmed on Push Chain'
+                : 'Waiting for Push Chain confirmation…',
+            );
+          } else if (ev.hopIndex === 1) {
+            setProgressNote(
+              ev.status === 'confirmed'
+                ? `Confirmed on ${selected.chainLabel}`
+                : ev.txHash
+                  ? `Submitted to ${selected.chainLabel} · Waiting for confirmation…`
+                  : `Sending to ${selected.chainLabel}…`,
+            );
+          }
+
           if (!needsExternalRecipient) return;
           if (ev.hopIndex === 0 && ev.status === 'confirmed') {
             setStage({ kind: 'step2-broadcasting', prevHash: initialHash, hash: '0x' as `0x${string}` });
@@ -382,12 +428,25 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   };
 
   // --- "Switch account" affordance --------------------------------------
-  // Disconnect, then open the connect modal so the user can pick a different
-  // wallet / chain. When not connected yet, this just opens the modal.
+  // Disconnect first, wait for account to become null, then open connect.
+  // Calling handleConnectToPushWallet immediately after logout leaves the
+  // UI-kit in a transitional state that causes the spinner to hang.
+  const pendingConnectRef = useRef(false);
+  useEffect(() => {
+    if (pendingConnectRef.current && !account) {
+      pendingConnectRef.current = false;
+      handleConnectToPushWallet();
+    }
+  }, [account, handleConnectToPushWallet]);
+
   const handleSwitchAccount = () => {
-    if (account) handleUserLogOutEvent();
-    setRouteTouched(false); // let origin-based default take over on reconnect
-    handleConnectToPushWallet();
+    setRouteTouched(false);
+    if (account) {
+      pendingConnectRef.current = true;
+      handleUserLogOutEvent();
+    } else {
+      handleConnectToPushWallet();
+    }
   };
 
   // --- derived labels ----------------------------------------------------
@@ -397,16 +456,16 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const sourceLabel = mode === 'mint'
     ? (isExternalRoute
         ? (account ? originChainDisplay : 'CONNECT A WALLET')
-        : 'PUSH CHAIN')
+        : (account ? 'PUSH CHAIN' : selected.chainLabel))
     : 'PUSH CHAIN';
 
   const destLabel = mode === 'mint'
     ? 'PUSH CHAIN'
-    : (isExternalRoute ? selected.chainLabel : 'PUSH CHAIN');
+    : (account && !isExternalRoute ? 'PUSH CHAIN' : selected.chainLabel);
 
   // What chain tag shows on the amount pills.
-  const mintSourceChainShort = isExternalRoute ? selected.chainShort : 'PUSH';
-  const redeemDestChainShort = isExternalRoute ? selected.chainShort : 'PUSH';
+  const mintSourceChainShort = isExternalRoute || !account ? selected.chainShort : 'PUSH';
+  const redeemDestChainShort = isExternalRoute || !account ? selected.chainShort : 'PUSH';
   const destChainKey = isExternalRoute ? selected.moveableKey[0] : 'PUSH_TESTNET_DONUT';
 
   const ctaLabel = (() => {
@@ -553,7 +612,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             >
               {balanceKnown
                 ? `BALANCE ${balanceLoading ? '…' : formatAmount(balance, decimals, { maxFractionDigits: 2 })} · MAX`
-                : `BALANCE ON ${originChainDisplay}`}
+                : `BALANCE ON ${account ? originChainDisplay : selected.chainLabel}`}
             </button>
           </div>
           <div className="input-shell">
@@ -598,7 +657,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     <div className="selector-panel__lead">
                       <TokenPill
                         symbol={t.symbol}
-                        chainShort={isExternalRoute ? t.chainShort : 'PUSH'}
+                        chainShort={isExternalRoute || !account ? t.chainShort : 'PUSH'}
                         size="sm"
                       />
                       <span className="meta">{t.chainLabel}</span>
@@ -622,7 +681,24 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         {/* Amount out */}
         <div>
           <div className="input-head">
-            <span>RECEIVE</span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              RECEIVE
+              {mode === 'redeem' && baseFeeBps > 0 && (
+                <button
+                  type="button"
+                  data-tooltip={
+                    amountValid
+                      ? `Receive exactly ${formatAmount(parsedAmount, decimals, { maxFractionDigits: 6 })} ${selected.symbol}. Increases burn slightly to cover the ${(baseFeeBps / 100).toFixed(2)}% fee`
+                      : 'Enter an amount, then click to receive that exact amount'
+                  }
+                  className="exact-out-btn"
+                  onClick={handleExactReceive}
+                  disabled={!amountValid || submitting}
+                >
+                  ⇅ exact
+                </button>
+              )}
+            </span>
             <span>1 : 1</span>
           </div>
           <div className="input-shell">
@@ -732,20 +808,46 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               <span className="src-header__label">DESTINATION</span>
               <span className="src-header__chain">{destLabel}</span>
             </div>
-            {account && !originIsPush && (
+            {!account ? (
               <button
                 type="button"
                 className="src-header__action"
-                onClick={() => {
-                  setRouteTouched(true);
-                  setRoute((r) => (r === 'external' ? 'push' : 'external'));
-                }}
-                disabled={submitting}
+                onClick={handleConnectToPushWallet}
               >
-                <span className="src-header__action-link">
-                  {isExternalRoute ? 'Keep on Push Chain →' : `Deliver on ${selected.chainLabel} →`}
-                </span>
+                <span className="src-header__action-link">Connect wallet ↗</span>
               </button>
+            ) : !originIsPush && (
+              allowBasket ? (
+                <span
+                  data-tooltip={`Basket mode distributes across all reserves on Push Chain only. Use bridge.push.org to move funds out.`}
+                  style={{ display: 'inline-flex', cursor: 'not-allowed' }}
+                >
+                  <button
+                    type="button"
+                    className="src-header__action"
+                    disabled
+                    style={{ pointerEvents: 'none' }}
+                  >
+                    <span className="src-header__action-link">
+                      {`Deliver on ${selected.chainLabel} →`}
+                    </span>
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  className="src-header__action"
+                  onClick={() => {
+                    setRouteTouched(true);
+                    setRoute((r) => (r === 'external' ? 'push' : 'external'));
+                  }}
+                  disabled={submitting}
+                >
+                  <span className="src-header__action-link">
+                    {isExternalRoute ? 'Keep on Push Chain →' : `Deliver on ${selected.chainLabel} →`}
+                  </span>
+                </button>
+              )
             )}
           </div>
         )}
@@ -855,7 +957,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             <div className="convert__grid-label">SOURCE</div>
             <div className="convert__grid-value">
               {mode === 'mint'
-                ? `${selected.symbol} · ${isExternalRoute ? selected.chainLabel : 'PUSH CHAIN'}`
+                ? `${selected.symbol} · ${isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}`
                 : 'PUSD · PUSH CHAIN'}
             </div>
           </div>
@@ -864,7 +966,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             <div className="convert__grid-value">
               {mode === 'mint'
                 ? 'PUSD · PUSH CHAIN'
-                : `${selected.symbol} · ${isExternalRoute ? selected.chainLabel : 'PUSH CHAIN'}`}
+                : `${selected.symbol} · ${isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}`}
             </div>
           </div>
         </div>
@@ -958,6 +1060,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                   </a>
                 )}
               </>
+            )}
+            {progressNote && stage.kind !== 'confirmed' && stage.kind !== 'step2-confirmed' && (
+              <div className="mono" style={{ marginTop: 8, opacity: 0.7 }}>
+                {progressNote}
+              </div>
             )}
           </div>
         )}

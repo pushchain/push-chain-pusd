@@ -13,10 +13,16 @@
  * Polls every 12 seconds while mounted, same cadence as useTokenBalance.
  */
 
+import { usePushChain, usePushChainClient } from '@pushchain/ui-kit';
 import { ethers } from 'ethers';
 import { useEffect, useRef, useState } from 'react';
-import { usePushChain, usePushChainClient } from '@pushchain/ui-kit';
-import { getExternalEvmRpc, isEvmChainKey } from '../lib/externalRpc';
+import {
+    getExternalEvmRpc,
+    getSolanaRpc,
+    getSolanaTokenBalance,
+    isEvmChainKey,
+    isSolanaChainKey,
+} from '../lib/externalRpc';
 import { resolveMoveableToken } from '../lib/wallet';
 
 const ABI = ['function balanceOf(address) view returns (uint256)'];
@@ -52,7 +58,9 @@ export function useExternalTokenBalance(
   const originAddress = pushChainClient?.universal?.origin?.address ?? null;
 
   const evm = isEvmChainKey(chainKey);
+  const solana = isSolanaChainKey(chainKey);
   const rpcUrl = getExternalEvmRpc(chainKey);
+  const solanaRpc = getSolanaRpc(chainKey);
 
   // Pull token metadata from SDK constants.
   const moveable = PushChain
@@ -63,25 +71,26 @@ export function useExternalTokenBalance(
   const tokenAddress = moveable?.address ?? null;
   const decimals = moveable?.decimals ?? 6;
 
+  const readable = (evm && !!rpcUrl) || (solana && !!solanaRpc);
+
   const [state, setState] = useState<ExternalBalanceState>({
-    available: evm && !!tokenAddress && !!rpcUrl,
+    available: readable && !!tokenAddress,
     balance: 0n,
     decimals,
-    loading: evm && !!tokenAddress && !!rpcUrl && !!originAddress,
+    loading: readable && !!tokenAddress && !!originAddress,
     error: null,
     tokenAddress,
   });
 
   // Stable key so the effect only reruns on meaningful changes.
-  const key = `${chainKey}|${symbolKey}|${originAddress ?? ''}|${tokenAddress ?? ''}|${rpcUrl ?? ''}`;
+  const key = `${chainKey}|${symbolKey}|${originAddress ?? ''}|${tokenAddress ?? ''}|${rpcUrl ?? ''}|${solanaRpc ?? ''}`;
   const keyRef = useRef(key);
   keyRef.current = key;
 
   useEffect(() => {
-    // No wallet, no readable chain, or no token metadata → nothing to do.
-    if (!evm || !tokenAddress || !rpcUrl || !originAddress) {
+    if (!readable || !tokenAddress || !originAddress) {
       setState({
-        available: evm && !!tokenAddress && !!rpcUrl,
+        available: readable && !!tokenAddress,
         balance: 0n,
         decimals,
         loading: false,
@@ -92,12 +101,17 @@ export function useExternalTokenBalance(
     }
 
     let cancelled = false;
-    const provider = getProvider(rpcUrl);
-    const token = new ethers.Contract(tokenAddress, ABI, provider);
 
     const read = async () => {
       try {
-        const raw = (await token.balanceOf(originAddress)) as bigint;
+        let raw: bigint;
+        if (solana && solanaRpc) {
+          raw = await getSolanaTokenBalance(originAddress, tokenAddress, solanaRpc);
+        } else {
+          const provider = getProvider(rpcUrl!);
+          const token = new ethers.Contract(tokenAddress, ABI, provider);
+          raw = (await token.balanceOf(originAddress)) as bigint;
+        }
         if (cancelled) return;
         setState({
           available: true,

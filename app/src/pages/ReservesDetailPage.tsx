@@ -20,11 +20,11 @@ import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useReserves, type ReserveRow } from '../hooks/useReserves';
 import {
-  explorerAddress,
-  formatAmount,
-  formatPct,
-  formatRelative,
-  truncAddr,
+    explorerAddress,
+    formatAmount,
+    formatPct,
+    formatRelative,
+    truncAddr,
 } from '../lib/format';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -139,7 +139,7 @@ export default function ReservesDetailPage() {
             <div className="stat">
               <div className="stat__label">SURPLUS</div>
               <div className="stat__value">
-                {formatAmount(surplus, 6, { maxFractionDigits: 0 })}
+                {formatAmount(surplus, 6, { maxFractionDigits: 2 })}
                 <em> USD</em>
               </div>
               <div className="stat__sub">OVER TOTAL SUPPLY</div>

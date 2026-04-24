@@ -23,6 +23,54 @@
  */
 
 /* ==========================================================================
+   0. CUSTOM TOOLTIP  (data-tooltip="…" on any element)
+   ========================================================================== */
+[data-tooltip] { position: relative; }
+
+[data-tooltip]::before {
+  content: attr(data-tooltip);
+  position: absolute;
+  bottom: calc(100% + 11px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--c-ink);
+  color: var(--c-cream);
+  padding: 10px 14px;
+  border-radius: 6px;
+  font-family: var(--f-body);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.5;
+  white-space: normal;
+  width: max-content;
+  max-width: 240px;
+  text-align: center;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 300;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+}
+
+[data-tooltip]::after {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 5px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: var(--c-ink);
+  border-bottom-width: 0;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s;
+  z-index: 300;
+}
+
+[data-tooltip]:hover::before,
+[data-tooltip]:hover::after { opacity: 1; }
+
+/* ==========================================================================
    1. RESETS
    ========================================================================== */
 *,
@@ -1130,6 +1178,37 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   background: var(--c-ink);
   color: var(--c-cream);
 }
+.convert__tab--active:hover {
+  background: var(--c-ink);
+  color: var(--c-cream);
+}
+
+.exact-out-btn,
+.input-head .exact-out-btn,
+[data-tooltip].exact-out-btn {
+  background: none;
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  padding: 0 4px;
+  line-height: 1.2;
+  font: inherit;
+  color: inherit;
+  font-size: 0.8em;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, opacity 0.15s;
+}
+.exact-out-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.exact-out-btn:not(:disabled) {
+  opacity: 0.7;
+}
+.exact-out-btn:not(:disabled):hover {
+  color: var(--c-magenta);
+  border-color: var(--c-magenta);
+  opacity: 1;
+}
 
 .convert__body {
   padding: 22px 24px;
@@ -1789,6 +1868,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   letter-spacing: 0.04em;
   border: var(--rule-thin);
   margin-top: 16px;
+  word-wrap: break-word;
 }
 
 .feedback--error   { border-color: var(--c-oxblood); color: var(--c-oxblood); background: var(--c-cream); }

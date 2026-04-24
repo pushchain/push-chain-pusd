@@ -310,7 +310,7 @@ export default function ReservesPage() {
             <div>
               <div className="book-footer__label">SURPLUS</div>
               <div className="book-footer__value">
-                {formatAmount(surplus, 6, { maxFractionDigits: 0 })} USD
+                {formatAmount(surplus, 6, { maxFractionDigits: 2 })} USD
               </div>
             </div>
             <div>
