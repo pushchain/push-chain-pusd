@@ -2346,7 +2346,60 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 /* ==========================================================================
-   28. REDUCED MOTION — disable everything above for users who've asked
+   28. ASCII WAVE BAND — hypnotic density-wave hero strip
+   ========================================================================== */
+
+/* Full-bleed section that holds the canvas + editorial caption */
+.ascii-wave {
+  position: relative;
+  width: 100%;
+  height: 300px;
+  overflow: hidden;
+  background: var(--c-paper);
+  border-top: 1px solid var(--c-ink);
+  border-bottom: 1px solid var(--c-ink);
+}
+
+/* Canvas fills the band; pointer-events off so copy is selectable */
+.ascii-wave__canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+  pointer-events: none;
+}
+
+/* Bottom-left editorial caption layered above the canvas */
+.ascii-wave__copy {
+  position: absolute;
+  left: var(--gutter);
+  bottom: var(--gutter);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  pointer-events: none;
+}
+
+.ascii-wave__eyebrow {
+  font: 600 9px/1 var(--f-mono);
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+}
+
+.ascii-wave__sub {
+  font: italic 500 15px/1 var(--f-display);
+  color: var(--c-ink);
+  letter-spacing: 0.01em;
+}
+
+@media (max-width: 720px) {
+  .ascii-wave { height: 210px; }
+}
+
+/* ==========================================================================
+   29. REDUCED MOTION — disable everything above for users who've asked
    ========================================================================== */
 @media (prefers-reduced-motion: reduce) {
   .ascii-band__peg,
@@ -2356,6 +2409,10 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
     animation: none !important;
   }
 
+  /* Hide the canvas; the copy caption still shows statically */
+  .ascii-wave__canvas {
+    display: none;
+  }
 
   .btn {
     transition: none !important;

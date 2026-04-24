@@ -19,6 +19,7 @@
  */
 
 import { useMemo } from 'react';
+import { AsciiWave } from '../components/AsciiWave';
 import { ConvertPanel } from '../components/ConvertPanel';
 import { DispatchFeed } from '../components/DispatchFeed';
 import { SloganBand } from '../components/SloganBand';
@@ -161,6 +162,9 @@ export default function ReservesPage() {
 
       {/* ===================================================== SLOGAN BAND ===== */}
       <SloganBand />
+
+      {/* ================================================== ASCII WAVE ===== */}
+      <AsciiWave />
 
       {/* ============================================ §01 · THE PROMISE ===== */}
       <div className="container">
