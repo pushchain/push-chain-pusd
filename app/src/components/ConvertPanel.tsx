@@ -1,35 +1,36 @@
 /**
  * ConvertPanel — one panel, both directions.
  *
- * Two tabs — MINT and REDEEM. `initialMode` controls which is active so
- * /mint opens on mint and /redeem opens on redeem.
+ * Two tabs — MINT and REDEEM — that update the URL (`/convert/mint`,
+ * `/convert/redeem`) so the panel is deep-linkable. `initialMode` is set
+ * by the parent from the route param and flips when the user picks a tab.
  *
  * Mint — asks "where is the money coming FROM?"
- *   - Default route = the connected wallet's origin chain (external).
- *     The token dropdown only lists tokens on that chain (that's what the
- *     SDK can bridge in one signature via `funds`).
- *   - Alt route = FROM PUSH CHAIN. User pays with the Donut-side ERC-20
- *     already on Push Chain; no bridge leg. Dropdown shows every token.
+ *   - Primary route = the connected wallet's origin chain. The SDK bridges
+ *     the token in one signature via `funds`. Dropdown is locked to tokens
+ *     that exist on that origin chain.
+ *   - Secondary route = "use Donut-side tokens already on Push Chain" —
+ *     surfaced as a subtle link below the source header, not as a peer
+ *     button. When chosen, the dropdown opens up to every reserve token.
  *
- * Redeem — always burns PUSD on Push Chain. Asks "where does the money
- * go TO?" — it's a destination question, not a source one.
- *   - Default destination = the selected token's own origin chain (e.g.
- *     pick USDC·ETH SEP → deliver on Ethereum Sepolia). Needs a recipient
- *     address on that chain.
+ * Redeem — always burns PUSD on Push Chain; the question is "where does
+ * the money go TO?" The token selector doubles as a destination picker.
+ *   - Default destination = the selected token's origin chain. Needs a
+ *     recipient address on that chain.
  *   - Alt destination = PUSH CHAIN. Deliver the Donut-side ERC-20 to the
  *     user's UEA, no bridge leg.
- *
- * `advanced` unlocks the Push Chain recipient override and basket mode —
- * surfaced on the dedicated /mint and /redeem pages.
  */
 
-import { useEffect, useMemo, useState } from 'react';
 import { usePushChain, usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
 import { TOKENS, type ReserveToken } from '../contracts/tokens';
+import { useExternalTokenBalance } from '../hooks/useExternalTokenBalance';
 import { useInvariants } from '../hooks/useInvariants';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
+import { useRedeemRecipient } from '../hooks/useRedeemRecipient';
 import { useTokenBalance } from '../hooks/useTokenBalance';
 import {
   buildApproveLeg,
@@ -38,6 +39,7 @@ import {
   type CascadeLeg,
   type HelpersLike,
 } from '../lib/cascade';
+import { explorerAddressForChain, explorerTxForChain } from '../lib/externalRpc';
 import { explorerTx, formatAmount, truncHash } from '../lib/format';
 import {
   chainLabelFromKey,
@@ -55,6 +57,7 @@ type Route = 'external' | 'push';
 
 type Stage =
   | { kind: 'idle' }
+  | { kind: 'preparing' }
   | { kind: 'signing' }
   | { kind: 'broadcasting'; hash: `0x${string}` }
   | { kind: 'confirmed'; hash: `0x${string}` }
@@ -70,14 +73,16 @@ type Props = {
 };
 
 export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) {
+  const navigate = useNavigate();
   const { pushChainClient } = usePushChainClient();
   const { PushChain } = usePushChain();
-  const { handleConnectToPushWallet } = usePushWalletContext();
+  const { handleConnectToPushWallet, handleUserLogOutEvent } = usePushWalletContext();
   const invariants = useInvariants();
   const { baseFeeBps } = useProtocolStats();
 
   const account = (pushChainClient?.universal?.account ?? null) as `0x${string}` | null;
   const origin = pushChainClient?.universal?.origin ?? null;
+  const originAddress = origin?.address ?? null;
 
   // --- resolve SDK chain identifier --------------------------------------
   // The SDK emits origin.chain as CAIP-2 ("eip155:11155111"), while our TOKENS
@@ -94,10 +99,9 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const [mode, setMode] = useState<Mode>(initialMode);
   useEffect(() => setMode(initialMode), [initialMode]);
 
-  // For mint, route defaults to external whenever we know the wallet is on
-  // an external chain. For redeem, route defaults to external too — i.e.
-  // pay out on the selected token's own chain. Push Chain wallets default
-  // to push on both tabs.
+  // For mint, external route is default whenever the wallet is on an external
+  // chain. For redeem, external = "deliver on the selected token's chain".
+  // Push-Chain-origin wallets default to push on both tabs.
   const [route, setRoute] = useState<Route>(originIsPush ? 'push' : 'external');
   const [routeTouched, setRouteTouched] = useState(false);
   useEffect(() => {
@@ -111,12 +115,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const isExternalRoute = effectiveRoute === 'external';
 
   // --- tokens ------------------------------------------------------------
-  // Mint + external route: lock the dropdown to the wallet's origin chain
-  // (that's what the SDK bridges in one signature).
-  // Mint + push route:    all Donut-side tokens.
-  // Redeem:               always all tokens — user picks *where* to redeem.
+  // Mint + external route: lock the dropdown to the wallet's origin chain.
+  // Mint + push route OR redeem: all reserve tokens.
   const eligibleTokens = useMemo<readonly ReserveToken[]>(() => {
-    if (mode === 'mint' && isExternalRoute) {
+    if (mode === 'mint' && isExternalRoute && originChainKey) {
       const filtered = filterTokensByChainKey(TOKENS, originChainKey);
       return filtered.length ? filtered : TOKENS;
     }
@@ -135,18 +137,30 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   // --- amount + balances -------------------------------------------------
   const [amount, setAmount] = useState('');
   const { balance: pusdBalance, loading: pusdLoading } = usePUSDBalance();
-  const { balance: tokenBal, loading: tokenLoading } = useTokenBalance(
+  const { balance: donutTokenBal, loading: donutTokenLoading } = useTokenBalance(
     selected.address,
     PUSD_MANAGER_ADDRESS as `0x${string}`,
   );
+  // External-chain balance for mint → Route 2. Returns `available: false` when
+  // the origin chain is non-EVM (Solana) or the SDK doesn't carry an address.
+  const externalBal = useExternalTokenBalance(originChainKey, selected.symbol);
 
-  // On the external mint route, the source balance lives on the origin chain
-  // and we can't read it from the Donut-side ERC-20. We intentionally don't
-  // surface a max/balance number there — the SDK will surface shortfalls at
-  // signing time.
-  const balanceKnown = mode === 'redeem' || !isExternalRoute;
-  const balance = mode === 'mint' ? tokenBal : pusdBalance;
-  const balanceLoading = mode === 'mint' ? tokenLoading : pusdLoading;
+  // What "balance" row should we display on the PAY input?
+  const mintBalanceKnown =
+    mode === 'mint' && (isExternalRoute ? externalBal.available : true);
+  const balanceKnown = mode === 'redeem' || mintBalanceKnown;
+
+  const balance = useMemo(() => {
+    if (mode === 'redeem') return pusdBalance;
+    if (!isExternalRoute) return donutTokenBal;
+    return externalBal.balance;
+  }, [mode, isExternalRoute, pusdBalance, donutTokenBal, externalBal.balance]);
+
+  const balanceLoading = useMemo(() => {
+    if (mode === 'redeem') return pusdLoading;
+    if (!isExternalRoute) return donutTokenLoading;
+    return externalBal.loading;
+  }, [mode, isExternalRoute, pusdLoading, donutTokenLoading, externalBal.loading]);
 
   const decimals = mode === 'mint' ? selected.decimals : 6;
   const parsedAmount = useMemo(() => {
@@ -170,21 +184,40 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   }, [mode, parsedAmount, baseFeeBps]);
   const receiveAmount = mode === 'mint' ? parsedAmount : parsedAmount - feeAmount;
 
-  // --- advanced fields ---------------------------------------------------
-  const [pushRecipient, setPushRecipient] = useState('');
-  useEffect(() => {
-    if (account && !pushRecipient) setPushRecipient(account);
-  }, [account, pushRecipient]);
-  const pushRecipientValid = isValidAddress(pushRecipient);
-
+  // --- redeem recipient + advanced fields --------------------------------
   const [allowBasket, setAllowBasket] = useState(false);
 
   const [externalRecipient, setExternalRecipient] = useState('');
-  const externalRecipientValid = isValidAddressForChain(
-    externalRecipient,
-    selected.moveableKey[0],
-  );
+  const [recipientTouched, setRecipientTouched] = useState(false);
   const needsExternalRecipient = mode === 'redeem' && isExternalRoute;
+
+  // Auto-derive the default recipient for redeem based on three branches:
+  //  1. Push route   → account (UEA)
+  //  2. Same chain   → originAddress
+  //  3. Other chain  → CEA from UEAFactory.getUEAForOrigin()
+  const autoRecipient = useRedeemRecipient(
+    isExternalRoute,
+    selected.moveableKey[0],
+    originChainKey,
+    origin?.chain ?? '',
+    account,
+    originAddress,
+    selected.chainLabel,
+  );
+
+  // Sync auto-derived address into the input whenever the user hasn't overridden it.
+  useEffect(() => {
+    if (recipientTouched) return;
+    if (autoRecipient.address) setExternalRecipient(autoRecipient.address);
+  }, [autoRecipient.address, recipientTouched]);
+
+  // Reset touched flag when mode / route / token changes.
+  useEffect(() => { setRecipientTouched(false); }, [mode, effectiveRoute, selected.address]);
+
+  // Push route recipient is always an EVM address; external route is chain-specific.
+  const externalRecipientValid = isExternalRoute
+    ? isValidAddressForChain(externalRecipient, selected.moveableKey[0])
+    : isValidAddress(externalRecipient);
 
   // Pre-flight Route 2 check: SDK may not yet carry a MOVEABLE.TOKEN entry
   // for every chain. When missing, any external-route tx can't run.
@@ -195,9 +228,21 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   }, [PushChain, selected.moveableKey]);
   const externalBlocked = isExternalRoute && !moveableAvailable;
 
+  // Pre-flight reserve check: when basket is off the manager must hold enough
+  // of the selected token to cover the full redemption amount.
+  const reserveShortfall = useMemo(() => {
+    if (mode !== 'redeem' || allowBasket || parsedAmount === 0n) return false;
+    const row = invariants.perToken.find(
+      (r) => r.address.toLowerCase() === selected.address.toLowerCase(),
+    );
+    if (!row) return false; // data not loaded yet — optimistic
+    return row.balance < parsedAmount;
+  }, [mode, allowBasket, parsedAmount, invariants.perToken, selected.address]);
+
   // --- execution ---------------------------------------------------------
   const [stage, setStage] = useState<Stage>({ kind: 'idle' });
   const submitting =
+    stage.kind === 'preparing' ||
     stage.kind === 'signing' ||
     stage.kind === 'broadcasting' ||
     stage.kind === 'step2-signing' ||
@@ -205,14 +250,19 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
   const handleConvert = async () => {
     if (!pushChainClient || !PushChain || !account) return;
-    if (!amountValid || exceedsBalance || solventHalt || externalBlocked) return;
-    if (advanced && !pushRecipientValid) return;
-    if (needsExternalRecipient && !externalRecipientValid) return;
+    if (!amountValid || exceedsBalance || solventHalt || externalBlocked || reserveShortfall) return;
+    if (mode === 'redeem' && !externalRecipientValid) return;
 
     const helpers = PushChain.utils.helpers as unknown as HelpersLike;
-    const target = (advanced ? pushRecipient : account) as `0x${string}`;
+    // For external-route redeems, the UEA holds the reserve between hops of the
+    // cascade; the final recipient is delivered by the outbound leg. For push
+    // route redeems, the unified recipient field IS the direct destination on
+    // Push Chain (defaults to UEA).
+    const target = (
+      mode === 'redeem' && !isExternalRoute ? externalRecipient : account
+    ) as `0x${string}`;
 
-    setStage({ kind: 'signing' });
+    setStage({ kind: 'preparing' });
 
     try {
       if (mode === 'mint') {
@@ -231,6 +281,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
           if (moveable) txOptions.funds = { amount: parsedAmount, token: moveable };
         }
+        setStage({ kind: 'signing' });
         const tx = await pushChainClient.universal.sendTransaction(txOptions);
         const hash = tx.hash as `0x${string}`;
         setStage({ kind: 'broadcasting', hash });
@@ -241,7 +292,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       }
 
       // --- REDEEM -------------------------------------------------------
-      // Step 1: burn PUSD on Push Chain, receive the reserve at the UEA.
+      // Shared cascade legs for step 1 (approve + burn PUSD → reserve at target).
       const legs: CascadeLeg[] = [
         buildApproveLeg(helpers, PUSD_ADDRESS as `0x${string}`, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
         buildRedeemLeg(
@@ -253,89 +304,125 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           target,
         ),
       ];
+
+      // Resolve the outbound leg token & destination up front so both paths below can share them.
+      let moveable: ReturnType<typeof resolveMoveableToken> = undefined;
+      let destChain: string | undefined;
+      if (needsExternalRecipient) {
+        const [chainKey, symbolKey] = selected.moveableKey;
+        moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
+        if (!moveable) {
+          throw new Error(
+            `MOVEABLE token for ${symbolKey} on ${chainKey} not available — pick a different asset or keep the payout on Push Chain.`,
+          );
+        }
+        // CAIP-2 value (`eip155:…` / `solana:…`) — the SDK route validator
+        // rejects the friendly key (throws `ChainNotSupportedError`).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        destChain = (PushChain.CONSTANTS.CHAIN as any)[chainKey];
+      }
+
+      // Single-signature cascade: prepare both legs, compose them into one
+      // Push Chain tx, and let universal.executeTransactions() handle it.
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const step1Options: any = {
+      const prepared1 = await pushChainClient.universal.prepareTransaction({
         to: '0x0000000000000000000000000000000000000000',
         value: 0n,
         data: legs,
-      };
-      const tx1 = await pushChainClient.universal.sendTransaction(step1Options);
-      const step1Hash = tx1.hash as `0x${string}`;
-      setStage({ kind: 'broadcasting', hash: step1Hash });
-      await tx1.wait();
-      setStage({ kind: 'confirmed', hash: step1Hash });
+      } as any);
 
-      if (!needsExternalRecipient) {
-        setAmount('');
-        return;
+      const preparedTxs = [prepared1];
+
+      if (needsExternalRecipient) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const prepared2 = await pushChainClient.universal.prepareTransaction({
+          to: { address: externalRecipient as `0x${string}`, chain: destChain },
+          value: 0n,
+          data: '0x',
+          funds: { amount: receiveAmount, token: moveable },
+        } as any);
+        preparedTxs.push(prepared2);
       }
 
-      // Step 2: Route 2 forward to the selected token's origin chain.
-      setStage({ kind: 'step2-signing', prevHash: step1Hash });
-      const [chainKey, symbolKey] = selected.moveableKey;
-      const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
-      if (!moveable) {
-        throw new Error(
-          `MOVEABLE token for ${symbolKey} on ${chainKey} not available — pick a different asset or keep the payout on Push Chain.`,
-        );
+      setStage({ kind: 'signing' });
+      const cascade = await pushChainClient.universal.executeTransactions(preparedTxs);
+      const initialHash = cascade.initialTxHash as `0x${string}`;
+      setStage({ kind: 'broadcasting', hash: initialHash });
+
+      // Track per-hop progress so the two-stage UI (broadcasting → paying-out
+      // → confirmed) still works with a single signature.
+      await cascade.wait({
+        progressHook: (ev) => {
+          if (!needsExternalRecipient) return;
+          if (ev.hopIndex === 0 && ev.status === 'confirmed') {
+            setStage({ kind: 'step2-broadcasting', prevHash: initialHash, hash: '0x' as `0x${string}` });
+            return;
+          }
+          if (ev.hopIndex === 1 && ev.txHash) {
+            setStage({
+              kind: 'step2-broadcasting',
+              prevHash: initialHash,
+              hash: ev.txHash as `0x${string}`,
+            });
+          }
+        },
+      });
+
+      if (needsExternalRecipient) {
+        const hop1 = cascade.hops[1];
+        const outHash = (hop1?.outboundDetails?.externalTxHash ?? hop1?.txHash ?? initialHash) as `0x${string}`;
+        setStage({ kind: 'step2-confirmed', prevHash: initialHash, hash: outHash });
+      } else {
+        setStage({ kind: 'confirmed', hash: initialHash });
       }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const step2Options: any = {
-        to: { address: externalRecipient as `0x${string}`, chain: chainKey },
-        value: 0n,
-        data: '0x',
-        funds: { amount: receiveAmount, token: moveable },
-      };
-      const tx2 = await pushChainClient.universal.sendTransaction(step2Options);
-      const step2Hash = tx2.hash as `0x${string}`;
-      setStage({ kind: 'step2-broadcasting', prevHash: step1Hash, hash: step2Hash });
-      await tx2.wait();
-      setStage({ kind: 'step2-confirmed', prevHash: step1Hash, hash: step2Hash });
       setAmount('');
     } catch (err) {
       setStage({ kind: 'error', message: err instanceof Error ? err.message : 'Transaction failed' });
     }
   };
 
+  // --- "Switch account" affordance --------------------------------------
+  // Disconnect, then open the connect modal so the user can pick a different
+  // wallet / chain. When not connected yet, this just opens the modal.
+  const handleSwitchAccount = () => {
+    if (account) handleUserLogOutEvent();
+    setRouteTouched(false); // let origin-based default take over on reconnect
+    handleConnectToPushWallet();
+  };
+
   // --- derived labels ----------------------------------------------------
-  // For mint the "wallet" option uses the connected origin chain's label
-  // (properly resolved from CAIP-2). For redeem the "external" option uses
-  // the selected token's chain label — because redeem destination is the
-  // token's own chain, not the wallet's.
-  const routeConfig = (() => {
-    if (mode === 'mint') {
-      return {
-        label: 'SOURCE',
-        externalLabel: account ? `FROM ${originChainDisplay}` : 'FROM YOUR WALLET',
-        pushLabel: 'FROM PUSH CHAIN',
-      };
-    }
-    return {
-      label: 'DESTINATION',
-      externalLabel: `TO ${selected.chainLabel}`,
-      pushLabel: 'KEEP ON PUSH CHAIN',
-    };
-  })();
+  const feeBpsLabel = `${(baseFeeBps / 100).toFixed(2)}%`;
+
+  // Source / destination strings for the header + summary.
+  const sourceLabel = mode === 'mint'
+    ? (isExternalRoute
+        ? (account ? originChainDisplay : 'CONNECT A WALLET')
+        : 'PUSH CHAIN')
+    : 'PUSH CHAIN';
+
+  const destLabel = mode === 'mint'
+    ? 'PUSH CHAIN'
+    : (isExternalRoute ? selected.chainLabel : 'PUSH CHAIN');
 
   // What chain tag shows on the amount pills.
   const mintSourceChainShort = isExternalRoute ? selected.chainShort : 'PUSH';
   const redeemDestChainShort = isExternalRoute ? selected.chainShort : 'PUSH';
-
-  const feeBpsLabel = `${(baseFeeBps / 100).toFixed(2)}%`;
+  const destChainKey = isExternalRoute ? selected.moveableKey[0] : 'PUSH_TESTNET_DONUT';
 
   const ctaLabel = (() => {
     if (!account) return 'CONNECT TO CONVERT';
+    if (stage.kind === 'preparing') return 'PREPARING…';
     if (stage.kind === 'signing') return 'SIGNING…';
     if (stage.kind === 'broadcasting') return mode === 'mint' ? 'MINTING…' : 'REDEEMING…';
     if (stage.kind === 'step2-signing') return 'SIGNING PAYOUT…';
     if (stage.kind === 'step2-broadcasting') return 'PAYING OUT…';
     if (solventHalt) return 'HALTED · SOLVENCY CHECK FAILED';
     if (externalBlocked) return `${selected.chainShort} BRIDGE NOT AVAILABLE`;
+    if (reserveShortfall) return `INSUFFICIENT ${selected.symbol} RESERVE`;
     if (!amountValid) return mode === 'mint' ? 'MINT PUSD' : 'REDEEM PUSD';
     if (exceedsBalance) return 'INSUFFICIENT BALANCE';
-    if (advanced && !pushRecipientValid) return 'INVALID PUSH RECIPIENT';
-    if (needsExternalRecipient && !externalRecipientValid) {
-      return `INVALID ${selected.chainShort} RECIPIENT`;
+    if (mode === 'redeem' && account && !externalRecipientValid) {
+      return `INVALID ${isExternalRoute ? selected.chainShort : 'PUSH CHAIN'} RECIPIENT`;
     }
     const amt = formatAmount(parsedAmount, decimals, { maxFractionDigits: 2 });
     if (mode === 'mint') return `MINT ${amt} PUSD →`;
@@ -351,8 +438,8 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     exceedsBalance ||
     solventHalt ||
     externalBlocked ||
-    (advanced && !pushRecipientValid) ||
-    (needsExternalRecipient && !externalRecipientValid);
+    reserveShortfall ||
+    (mode === 'redeem' && !!account && !externalRecipientValid);
 
   // --- render helpers ----------------------------------------------------
   const title = advanced ? (mode === 'mint' ? 'Mint PUSD' : 'Redeem PUSD') : 'Convert.';
@@ -373,6 +460,15 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       : `Burn PUSD on Push Chain. Receive ${selected.symbol}·${selected.chainShort} on Push Chain.`;
   })();
 
+  // --- tab switcher navigates the URL -----------------------------------
+  const goMode = (next: Mode) => {
+    if (next === mode) return;
+    setMode(next);
+    setAmount('');
+    setStage({ kind: 'idle' });
+    if (advanced) navigate(`/convert/${next}`);
+  };
+
   return (
     <div className="convert">
       <div className="convert__head">
@@ -386,11 +482,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           role="tab"
           aria-selected={mode === 'mint'}
           className={`convert__tab ${mode === 'mint' ? 'convert__tab--active' : ''}`}
-          onClick={() => {
-            setMode('mint');
-            setAmount('');
-            setStage({ kind: 'idle' });
-          }}
+          onClick={() => goMode('mint')}
         >
           Mint
         </button>
@@ -399,49 +491,50 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           role="tab"
           aria-selected={mode === 'redeem'}
           className={`convert__tab ${mode === 'redeem' ? 'convert__tab--active' : ''}`}
-          onClick={() => {
-            setMode('redeem');
-            setAmount('');
-            setStage({ kind: 'idle' });
-          }}
+          onClick={() => goMode('redeem')}
         >
           Redeem
         </button>
       </div>
 
       <div className="convert__body">
-        {/* Route switch — SOURCE for mint, DESTINATION for redeem */}
-        <div className="route-switch">
-          <div className="route-switch__label">{routeConfig.label}</div>
-          <div className="route-switch__options" role="tablist">
+        {/* SOURCE header — mint only, shown before the inputs */}
+        {mode === 'mint' && (
+          <div className="src-header">
+            <div className="src-header__main">
+              <span className="src-header__label">SOURCE</span>
+              <span className="src-header__chain">{sourceLabel}</span>
+            </div>
             <button
               type="button"
-              role="tab"
-              aria-selected={effectiveRoute === 'external'}
-              className={`route-switch__opt ${effectiveRoute === 'external' ? 'is-active' : ''}`}
-              onClick={() => {
-                setRouteTouched(true);
-                setRoute('external');
-              }}
-              disabled={!account && mode === 'mint'}
-              title={!account && mode === 'mint' ? 'Connect a wallet to pick a source' : ''}
+              className="src-header__action"
+              onClick={handleSwitchAccount}
+              disabled={submitting}
             >
-              {routeConfig.externalLabel}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={effectiveRoute === 'push'}
-              className={`route-switch__opt ${effectiveRoute === 'push' ? 'is-active' : ''}`}
-              onClick={() => {
-                setRouteTouched(true);
-                setRoute('push');
-              }}
-            >
-              {routeConfig.pushLabel}
+              {account ? 'Minting from a different chain? ' : ''}
+              <span className="src-header__action-link">
+                {account ? 'Switch account ↗' : 'Connect wallet ↗'}
+              </span>
             </button>
           </div>
-        </div>
+        )}
+
+        {/* Secondary: switch mint route. Only shown when external is available. */}
+        {mode === 'mint' && account && !originIsPush && (
+          <button
+            type="button"
+            className="src-header__aside"
+            onClick={() => {
+              setRouteTouched(true);
+              setRoute((r) => (r === 'external' ? 'push' : 'external'));
+            }}
+            disabled={submitting}
+          >
+            {isExternalRoute
+              ? '↳ Already hold reserves on Push Chain? Use those instead'
+              : `↳ Pay from ${originChainDisplay} wallet instead`}
+          </button>
+        )}
 
         {/* Amount in */}
         <div>
@@ -490,7 +583,6 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             <div className="selector-panel" role="listbox" style={{ marginTop: 6 }}>
               {eligibleTokens.map((t) => {
                 const active = t.address === selected.address;
-                const onYourChain = originChainKey === t.moveableKey[0];
                 return (
                   <button
                     key={t.address}
@@ -503,18 +595,23 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                       setShowSelector(false);
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <div className="selector-panel__lead">
                       <TokenPill
                         symbol={t.symbol}
                         chainShort={isExternalRoute ? t.chainShort : 'PUSH'}
                         size="sm"
                       />
                       <span className="meta">{t.chainLabel}</span>
-                      {isExternalRoute && onYourChain && (
-                        <span className="chip chip--accent">YOUR WALLET</span>
-                      )}
                     </div>
-                    <span className="addr">{t.address.slice(0, 6)}…{t.address.slice(-4)}</span>
+                    <a
+                      className="addr"
+                      href={explorerAddressForChain(t.address, 'PUSH_TESTNET_DONUT')}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t.address.slice(0, 6)}…{t.address.slice(-4)} ↗
+                    </a>
                   </button>
                 );
               })}
@@ -558,6 +655,16 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             <div className="selector-panel" role="listbox" style={{ marginTop: 6 }}>
               {eligibleTokens.map((t) => {
                 const active = t.address === selected.address;
+                const resRow = invariants.perToken.find(
+                  (r) => r.address.toLowerCase() === t.address.toLowerCase(),
+                );
+                const dotColor = !resRow
+                  ? '#6b7280'
+                  : resRow.balance === 0n
+                    ? '#ef4444'
+                    : parsedAmount > 0n && resRow.balance < parsedAmount
+                      ? '#eab308'
+                      : '#22c55e';
                 return (
                   <button
                     key={t.address}
@@ -565,12 +672,23 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     className={active ? 'active' : undefined}
                     role="option"
                     aria-selected={active}
+                    style={{ position: 'relative' }}
                     onClick={() => {
                       setSelected(t);
                       setShowSelector(false);
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                    <span
+                      style={{
+                        position: 'absolute',
+                        left: 0,
+                        top: 0,
+                        bottom: 0,
+                        width: 4,
+                        background: dotColor,
+                      }}
+                    />
+                    <div className="selector-panel__lead">
                       <TokenPill
                         symbol={t.symbol}
                         chainShort={isExternalRoute ? t.chainShort : 'PUSH'}
@@ -578,7 +696,15 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                       />
                       <span className="meta">{t.chainLabel}</span>
                     </div>
-                    <span className="addr">{t.address.slice(0, 6)}…{t.address.slice(-4)}</span>
+                    <a
+                      className="addr"
+                      href={explorerAddressForChain(t.address, 'PUSH_TESTNET_DONUT')}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {t.address.slice(0, 6)}…{t.address.slice(-4)} ↗
+                    </a>
                   </button>
                 );
               })}
@@ -586,92 +712,130 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           )}
         </div>
 
-        {/* Advanced-only — Push Chain recipient override + basket mode */}
-        {advanced && (
-          <>
-            <div>
-              <div className="input-head">
-                <span>RECIPIENT (PUSH CHAIN)</span>
+        {reserveShortfall && mode === 'redeem' && (
+          <div className="feedback feedback--warn">
+            <div className="feedback__title">
+              INSUFFICIENT {selected.symbol} RESERVE ON {selected.chainLabel}
+            </div>
+            <div className="mono" style={{ marginTop: 4 }}>
+              The manager does not hold enough {selected.symbol} to cover this redemption.
+              Enable <strong>basket mode</strong> to spread across all reserves, or select a
+              different stablecoin.
+            </div>
+          </div>
+        )}
+
+        {/* DESTINATION header — redeem only, shown after BURN + RECEIVE */}
+        {mode === 'redeem' && (
+          <div className="src-header">
+            <div className="src-header__main">
+              <span className="src-header__label">DESTINATION</span>
+              <span className="src-header__chain">{destLabel}</span>
+            </div>
+            {account && !originIsPush && (
+              <button
+                type="button"
+                className="src-header__action"
+                onClick={() => {
+                  setRouteTouched(true);
+                  setRoute((r) => (r === 'external' ? 'push' : 'external'));
+                }}
+                disabled={submitting}
+              >
+                <span className="src-header__action-link">
+                  {isExternalRoute ? 'Keep on Push Chain →' : `Deliver on ${selected.chainLabel} →`}
+                </span>
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Recipient — shown for all redeem routes, right after destination */}
+        {mode === 'redeem' && account && (
+          <div>
+            <div className="input-head">
+              <span>RECIPIENT ({isExternalRoute ? selected.chainShort : 'PUSH CHAIN'})</span>
+              {recipientTouched && autoRecipient.address && (
                 <button
                   type="button"
-                  onClick={() => account && setPushRecipient(account)}
-                  disabled={!account}
+                  onClick={() => {
+                    setRecipientTouched(false);
+                    setExternalRecipient(autoRecipient.address);
+                  }}
+                  disabled={submitting}
                 >
                   USE MY ADDRESS
                 </button>
-              </div>
-              <div className="input-row">
-                <input
-                  type="text"
-                  placeholder="0x…"
-                  value={pushRecipient}
-                  onChange={(e) => setPushRecipient(e.target.value.trim())}
-                  disabled={submitting}
-                  spellCheck={false}
-                />
-                {pushRecipient && !pushRecipientValid && (
-                  <span className="input-row__hint input-row__hint--warn">
-                    ✕ Not a valid EVM address.
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {mode === 'redeem' && (
-              <div
-                className="toggle-row"
-                role="button"
-                tabIndex={0}
-                onClick={() => setAllowBasket((b) => !b)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    setAllowBasket((b) => !b);
-                  }
-                }}
-              >
-                <div>
-                  <div className="toggle-row__label">
-                    BASKET MODE {allowBasket ? '[ON]' : '[OFF]'}
-                  </div>
-                  <div className="toggle-row__sub">
-                    Accept proportional draws from all reserves if the preferred token runs short.
-                  </div>
-                </div>
-                <span
-                  className="toggle"
-                  role="switch"
-                  aria-checked={allowBasket}
-                  data-active={allowBasket ? 'true' : 'false'}
-                />
-              </div>
-            )}
-          </>
-        )}
-
-        {/* Destination address — required whenever redeem delivers off Push. */}
-        {needsExternalRecipient && (
-          <div>
-            <div className="input-head">
-              <span>RECIPIENT ({selected.chainShort})</span>
-              <span>•</span>
+              )}
             </div>
             <div className="input-row">
               <input
                 type="text"
-                placeholder={`Address on ${selected.chainLabel}`}
+                placeholder={autoRecipient.loading ? 'Deriving address…' : selected.moveableKey[0].startsWith('SOLANA') ? 'Solana address…' : '0x…'}
                 value={externalRecipient}
-                onChange={(e) => setExternalRecipient(e.target.value.trim())}
-                disabled={submitting}
+                onChange={(e) => {
+                  setRecipientTouched(true);
+                  setExternalRecipient(e.target.value.trim());
+                }}
+                disabled={submitting || autoRecipient.loading}
                 spellCheck={false}
               />
+              {!recipientTouched && autoRecipient.hint?.kind === 'cea' && externalRecipient && (
+                <span className="input-row__hint">
+                  This is your linked account on {autoRecipient.hint.chainLabel}, controlled by
+                  your connected wallet. Funds will be retrievable only through your universal
+                  wallet, change the address above to send to a different recipient.
+                </span>
+              )}
+              {!recipientTouched && autoRecipient.hint?.kind === 'own-wallet' && externalRecipient && (
+                <span className="input-row__hint">
+                  Your connected wallet address on {selected.chainLabel}.
+                </span>
+              )}
               {externalRecipient && !externalRecipientValid && (
                 <span className="input-row__hint input-row__hint--warn">
                   ✕ Not a valid {selected.moveableKey[0].startsWith('SOLANA') ? 'Solana' : 'EVM'} address
-                  for {selected.chainLabel}.
+                  for {isExternalRoute ? selected.chainLabel : 'Push Chain'}.
                 </span>
               )}
             </div>
+          </div>
+        )}
+
+        {/* Advanced basket mode toggle */}
+        {advanced && mode === 'redeem' && (
+          <div
+            className="toggle-row"
+            role="button"
+            tabIndex={0}
+            onClick={() => {
+              const next = !allowBasket;
+              setAllowBasket(next);
+              if (next) { setRoute('push'); setRouteTouched(true); }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                const next = !allowBasket;
+                setAllowBasket(next);
+                if (next) { setRoute('push'); setRouteTouched(true); }
+              }
+            }}
+          >
+            <div>
+              <div className="toggle-row__label">
+                BASKET MODE {allowBasket ? '[ON]' : '[OFF]'}
+              </div>
+              <div className="toggle-row__sub">
+                Accept proportional draws from all reserves if the preferred token runs short.
+              </div>
+            </div>
+            <span
+              className="toggle"
+              role="switch"
+              aria-checked={allowBasket}
+              data-active={allowBasket ? 'true' : 'false'}
+            />
           </div>
         )}
 
@@ -716,6 +880,21 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
         <p className="convert__fineprint">{plainBlurb}</p>
 
+        {originAddress && mode === 'mint' && isExternalRoute && (
+          <p className="convert__fineprint" style={{ marginTop: -8 }}>
+            Wallet{' '}
+            <a
+              className="link-mono"
+              href={explorerAddressForChain(originAddress, originChainKey)}
+              target="_blank"
+              rel="noreferrer"
+            >
+              {originAddress.slice(0, 6)}…{originAddress.slice(-4)} ↗
+            </a>
+            {' '}on {originChainDisplay}.
+          </p>
+        )}
+
         {externalBlocked && (
           <div className="feedback feedback--warn">
             <div className="feedback__title">BRIDGE UNAVAILABLE · {selected.chainLabel}</div>
@@ -734,7 +913,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             <div className="mono">{stage.message}</div>
           </div>
         )}
-        {stage.kind !== 'idle' && stage.kind !== 'error' && stage.kind !== 'signing' && (
+        {stage.kind !== 'idle' && stage.kind !== 'error' && stage.kind !== 'preparing' && stage.kind !== 'signing' && (
           <div
             className={`feedback ${
               (stage.kind === 'confirmed' && !needsExternalRecipient) ||
@@ -745,7 +924,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           >
             <div className="feedback__title">
               {needsExternalRecipient ? 'STEP 1 · ' : ''}
-              {stage.kind === 'broadcasting' ? 'BROADCASTING' : 'CONFIRMED'}
+              {stage.kind === 'broadcasting'
+                ? 'BROADCASTING'
+                : needsExternalRecipient
+                  ? 'CONFIRMED · REDEEMED ON PUSH CHAIN'
+                  : 'CONFIRMED'}
             </div>
             <a
               className="link-mono"
@@ -765,10 +948,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     ? 'SIGNING…'
                     : stage.kind === 'step2-broadcasting'
                       ? 'BROADCASTING'
-                      : 'CONFIRMED'}
+                      : `CONFIRMED · SENT TO ${selected.chainLabel.toUpperCase()}`}
                 </div>
-                {(stage.kind === 'step2-broadcasting' || stage.kind === 'step2-confirmed') && (
-                  <a className="link-mono" href={explorerTx(stage.hash)} target="_blank" rel="noreferrer">
+                {stage.kind === 'step2-broadcasting' && stage.hash === '0x' ? (
+                  <span className="link-mono">PENDING…</span>
+                ) : (stage.kind === 'step2-broadcasting' || stage.kind === 'step2-confirmed') && (
+                  <a className="link-mono" href={explorerTxForChain(stage.hash, destChainKey)} target="_blank" rel="noreferrer">
                     {truncHash(stage.hash)} ↗
                   </a>
                 )}

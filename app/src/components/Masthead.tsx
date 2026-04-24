@@ -4,8 +4,8 @@
  * Sits directly below the EditorialBand. Nav mirrors the mockup with the
  * addition of CHANGELOG. /docs is an EXTERNAL link (pusd.push.org/docs)
  * rendered as a plain anchor so the in-app router never tries to match it.
- * /convert is an alias to /mint — the convert flow lives there, since
- * mint and redeem each earn their own dedicated route.
+ * The CONVERT nav link points to /convert/mint — the convert flow lives
+ * at /convert with mint / redeem sub-routes, and MINT is the landing tab.
  *
  * On mobile the nav wraps to its own row and horizontally scrolls.
  */
@@ -21,7 +21,7 @@ type NavItem = InternalLink | ExternalLink;
 
 const NAV: readonly NavItem[] = [
   { to: '/',          label: 'HOME',      end: true },
-  { to: '/mint',      label: 'CONVERT' },
+  { to: '/convert',   label: 'CONVERT' },
   { to: '/reserves',  label: 'RESERVES' },
   { to: '/history',   label: 'ACTIVITY' },
   { to: '/changelog', label: 'CHANGELOG' },

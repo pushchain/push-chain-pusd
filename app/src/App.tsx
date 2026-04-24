@@ -7,13 +7,16 @@
  *   Footer                   ← editorial colophon
  *
  * Routes:
- *   /           ReservesPage         — editorial home (narrative + reserves + dispatch)
- *   /mint       MintPage
- *   /redeem     RedeemPage
- *   /reserves   ReservesDetailPage   — focused book-of-reserves view
- *   /history    HistoryPage          — user activity
- *   /changelog  ChangelogPage        — editorial release notes
- *   *           → /
+ *   /                   ReservesPage         — editorial home (narrative + reserves + dispatch)
+ *   /convert            → /convert/mint
+ *   /convert/mint       ConvertPage (mint tab)
+ *   /convert/redeem     ConvertPage (redeem tab)
+ *   /mint               → /convert/mint   (legacy)
+ *   /redeem             → /convert/redeem (legacy)
+ *   /reserves           ReservesDetailPage   — focused book-of-reserves view
+ *   /history            HistoryPage          — user activity
+ *   /changelog          ChangelogPage        — editorial release notes
+ *   *                   → /
  *
  * /docs is an external link (pusd.push.org/docs) and is NOT handled in-app —
  * see Masthead for the anchor with target=_blank.
@@ -24,9 +27,8 @@ import { EditorialBand } from './components/EditorialBand';
 import { Footer } from './components/Footer';
 import { Masthead } from './components/Masthead';
 import ChangelogPage from './pages/ChangelogPage';
+import ConvertPage from './pages/ConvertPage';
 import HistoryPage from './pages/HistoryPage';
-import MintPage from './pages/MintPage';
-import RedeemPage from './pages/RedeemPage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
 import ReservesPage from './pages/ReservesPage';
 
@@ -39,8 +41,10 @@ function App() {
         <main>
           <Routes>
             <Route path="/" element={<ReservesPage />} />
-            <Route path="/mint" element={<MintPage />} />
-            <Route path="/redeem" element={<RedeemPage />} />
+            <Route path="/convert" element={<Navigate to="/convert/mint" replace />} />
+            <Route path="/convert/:mode" element={<ConvertPage />} />
+            <Route path="/mint" element={<Navigate to="/convert/mint" replace />} />
+            <Route path="/redeem" element={<Navigate to="/convert/redeem" replace />} />
             <Route path="/reserves" element={<ReservesDetailPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/changelog" element={<ChangelogPage />} />
