@@ -1,5 +1,5 @@
 /**
- * ReservesPage — editorial home (/).
+ * HomePage — editorial home (/).
  *
  * Composition, top to bottom, matches the Issue 01 mockup:
  *
@@ -19,7 +19,6 @@
  */
 
 import { useMemo } from 'react';
-import { AsciiWave } from '../components/AsciiWave';
 import { ConvertPanel } from '../components/ConvertPanel';
 import { DispatchFeed } from '../components/DispatchFeed';
 import { SloganBand } from '../components/SloganBand';
@@ -30,11 +29,11 @@ import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useReserves } from '../hooks/useReserves';
 import {
-  explorerAddress,
-  formatAmount,
-  formatPct,
-  formatRelative,
-  truncAddr,
+    explorerAddress,
+    formatAmount,
+    formatPct,
+    formatRelative,
+    truncAddr,
 } from '../lib/format';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -51,7 +50,7 @@ const STATUS_CLASS: Record<string, string> = {
   REMOVED: 'status--removed',
 };
 
-export default function ReservesPage() {
+export default function HomePage() {
   const reserves = useReserves();
   const { totalSupply, loading: supplyLoading } = usePUSDBalance();
   const stats = useProtocolStats();
@@ -162,9 +161,6 @@ export default function ReservesPage() {
 
       {/* ===================================================== SLOGAN BAND ===== */}
       <SloganBand />
-
-      {/* ================================================== ASCII WAVE ===== */}
-      <AsciiWave />
 
       {/* ============================================ §01 · THE PROMISE ===== */}
       <div className="container">

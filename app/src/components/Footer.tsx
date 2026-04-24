@@ -11,6 +11,7 @@
 
 import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
 import { explorerAddress, truncAddr } from '../lib/format';
+import { AsciiWave } from './AsciiWave';
 
 export function Footer() {
   const year = new Date().getFullYear();
@@ -83,7 +84,7 @@ export function Footer() {
 
         <div className="footer__row">
           <span>
-            © MMXX{yearRoman(year - 2020)} · Push USD · <em>All serifs intentional.</em>
+            &copy; MMXX{yearRoman(year - 2020)} · Push USD · <em>All serifs intentional.</em>
           </span>
           <span>
             PUSD{' '}
@@ -108,6 +109,8 @@ export function Footer() {
           </span>
         </div>
       </div>
+
+      <AsciiWave />
     </footer>
   );
 }

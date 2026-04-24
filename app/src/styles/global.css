@@ -1029,7 +1029,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .footer {
   margin-top: auto;
   border-top: var(--rule-med);
-  padding: 40px 0 32px;
+  padding: 40px 0 0 0;
   font-family: var(--f-mono);
   font-size: 12px;
   color: var(--c-ink-dim);
@@ -1041,6 +1041,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
   gap: 40px;
   align-items: start;
+  padding: 0 0 32px 0;
 }
 
 .footer__logo {
@@ -1092,9 +1093,11 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .footer__links a:hover { color: var(--c-magenta); text-decoration: none; }
 
 .footer__row {
+  grid-column: 1 / -1;
+  position: relative;
   margin-top: 32px;
   padding-top: 20px;
-  border-top: var(--rule-thin);
+  padding-bottom: 24px;
   display: flex;
   justify-content: space-between;
   gap: 16px;
@@ -1103,6 +1106,17 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   font-size: 11px;
   color: var(--c-ink-mute);
   letter-spacing: 0.06em;
+}
+
+.footer__row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 100vw;
+  height: 1px;
+  background: var(--c-rule);
 }
 
 .footer__row em { font-style: italic; color: var(--c-ink-dim); }
@@ -2392,6 +2406,23 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   font: italic 500 15px/1 var(--f-display);
   color: var(--c-ink);
   letter-spacing: 0.01em;
+}
+
+/* Bottom colophon row overlaid on the wave (used by Footer) */
+.ascii-wave__colophon {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0 var(--gutter) 18px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  color: var(--c-ink-dim);
+  flex-wrap: wrap;
 }
 
 @media (max-width: 720px) {

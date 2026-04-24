@@ -7,7 +7,7 @@
  *   Footer                   ← editorial colophon
  *
  * Routes:
- *   /                   ReservesPage         — editorial home (narrative + reserves + dispatch)
+ *   /                   HomePage             — editorial home (narrative + reserves + dispatch)
  *   /convert            → /convert/mint
  *   /convert/mint       ConvertPage (mint tab)
  *   /convert/redeem     ConvertPage (redeem tab)
@@ -29,8 +29,8 @@ import { Masthead } from './components/Masthead';
 import ChangelogPage from './pages/ChangelogPage';
 import ConvertPage from './pages/ConvertPage';
 import HistoryPage from './pages/HistoryPage';
+import HomePage from './pages/HomePage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
-import ReservesPage from './pages/ReservesPage';
 
 function App() {
   return (
@@ -40,7 +40,7 @@ function App() {
         <Masthead />
         <main>
           <Routes>
-            <Route path="/" element={<ReservesPage />} />
+            <Route path="/" element={<HomePage />} />
             <Route path="/convert" element={<Navigate to="/convert/mint" replace />} />
             <Route path="/convert/:mode" element={<ConvertPage />} />
             <Route path="/mint" element={<Navigate to="/convert/mint" replace />} />

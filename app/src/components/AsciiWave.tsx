@@ -10,12 +10,12 @@
  * contrast produce fluid, hypnotic movement (per the art-direction brief).
  */
 
-import { useEffect, useRef } from 'react';
+import { type ReactNode, useEffect, useRef } from 'react';
 
 // Sparse → dense character ramp. Each char represents a visual "weight".
 const RAMP = ' ·:;÷+×xX$▒▓█';
 
-export function AsciiWave() {
+export function AsciiWave({ children }: { children?: ReactNode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -148,10 +148,11 @@ export function AsciiWave() {
   return (
     <section className="ascii-wave" ref={containerRef}>
       <canvas ref={canvasRef} className="ascii-wave__canvas" aria-hidden="true" />
-      <div className="ascii-wave__copy">
-        <span className="ascii-wave__eyebrow">PUSH CHAIN · DONUT TESTNET</span>
-        <p className="ascii-wave__sub">one signature. every chain.</p>
-      </div>
+      {children && (
+        <div className="ascii-wave__colophon">
+          {children}
+        </div>
+      )}
     </section>
   );
 }
