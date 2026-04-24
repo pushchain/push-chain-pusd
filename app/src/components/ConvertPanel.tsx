@@ -344,11 +344,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         data: legs,
       };
       console.log('[prepareTransaction] leg 1 params:', params1);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prepared1 = await pushChainClient.universal.prepareTransaction({
         to: '0x0000000000000000000000000000000000000000',
         value: 0n,
         data: legs,
-      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+      } as any);
 
       const preparedTxs = [prepared1];
 
@@ -360,12 +361,13 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           funds: { amount: receiveAmount, token: moveable },
         };
         console.log('[prepareTransaction] leg 2 params:', params2);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const prepared2 = await pushChainClient.universal.prepareTransaction({
           to: { address: externalRecipient as `0x${string}`, chain: destChain },
           value: 0n,
           data: '0x',
           funds: { amount: receiveAmount, token: moveable },
-        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        } as any);
         preparedTxs.push(prepared2);
       }
 
@@ -819,7 +821,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             ) : !originIsPush && (
               allowBasket ? (
                 <span
-                  data-tooltip={`Basket mode distributes across all reserves on Push Chain only. Use bridge.push.org to move funds out.`}
+                  data-tooltip={`Basket mode distributes across all reserves on Push Chain only.`}
                   style={{ display: 'inline-flex', cursor: 'not-allowed' }}
                 >
                   <button
