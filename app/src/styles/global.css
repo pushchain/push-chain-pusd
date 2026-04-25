@@ -422,6 +422,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .hero__kicker {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   font-family: var(--f-mono);
   font-size: 10px;
@@ -497,6 +498,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .proof-tw__header {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   font-family: var(--f-mono);
   font-size: 10px;
@@ -1487,8 +1489,8 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   text-transform: uppercase;
   color: var(--c-ink-mute);
   cursor: pointer;
-  text-align: right;
-  white-space: nowrap;
+  text-align: left;
+  white-space: pre-wrap;
 }
 
 .src-header__action:disabled {
@@ -2404,6 +2406,8 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .ascii-band__kicker {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
   font-family: var(--f-mono);
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -2590,6 +2594,133 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
 @media (max-width: 720px) {
   .ascii-wave { height: 210px; }
+}
+
+/* ==========================================================================
+   30. SMALL PHONE — 480px and below
+   Tighter gutter, scaled-down section rhythm, smaller primitives.
+   ========================================================================== */
+@media (max-width: 480px) {
+  :root {
+    --gutter: 16px;
+  }
+
+  /* Section rhythm */
+  .section         { padding: 48px 0; }
+  .section--tight  { padding: 32px 0; }
+  .section--loose  { padding: 64px 0; }
+
+  /* Stat values — still readable, just not oversized */
+  .stat__value { font-size: 22px; }
+
+  /* Convert panel — pull in the horizontal padding */
+  .convert__head { padding: 14px 16px 14px; }
+  .convert__body { padding: 16px; gap: 14px; }
+  .convert__grid > div { padding: 12px 14px; }
+
+  /* Amount input — 32 → 24px so it doesn't dominate the panel */
+  .input-shell          { padding: 12px 14px; }
+  .input-shell__amount  { font-size: 24px; }
+
+  /* Card shell (dedicated /convert page) */
+  .card-shell { padding: 16px; }
+
+  /* Book totals */
+  .book__totals-value { font-size: 26px; }
+
+  /* Empty / gate */
+  .empty       { padding: 36px 16px 44px; }
+  .empty__title { font-size: 22px; }
+
+  /* Manifesto columns — less vertical air */
+  .manifesto__col { padding: 28px 0; }
+}
+
+/* ==========================================================================
+   31. EXTRA-SMALL PHONE — 380px and below (covers 320px)
+   Final pass to ensure nothing breaks at the narrowest supported width.
+   ========================================================================== */
+@media (max-width: 380px) {
+  :root {
+    --gutter: 12px;
+  }
+
+  /* ── Masthead ── */
+  .masthead__inner { padding: 16px 0; gap: 10px; }
+  .masthead__logo  { font-size: 22px; }
+  .masthead__nav   { gap: 10px; font-size: 10px; letter-spacing: 0.06em; }
+
+  /* ── Editorial band ── */
+  .editorial-band__left  { gap: 8px; }
+  .editorial-band__right { gap: 8px; font-size: 9px; }
+  .editorial-band__right > * + *::before { margin-right: 8px; }
+
+  /* ── Hero ── */
+  /* Rebase the clamp so the title fits at 320px without overflowing */
+  .hero__title { font-size: clamp(28px, 9vw, 44px); }
+  .hero__lead  { font-size: 15px; }
+
+  /* ── Proof typewriter ── */
+  .proof-tw__title { font-size: clamp(26px, 8vw, 56px); }
+  /* Prevent the typed line from stretching the layout horizontally */
+  .proof-tw__line  { overflow: hidden; }
+  .proof-tw__cells { gap: 10px; }
+
+  /* ── Stat strip ── */
+  .stat__value { font-size: 18px; }
+
+  /* ── Invariants ribbon ── */
+  .ribbon__inner { gap: 14px; padding: 8px 0; }
+
+  /* ── Convert panel ── */
+  .convert__head        { padding: 12px; }
+  .convert__body        { padding: 12px; gap: 12px; }
+  .convert__grid > div  { padding: 10px 12px; }
+
+  /* Amount input */
+  .input-shell          { padding: 10px 12px; }
+  .input-shell__amount  { font-size: 20px; }
+
+  /* Source / destination header */
+  .src-header          { padding: 8px 10px; }
+  .src-header__chain   { font-size: 12px; }
+
+  /* Toggle row */
+  .toggle-row { padding: 10px 12px; gap: 10px; }
+
+  /* Summary */
+  .summary { font-size: 11px; }
+
+  /* Feedback blocks */
+  .feedback { padding: 10px 14px; font-size: 11px; }
+
+  /* Buttons */
+  .btn--block { padding: 14px 16px; }
+
+  /* Card shell (dedicated /convert page) */
+  .card-shell { padding: 12px; }
+
+  /* Book totals */
+  .book__totals-value { font-size: 20px; }
+
+  /* Section rhythm */
+  .section { padding: 36px 0; }
+  /* Section header — stack label + meta on very narrow viewports */
+  .section__header { flex-direction: column; gap: 4px; align-items: flex-start; }
+
+  /* Manifesto */
+  .manifesto__col { padding: 20px 0; }
+
+  /* Empty / gate */
+  .empty        { padding: 28px 12px 36px; }
+  .empty__title { font-size: 18px; }
+  .empty__glyph { font-size: 30px; }
+
+  /* ASCII wave — shorter on tiny screens */
+  .ascii-wave { height: 160px; }
+
+  /* Footer bottom row — stack copyright + links */
+  .footer__row { flex-direction: column; gap: 8px; }
 }
 
 /* ==========================================================================
