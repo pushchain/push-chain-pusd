@@ -480,6 +480,169 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 /* ==========================================================================
+   7b. PROOF TYPEWRITER — § 03 editorial rotating ticker + live ledger
+   --------------------------------------------------------------------------
+   Sits inside the hero, full container width, below `.hero__inner`.
+   Reads like a newspaper ticker; prints like a receipt.
+   ========================================================================== */
+.proof-tw {
+  border-top: var(--rule-thin);
+  padding: 28px 0 32px;
+  margin-top: 4px;
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+
+.proof-tw__header {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+}
+
+.proof-tw__title {
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: clamp(36px, 4.4vw, 56px);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--c-ink);
+  margin: 0;
+}
+
+.proof-tw__title em {
+  font-style: italic;
+  font-weight: 500;
+  position: relative;
+  display: inline-block;
+  color: var(--c-magenta);
+}
+
+.proof-tw__sub {
+  font-family: var(--f-display);
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--c-ink-dim);
+  margin: 0;
+  max-width: 64ch;
+}
+
+/* The typewriter line — a single mono row, ▶ prefix, blinking ▌ cursor. */
+.proof-tw__line {
+  margin-top: 6px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  font-family: var(--f-mono);
+  font-size: clamp(15px, 1.4vw, 18px);
+  letter-spacing: 0.005em;
+  color: var(--c-ink);
+  min-height: 1.4em; /* keeps the row from collapsing during the gap phase */
+}
+
+.proof-tw__caret {
+  color: var(--c-magenta);
+  font-weight: 700;
+}
+
+.proof-tw__text {
+  white-space: pre;
+}
+
+.proof-tw__cursor {
+  display: inline-block;
+  color: var(--c-magenta);
+  transform: translateY(-1px);
+  animation: proof-tw-blink 1.05s steps(1, end) infinite;
+}
+
+@keyframes proof-tw-blink {
+  0%, 49%   { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proof-tw__cursor { animation: none; opacity: 1; }
+}
+
+.proof-tw__rule {
+  height: 0;
+  border-top: var(--rule-thin);
+  margin-top: 8px;
+}
+
+/* Receipt-style ledger row. */
+.proof-tw__ledger {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) minmax(0, 1fr);
+  gap: 24px;
+  align-items: end;
+  margin-top: 4px;
+}
+
+.proof-tw__ledger-tag {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+}
+
+.proof-tw__cells {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 24px;
+  margin: 0;
+  padding: 0;
+}
+
+.proof-tw__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.proof-tw__cell dt {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+  margin: 0;
+}
+
+.proof-tw__cell dd {
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: clamp(15px, 1.6vw, 19px);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--c-ink);
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 760px) {
+  .proof-tw__ledger {
+    grid-template-columns: 1fr;
+    gap: 14px;
+    align-items: start;
+  }
+  .proof-tw__cells {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 14px 24px;
+  }
+}
+
+/* ==========================================================================
    8. STAT STRIP — CIRCULATION / RATIO / ASSETS / FEE
    ========================================================================== */
 .stat {

@@ -344,12 +344,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         data: legs,
       };
       console.log('[prepareTransaction] leg 1 params:', params1);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const prepared1 = await pushChainClient.universal.prepareTransaction({
         to: '0x0000000000000000000000000000000000000000',
         value: 0n,
         data: legs,
-      } as any);
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       const preparedTxs = [prepared1];
 
@@ -361,13 +360,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           funds: { amount: receiveAmount, token: moveable },
         };
         console.log('[prepareTransaction] leg 2 params:', params2);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const prepared2 = await pushChainClient.universal.prepareTransaction({
           to: { address: externalRecipient as `0x${string}`, chain: destChain },
           value: 0n,
           data: '0x',
           funds: { amount: receiveAmount, token: moveable },
-        } as any);
+        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
         preparedTxs.push(prepared2);
       }
 
@@ -572,9 +570,9 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               onClick={handleSwitchAccount}
               disabled={submitting}
             >
-              {account ? 'Minting from a different chain? ' : ''}
+              Minting from a different chain?{' '}
               <span className="src-header__action-link">
-                {account ? 'Switch account ↗' : 'Connect wallet ↗'}
+                {account ? 'Switch account ↗' : 'Connect Wallet ↗'}
               </span>
             </button>
           </div>
