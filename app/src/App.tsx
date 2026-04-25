@@ -31,6 +31,7 @@ import ConvertPage from './pages/ConvertPage';
 import HistoryPage from './pages/HistoryPage';
 import HomePage from './pages/HomePage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
+import StyleDemoPage from './pages/StyleDemoPage';
 
 function App() {
   return (
@@ -48,6 +49,7 @@ function App() {
             <Route path="/reserves" element={<ReservesDetailPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/changelog" element={<ChangelogPage />} />
+            <Route path="/style-demo" element={<StyleDemoPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

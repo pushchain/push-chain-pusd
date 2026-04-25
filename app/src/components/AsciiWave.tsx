@@ -1,21 +1,12 @@
-/**
- * AsciiWave — full-bleed ASCII density wave band.
- *
- * Three overlapping sine waves create an organic interference pattern.
- * Characters cycle through a sparse→dense ramp; the word "PUSD" is
- * pre-rendered on an off-screen canvas and sampled per-cell so that
- * the text emerges from the noise in magenta at density peaks.
- *
- * Inspiration: ASCII motion graphics where varying symbol density and
- * contrast produce fluid, hypnotic movement (per the art-direction brief).
- */
-
 import { type ReactNode, useEffect, useRef } from 'react';
 
-// Sparse → dense character ramp. Each char represents a visual "weight".
 const RAMP = ' ·:;÷+×xX$▒▓█';
 
-export function AsciiWave({ children }: { children?: ReactNode }) {
+export type AsciiMode =
+  | 'block' | 'isometric' | 'anaglyph'
+  | 'pulse' | 'spin' | 'shimmer' | 'parallax' | 'wobble' | 'neon';
+
+export function AsciiWave({ children, mode = 'wobble' }: { children?: ReactNode; mode?: AsciiMode }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -27,51 +18,46 @@ export function AsciiWave({ children }: { children?: ReactNode }) {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Cell geometry — tuned for IBM Plex Mono at 13px
-    const CW = 11; // cell width  (px)
-    const CH = 18; // cell height (px)
-    const FS = 13; // font size   (px)
+    const CW = 11;
+    const CH = 18;
+    const FS = 13;
 
     let cols = 0;
     let rows = 0;
     let raf: number;
     let t = 0;
 
-    // Off-screen mask data: white pixels = PUSD text area
-    let maskPixels: Uint8ClampedArray | null = null;
-    let maskW = 0;
-    let maskH = 0;
+    // Single base mask: white pixels = PUSD shape, built once per resize.
+    let shapePixels: Uint8ClampedArray | null = null;
+    let shapeW = 0;
+    let shapeH = 0;
 
-    const buildMask = (w: number, h: number) => {
+    const buildShape = (w: number, h: number) => {
       const off = document.createElement('canvas');
       off.width = w;
       off.height = h;
       const offCtx = off.getContext('2d');
       if (!offCtx) return;
-
       offCtx.fillStyle = '#000';
       offCtx.fillRect(0, 0, w, h);
-
-      // Fit "PUSD" to ~60 % of band height, centred
       const fs = Math.min(h * 0.60, w * 0.20);
       offCtx.font = `700 ${fs}px "Fraunces", serif`;
       offCtx.textAlign = 'center';
       offCtx.textBaseline = 'middle';
       offCtx.fillStyle = '#fff';
       offCtx.fillText('PUSD', w / 2, h / 2);
-
-      const d = offCtx.getImageData(0, 0, w, h);
-      maskPixels = d.data;
-      maskW = w;
-      maskH = h;
+      shapePixels = offCtx.getImageData(0, 0, w, h).data;
+      shapeW = w;
+      shapeH = h;
     };
 
-    // Sample mask brightness at a given grid cell (0 = background, 1 = text)
-    const getMask = (col: number, row: number): number => {
-      if (!maskPixels) return 0;
-      const x = Math.min(maskW - 1, Math.floor(col * CW + CW / 2));
-      const y = Math.min(maskH - 1, Math.floor(row * CH + CH / 2));
-      return maskPixels[(y * maskW + x) * 4] / 255;
+    // Sample the shape at a pixel (x, y) — true if inside a letter stroke.
+    const hasShape = (px: number, py: number): boolean => {
+      if (!shapePixels) return false;
+      const x = px | 0;
+      const y = py | 0;
+      if (x < 0 || y < 0 || x >= shapeW || y >= shapeH) return false;
+      return shapePixels[(y * shapeW + x) * 4] > 100;
     };
 
     const resize = () => {
@@ -80,7 +66,7 @@ export function AsciiWave({ children }: { children?: ReactNode }) {
       rows = Math.ceil(height / CH) + 1;
       canvas.width = cols * CW;
       canvas.height = rows * CH;
-      buildMask(canvas.width, canvas.height);
+      buildShape(canvas.width, canvas.height);
     };
 
     const draw = () => {
@@ -88,47 +74,232 @@ export function AsciiWave({ children }: { children?: ReactNode }) {
       ctx.font = `${FS}px "IBM Plex Mono", monospace`;
       ctx.textBaseline = 'top';
 
+      const DX = CW * 3;
+      const DY = CH * 2;
+      const STEPS = 10;
+
+      // Per-frame animated parameters
+      const pulseF = 0.35 + 0.65 * (0.5 + 0.5 * Math.sin(t * 0.35));
+      const spinA = t * 0.30;
+      const spinDx = Math.cos(spinA) * DX;
+      const spinDy = Math.sin(spinA) * DY * 0.7;
+
+      const pLayers = mode === 'parallax'
+        ? [
+            { dx: 0,          driftX: 0,                               dy: 0,          col: 'rgba(221,68,185,',  chr: '█' },
+            { dx: CW * 1.5,   driftX: Math.sin(t * 0.40) * CW * 2,     dy: CH * 0.8,   col: 'rgba(175,45,135,',  chr: '▓' },
+            { dx: CW * 3,     driftX: Math.sin(t * 0.60 + 1) * CW * 3, dy: CH * 1.7,   col: 'rgba(115,25,88,',   chr: '▒' },
+            { dx: CW * 4.5,   driftX: Math.sin(t * 0.80 + 2) * CW * 5, dy: CH * 2.6,   col: 'rgba(65,15,52,',    chr: '░' },
+          ]
+        : [];
+
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
-          const mask = getMask(c, r);
+          const px = c * CW + CW / 2;
+          const py = r * CH + CH / 2;
 
-          // Three overlapping sine waves — interference makes the pattern
-          // feel organic rather than mechanical
-          const a = Math.sin(c * 0.13 - t * 1.05 + r * 0.20);
-          const b = Math.sin(c * 0.07 + t * 0.62 - r * 0.17);
-          const e = Math.sin((c + r * 0.6) * 0.09 - t * 0.85);
+          const wa = Math.sin(c * 0.13 - t * 1.05 + r * 0.20);
+          const wb = Math.sin(c * 0.07 + t * 0.62 - r * 0.17);
+          const we = Math.sin((c + r * 0.6) * 0.09 - t * 0.85);
+          const wave = (wa + wb + we + 3) / 6;
 
-          // Normalise to [0, 1]
-          let v = (a + b + e + 3) / 6;
+          // Default: background field character
+          let ch = RAMP[Math.floor(wave * (RAMP.length - 1))];
+          let fill = `rgba(15,13,10,${(0.03 + wave * 0.38).toFixed(2)})`;
 
-          // Inside PUSD mask: floor the density so the letters are always
-          // denser than the surrounding field, regardless of wave phase
-          if (mask > 0.4) {
-            v = Math.min(1, v * 0.35 + 0.62 + mask * 0.18);
+          if (mode === 'block') {
+            if (hasShape(px, py)) {
+              ch = '█';
+              fill = `rgba(221,68,185,${(0.70 + wave * 0.30).toFixed(2)})`;
+            } else {
+              for (let k = 1; k <= STEPS; k++) {
+                const f = k / STEPS;
+                if (hasShape(px - DX * f, py - DY * f)) {
+                  const v = Math.min(1, 0.45 + wave * 0.35 + (1 - f) * 0.20);
+                  ch = RAMP[Math.floor(v * (RAMP.length - 1))];
+                  fill = `rgba(130,22,98,${(0.35 + (1 - f) * 0.40 + wave * 0.10).toFixed(2)})`;
+                  break;
+                }
+              }
+            }
+
+          } else if (mode === 'pulse') {
+            if (hasShape(px, py)) {
+              ch = '█';
+              fill = `rgba(221,68,185,${(0.70 + pulseF * 0.25 + wave * 0.05).toFixed(2)})`;
+            } else {
+              const maxX = DX * pulseF;
+              const maxY = DY * pulseF;
+              const steps = Math.max(2, Math.round(STEPS * pulseF));
+              for (let k = 1; k <= steps; k++) {
+                const f = k / steps;
+                if (hasShape(px - maxX * f, py - maxY * f)) {
+                  const v = Math.min(1, 0.45 + wave * 0.30 + (1 - f) * 0.20);
+                  ch = RAMP[Math.floor(v * (RAMP.length - 1))];
+                  fill = `rgba(130,22,98,${(0.35 + (1 - f) * 0.40 * pulseF + wave * 0.10).toFixed(2)})`;
+                  break;
+                }
+              }
+            }
+
+          } else if (mode === 'spin') {
+            if (hasShape(px, py)) {
+              ch = '█';
+              fill = `rgba(221,68,185,${(0.70 + wave * 0.30).toFixed(2)})`;
+            } else {
+              for (let k = 1; k <= STEPS; k++) {
+                const f = k / STEPS;
+                if (hasShape(px - spinDx * f, py - spinDy * f)) {
+                  const v = Math.min(1, 0.45 + wave * 0.35 + (1 - f) * 0.20);
+                  ch = RAMP[Math.floor(v * (RAMP.length - 1))];
+                  // Hue shifts with spin angle — the "light" seems to orbit
+                  const rr = 130 + Math.floor(Math.cos(spinA) * 55);
+                  const bb = 98 + Math.floor(Math.sin(spinA) * 55);
+                  fill = `rgba(${rr},22,${bb},${(0.35 + (1 - f) * 0.40 + wave * 0.10).toFixed(2)})`;
+                  break;
+                }
+              }
+            }
+
+          } else if (mode === 'shimmer') {
+            if (hasShape(px, py)) {
+              ch = '█';
+              // Holographic sheen sweeping across columns
+              const phase = c * 0.14 + t * 1.8;
+              const hue = 290 + 55 * Math.sin(phase);
+              const light = 55 + 10 * Math.sin(phase + r * 0.2);
+              fill = `hsl(${hue.toFixed(0)}, 88%, ${light.toFixed(0)}%)`;
+            } else {
+              for (let k = 1; k <= 6; k++) {
+                const f = k / 6;
+                if (hasShape(px - CW * 2 * f, py - CH * 1 * f)) {
+                  ch = RAMP[Math.min(RAMP.length - 1, Math.floor((0.32 + wave * 0.30) * (RAMP.length - 1)))];
+                  fill = `rgba(95,40,95,${(0.25 + (1 - f) * 0.25).toFixed(2)})`;
+                  break;
+                }
+              }
+            }
+
+          } else if (mode === 'parallax') {
+            for (const layer of pLayers) {
+              if (hasShape(px - (layer.dx + layer.driftX), py - layer.dy)) {
+                ch = layer.chr;
+                fill = `${layer.col}${(0.60 + wave * 0.35).toFixed(2)})`;
+                break;
+              }
+            }
+
+          } else if (mode === 'wobble') {
+            // Wave-warped 3D: sampling coordinates wobble in time
+            const warpX = Math.sin(r * 0.28 + t * 1.4) * CW * 1.8;
+            const warpY = Math.sin(c * 0.22 + t * 1.1) * CH * 0.7;
+            if (hasShape(px + warpX, py + warpY)) {
+              ch = '█';
+              fill = `rgba(221,68,185,${(0.70 + wave * 0.30).toFixed(2)})`;
+            } else {
+              for (let k = 1; k <= STEPS; k++) {
+                const f = k / STEPS;
+                if (hasShape(px + warpX - DX * f, py + warpY - DY * f)) {
+                  const v = Math.min(1, 0.45 + wave * 0.35 + (1 - f) * 0.20);
+                  ch = RAMP[Math.floor(v * (RAMP.length - 1))];
+                  fill = `rgba(130,22,98,${(0.35 + (1 - f) * 0.40 + wave * 0.10).toFixed(2)})`;
+                  break;
+                }
+              }
+            }
+
+          } else if (mode === 'neon') {
+            const ow = 5; // outline width in pixels
+            const inside = hasShape(px, py);
+            if (inside) {
+              // Outline detection: neighbour just outside shape?
+              const onEdge =
+                !hasShape(px - ow, py) || !hasShape(px + ow, py) ||
+                !hasShape(px, py - ow) || !hasShape(px, py + ow);
+              if (onEdge) {
+                ch = '█';
+                const glow = 0.75 + 0.25 * Math.sin(t * 2.5 + c * 0.12 + r * 0.2);
+                fill = `rgba(240,100,210,${glow.toFixed(2)})`;
+              } else {
+                // Hollow interior
+                ch = ' ';
+                fill = 'rgba(0,0,0,0)';
+              }
+            } else {
+              // Extruded outline (tube sides)
+              for (let k = 1; k <= 6; k++) {
+                const f = k / 6;
+                const ex = px - CW * 2 * f;
+                const ey = py - CH * 1 * f;
+                if (hasShape(ex, ey)) {
+                  const isEdge =
+                    !hasShape(ex - ow, ey) || !hasShape(ex + ow, ey) ||
+                    !hasShape(ex, ey - ow) || !hasShape(ex, ey + ow);
+                  if (isEdge) {
+                    ch = '▓';
+                    fill = `rgba(140,40,120,${(0.30 + (1 - f) * 0.35 + wave * 0.10).toFixed(2)})`;
+                    break;
+                  }
+                }
+              }
+            }
+
+          } else if (mode === 'isometric') {
+            if (hasShape(px, py)) {
+              ch = '█';
+              fill = `rgba(221,68,185,${(0.70 + wave * 0.30).toFixed(2)})`;
+            } else {
+              let hit = false;
+              // Top face: shape lies below-and-right of this cell
+              for (let k = 1; k <= 8; k++) {
+                const f = k / 8;
+                if (hasShape(px - CW * 3 * f, py + CH * 1.5 * f)) {
+                  const v = Math.min(1, 0.48 + wave * 0.30 + (1 - f) * 0.15);
+                  ch = RAMP[Math.floor(v * (RAMP.length - 1))];
+                  fill = `rgba(245,150,220,${(0.55 + (1 - f) * 0.30 + wave * 0.10).toFixed(2)})`;
+                  hit = true;
+                  break;
+                }
+              }
+              if (!hit) {
+                // Side face: shape lies above-and-right
+                for (let k = 1; k <= 8; k++) {
+                  const f = k / 8;
+                  if (hasShape(px - CW * 3 * f, py - CH * 1.5 * f)) {
+                    const v = Math.min(1, 0.42 + wave * 0.30 + (1 - f) * 0.20);
+                    ch = RAMP[Math.floor(v * (RAMP.length - 1))];
+                    fill = `rgba(90,10,65,${(0.55 + (1 - f) * 0.30 + wave * 0.10).toFixed(2)})`;
+                    break;
+                  }
+                }
+              }
+            }
+
+          } else if (mode === 'anaglyph') {
+            const s = CW * 3;
+            const red = hasShape(px - s, py);
+            const cyan = hasShape(px + s, py);
+            if (red && cyan) {
+              ch = '█';
+              fill = `rgba(221,68,185,${(0.80 + wave * 0.20).toFixed(2)})`;
+            } else if (red) {
+              ch = '█';
+              fill = `rgba(220,30,30,${(0.60 + wave * 0.30).toFixed(2)})`;
+            } else if (cyan) {
+              ch = '█';
+              fill = `rgba(0,200,200,${(0.60 + wave * 0.30).toFixed(2)})`;
+            }
           }
 
-          const idx = Math.floor(v * (RAMP.length - 1));
-          const ch = RAMP[idx];
-
-          // Colour: magenta at dense mask pixels, ink everywhere else
-          if (mask > 0.4 && v > 0.70) {
-            ctx.fillStyle = `rgba(221,68,185,${(0.45 + v * 0.55).toFixed(2)})`;
-          } else if (mask > 0.4) {
-            ctx.fillStyle = `rgba(15,13,10,${(0.25 + v * 0.65).toFixed(2)})`;
-          } else {
-            // Background field: very sparse so the PUSD text pops
-            ctx.fillStyle = `rgba(15,13,10,${(0.03 + v * 0.38).toFixed(2)})`;
-          }
-
+          ctx.fillStyle = fill;
           ctx.fillText(ch, c * CW, r * CH);
         }
       }
 
-      t += 0.011; // ~60 fps continuous loop
+      t += 0.011;
       raf = requestAnimationFrame(draw);
     };
 
-    // Wait for fonts before measuring and building the mask
     const init = async () => {
       await document.fonts.ready;
       resize();
@@ -143,7 +314,7 @@ export function AsciiWave({ children }: { children?: ReactNode }) {
       cancelAnimationFrame(raf);
       ro.disconnect();
     };
-  }, []);
+  }, [mode]);
 
   return (
     <section className="ascii-wave" ref={containerRef}>
