@@ -2,15 +2,61 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content="PUSD — Universal stablecoin on Push Chain. Mint and redeem PUSD across any chain." />
-    <title>PUSD — Universal Stablecoin</title>
+
+    <!-- ─── Favicons ──────────────────────────────────────────────────────── -->
+    <!-- ICO for legacy browsers (IE, old Windows) -->
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <!-- SVG for modern browsers — scales perfectly at any DPI -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <!-- PNG fallbacks for sizes that need them -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <!-- Apple touch icon (Home Screen on iOS/iPadOS) -->
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <!-- PWA manifest -->
+    <link rel="manifest" href="/site.webmanifest" />
+    <!-- Browser/OS chrome colour -->
+    <meta name="theme-color" content="#0f0d0a" />
+    <meta name="msapplication-TileColor" content="#0f0d0a" />
+
+    <!-- ─── Primary SEO ───────────────────────────────────────────────────── -->
+    <title>PUSD — Universal Stablecoin on Push Chain</title>
+    <meta name="description" content="Par-backed universal stablecoin on Push Chain. Deposit USDC or USDT from any chain and mint PUSD 1:1. Always backed. Always redeemable." />
+    <meta name="keywords" content="PUSD, Push Chain, stablecoin, universal stablecoin, cross-chain, USDC, USDT, DeFi, par-backed, mint, redeem" />
+    <meta name="author" content="Push Protocol" />
+    <meta name="robots" content="index, follow" />
+    <link rel="canonical" href="https://pusd.push.org" />
+
+    <!-- ─── Open Graph (Facebook, Discord, Telegram, LinkedIn …) ─────────── -->
+    <meta property="og:type"        content="website" />
+    <meta property="og:site_name"   content="PUSD" />
+    <meta property="og:url"         content="https://pusd.push.org" />
+    <meta property="og:title"       content="PUSD — Universal Stablecoin on Push Chain" />
+    <meta property="og:description" content="Par-backed universal stablecoin on Push Chain. Deposit USDC or USDT from any chain and mint PUSD 1:1. Always backed. Always redeemable." />
+    <meta property="og:image"       content="https://pusd.push.org/og-image.png" />
+    <meta property="og:image:width"  content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt"   content="PUSD — Universal Stablecoin on Push Chain" />
+    <meta property="og:image:type"  content="image/png" />
+    <meta property="og:locale"      content="en_US" />
+
+    <!-- ─── Twitter / X Card ─────────────────────────────────────────────── -->
+    <meta name="twitter:card"        content="summary_large_image" />
+    <meta name="twitter:site"        content="@PushProtocol" />
+    <meta name="twitter:creator"     content="@PushProtocol" />
+    <meta name="twitter:title"       content="PUSD — Universal Stablecoin on Push Chain" />
+    <meta name="twitter:description" content="Par-backed universal stablecoin on Push Chain. Deposit USDC or USDT from any chain and mint PUSD 1:1. Always backed. Always redeemable." />
+    <meta name="twitter:image"       content="https://pusd.push.org/og-image.png" />
+    <meta name="twitter:image:alt"   content="PUSD — Universal Stablecoin on Push Chain" />
+
+    <!-- ─── SPA deep-link rehydration ────────────────────────────────────── -->
+    <!--
+      Pairs with public/404.html for static hosts (GitHub Pages etc.) that
+      can't serve index.html on arbitrary paths. On Netlify/Vercel this
+      branch never runs because _redirects/vercel.json handle routing first.
+    -->
     <script>
-      // SPA deep-link rehydration — pairs with public/404.html for static hosts
-      // (GitHub Pages etc.) that can't serve index.html on arbitrary paths.
-      // On Netlify/Vercel this branch never runs because _redirects / vercel.json
-      // already route everything to / before the page loads.
       (function () {
         var l = window.location;
         if (l.search && l.search[1] === '/') {

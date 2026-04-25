@@ -1,8 +1,7 @@
 /**
  * Masthead — the "Push USD" logo, primary nav, and wallet connect.
  *
- * Sits directly below the EditorialBand. Nav mirrors the mockup with the
- * addition of CHANGELOG. /docs is an EXTERNAL link (pusd.push.org/docs)
+ * Sits directly below the EditorialBand. /docs is an EXTERNAL link (pusd.push.org/docs)
  * rendered as a plain anchor so the in-app router never tries to match it.
  * The CONVERT nav link points to /convert/mint — the convert flow lives
  * at /convert with mint / redeem sub-routes, and MINT is the landing tab.
@@ -13,7 +12,7 @@
 import { PushUniversalAccountButton } from '@pushchain/ui-kit';
 import { NavLink } from 'react-router-dom';
 
-const DOCS_URL = 'https://pusd.push.org/docs';
+const DOCS_URL = 'https://push.org/docs';
 
 type InternalLink = { to: string; label: string; end?: boolean; external?: false };
 type ExternalLink = { href: string; label: string; external: true };
@@ -24,7 +23,6 @@ const NAV: readonly NavItem[] = [
   { to: '/convert',   label: 'CONVERT' },
   { to: '/reserves',  label: 'RESERVES' },
   { to: '/history',   label: 'ACTIVITY' },
-  { to: '/changelog', label: 'CHANGELOG' },
   { href: DOCS_URL,   label: 'DOCS ↗',    external: true },
 ];
 

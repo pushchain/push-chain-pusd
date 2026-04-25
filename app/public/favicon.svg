@@ -1,0 +1,39 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <title>PUSD</title>
+  <!--
+    Option K — risograph duotone.
+    Ink ground, magenta shadow $ shifted +8 right +9 down, cream $ on top.
+    The offset is proportional so the misprint effect reads at every size:
+      16 px  → ~1–2 px fringe (subtle glow)
+      32 px  → ~3 px fringe (visible duotone)
+      192 px → ~15 px fringe (full risograph)
+      512 px → ~41 px fringe (editorial poster)
+  -->
+
+  <!-- Ground -->
+  <rect width="100" height="100" fill="#0f0d0a"/>
+
+  <!-- Shadow layer — magenta, shifted 8 % right + 9 % down -->
+  <text
+    x="54"
+    y="91"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="90"
+    font-weight="700"
+    fill="#dd44b9"
+    text-anchor="middle"
+    dominant-baseline="auto"
+  >$</text>
+
+  <!-- Main layer — cream, anchored at optical centre -->
+  <text
+    x="46"
+    y="82"
+    font-family="Georgia,'Times New Roman',serif"
+    font-size="90"
+    font-weight="700"
+    fill="#f3eee4"
+    text-anchor="middle"
+    dominant-baseline="auto"
+  >$</text>
+</svg>

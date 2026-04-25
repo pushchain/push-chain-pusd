@@ -11,6 +11,7 @@
  */
 
 import type { ReactNode } from 'react';
+import { useControllerAddress } from '../hooks/useControllerAddress';
 import { useProtocolDispatch, type DispatchRow } from '../hooks/useProtocolDispatch';
 import { explorerTx, formatAmount, formatRelative, truncAddr } from '../lib/format';
 
@@ -18,7 +19,12 @@ function dotClass(type: DispatchRow['type']): string {
   return type === 'MINT' ? 'dispatch__dot--mint' : 'dispatch__dot--redeem';
 }
 
-function describe(row: DispatchRow): { head: string; body: ReactNode; foot: string } {
+function describe(row: DispatchRow): {
+  head: string;
+  body: ReactNode;
+  footAddr: string;
+  footPrefix: 'from' | 'to';
+} {
   const pusd = formatAmount(row.pusdAmount, 6, { maxFractionDigits: 2 });
   const token = formatAmount(row.tokenAmount, row.asset.decimals, { maxFractionDigits: 2 });
   const chain = row.asset.chainShort;
@@ -26,23 +32,42 @@ function describe(row: DispatchRow): { head: string; body: ReactNode; foot: stri
   if (row.type === 'MINT') {
     return {
       head: 'MINT',
-      body: (
-        <>
-          <strong>+{pusd} PUSD</strong> issued against {token} {sym} from {chain}.
-        </>
-      ),
-      foot: `for ${truncAddr(row.recipient)} · ${formatRelative(row.timestamp * 1000)}`,
+      body: <><strong>+{pusd} PUSD</strong> issued against {token} {sym} from {chain}.</>,
+      footAddr: row.user,
+      footPrefix: 'from',
     };
   }
   return {
     head: 'REDEEM',
-    body: (
-      <>
-        <strong>−{pusd} PUSD</strong> burned; {token} {sym} paid on {chain}.
-      </>
-    ),
-    foot: `for ${truncAddr(row.recipient)} · ${formatRelative(row.timestamp * 1000)}`,
+    body: <><strong>−{pusd} PUSD</strong> burned; {token} {sym} paid on {chain}.</>,
+    footAddr: row.recipient,
+    footPrefix: 'to',
   };
+}
+
+function DispatchFoot({
+  prefix,
+  address,
+  txHash,
+}: {
+  prefix: 'from' | 'to';
+  address: string;
+  txHash: string;
+}) {
+  const { controller, loading } = useControllerAddress(address);
+
+  const displayAddr = loading || !controller?.isUEA ? address : controller.address;
+  const chainLabel = !loading && controller?.isUEA ? ` (${controller.chainLabel})` : '';
+
+  return (
+    <div className="dispatch__foot">
+      {prefix}{' '}
+      <a className="link-mono" href={explorerTx(txHash)} target="_blank" rel="noreferrer">
+        {truncAddr(displayAddr)}
+      </a>
+      {chainLabel}
+    </div>
+  );
 }
 
 export function DispatchFeed() {
@@ -63,7 +88,7 @@ export function DispatchFeed() {
           <p className="dispatch__body">
             Awaiting first mint. Be the one who <em>lights the fuse</em>.
           </p>
-          <div className="dispatch__foot">window: ~2,000 blocks</div>
+          <div className="dispatch__foot">—</div>
         </div>
       </div>
     );
@@ -86,7 +111,7 @@ export function DispatchFeed() {
             </div>
           );
         }
-        const { head, body, foot } = describe(row);
+        const { head, body, footAddr, footPrefix } = describe(row);
         return (
           <div
             key={`${row.txHash}:${row.logIndex}`}
@@ -100,17 +125,16 @@ export function DispatchFeed() {
               <span>BLOCK {row.blockNumber.toString()}</span>
             </div>
             <p className="dispatch__body">{body}</p>
-            <div className="dispatch__foot">
-              <a
-                className="link-mono"
-                href={explorerTx(row.txHash)}
-                target="_blank"
-                rel="noreferrer"
-                style={{ letterSpacing: 'inherit' }}
-              >
-                {foot}
-              </a>
-            </div>
+            <DispatchFoot
+              prefix={footPrefix}
+              address={footAddr}
+              txHash={row.txHash}
+            />
+            {row.timestamp > 0 && (
+              <span className="dispatch__time">
+                {formatRelative(row.timestamp * 1000)}
+              </span>
+            )}
           </div>
         );
       })}

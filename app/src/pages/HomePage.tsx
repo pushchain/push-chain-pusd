@@ -429,7 +429,7 @@ export default function HomePage() {
         <section className="section">
           <div className="section__header">
             <span>§ 04 · DISPATCH</span>
-            <span>LIVE · ~2,000 BLOCK WINDOW</span>
+            <span>LIVE</span>
           </div>
           <DispatchFeed />
         </section>

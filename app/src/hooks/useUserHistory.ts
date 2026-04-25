@@ -1,28 +1,18 @@
 /**
  * useUserHistory — connected account's Deposited + Redeemed events.
  *
- * Strategy:
- *   - Scan a bounded window of `WINDOW_BLOCKS` ending at `latest`.
- *   - Query Deposited filtered by `user = account` and Deposited filtered by
- *     `recipient = account`, plus the same two for Redeemed.
- *   - Coalesce by (txHash, logIndex) to dedupe self-directed mints/redeems.
- *   - Resolve block timestamps in a single `getBlock` per unique block.
+ * Fetches from Blockscout API (no block-range cap) and filters logs where
+ * the connected account appears as either `user` (topic1) or `recipient`
+ * (topic3). Deduplication is implicit since Blockscout returns each log once.
  *
- * We do NOT subscribe to events — we re-scan on a 30s cadence (cheaper than
- * maintaining an in-browser eventsource against a rate-limited RPC).
+ * Re-polls on a 30s cadence; full history available from block 0.
  */
 
-import { ethers } from 'ethers';
-import { useEffect, useMemo, useState } from 'react';
 import { usePushChainClient } from '@pushchain/ui-kit';
-import PUSDManagerArtifact from '../contracts/PUSDManager.json';
-import { PUSD_MANAGER_ADDRESS } from '../contracts/config';
+import { useEffect, useState } from 'react';
 import { TOKENS, tokenByAddress, type ReserveToken } from '../contracts/tokens';
-import { parseManagerLog, type ManagerEvent } from '../lib/events';
-import { getReadProvider } from '../lib/provider';
+import { fetchManagerLogs } from '../lib/blockscout';
 
-// Donut Testnet RPC caps eth_getLogs range at ~2k blocks per call.
-const WINDOW_BLOCKS = 2_000n;
 const POLL_MS = 30_000;
 
 export type HistoryRow = {
@@ -64,7 +54,7 @@ function unknownAssetFromAddress(address: `0x${string}`): HistoryRow['asset'] {
 
 export function useUserHistory(): UserHistoryState {
   const { pushChainClient } = usePushChainClient();
-  const account = pushChainClient?.universal?.account ?? null;
+  const account = (pushChainClient?.universal?.account ?? null) as `0x${string}` | null;
 
   const [state, setState] = useState<UserHistoryState>({
     rows: [],
@@ -72,12 +62,6 @@ export function useUserHistory(): UserHistoryState {
     error: null,
     updatedAt: 0,
   });
-
-  // Prebuild the interface for log parsing. Stable across renders.
-  const iface = useMemo(
-    () => new ethers.Interface(PUSDManagerArtifact as ethers.InterfaceAbi),
-    [],
-  );
 
   useEffect(() => {
     if (!account) {
@@ -90,50 +74,10 @@ export function useUserHistory(): UserHistoryState {
     const read = async () => {
       setState((prev) => ({ ...prev, loading: prev.rows.length === 0 }));
       try {
-        const provider = getReadProvider();
-        const manager = new ethers.Contract(PUSD_MANAGER_ADDRESS, PUSDManagerArtifact, provider);
+        const items = await fetchManagerLogs({ account, maxPages: 5 });
+        if (cancelled) return;
 
-        const latest = BigInt(await provider.getBlockNumber());
-        const fromBlock = latest > WINDOW_BLOCKS ? latest - WINDOW_BLOCKS : 0n;
-        const from = Number(fromBlock);
-        const to = Number(latest);
-
-        // Four filters: Deposited(user), Deposited(recipient), Redeemed(user), Redeemed(recipient).
-        const depositedUserFilter = manager.filters.Deposited(account, null, null);
-        const depositedRecipientFilter = manager.filters.Deposited(null, null, null, account);
-        const redeemedUserFilter = manager.filters.Redeemed(account, null, null);
-        const redeemedRecipientFilter = manager.filters.Redeemed(null, null, null, account);
-
-        const [depUser, depRecip, redUser, redRecip] = await Promise.all([
-          manager.queryFilter(depositedUserFilter, from, to),
-          manager.queryFilter(depositedRecipientFilter, from, to),
-          manager.queryFilter(redeemedUserFilter, from, to),
-          manager.queryFilter(redeemedRecipientFilter, from, to),
-        ]);
-
-        // Coalesce by (txHash, logIndex).
-        const dedup = new Map<string, ethers.Log>();
-        [...depUser, ...depRecip, ...redUser, ...redRecip].forEach((log) => {
-          const key = `${log.transactionHash}:${log.index}`;
-          if (!dedup.has(key)) dedup.set(key, log);
-        });
-
-        // Parse. Filter any that don't match our known events.
-        const parsed = Array.from(dedup.values())
-          .map((log) => ({ log, event: parseManagerLog(log, iface) }))
-          .filter((p): p is { log: ethers.Log; event: ManagerEvent } => p.event !== null);
-
-        // Fetch block timestamps — batch unique blocks.
-        const uniqueBlocks = Array.from(new Set(parsed.map((p) => p.log.blockNumber)));
-        const blockMap = new Map<number, number>();
-        await Promise.all(
-          uniqueBlocks.map(async (bn) => {
-            const block = await provider.getBlock(bn);
-            if (block) blockMap.set(bn, Number(block.timestamp));
-          }),
-        );
-
-        const rows: HistoryRow[] = parsed.map(({ log, event }) => {
+        const rows: HistoryRow[] = items.map(({ event, timestamp }) => {
           const asset =
             (TOKENS.find((t) => t.address.toLowerCase() === event.token.toLowerCase())
               ?? tokenByAddress(event.token))
@@ -141,8 +85,8 @@ export function useUserHistory(): UserHistoryState {
 
           if (event.type === 'MINT') {
             return {
-              type: 'MINT',
-              timestamp: blockMap.get(log.blockNumber) ?? 0,
+              type: 'MINT' as const,
+              timestamp,
               pusdAmount: event.pusdMinted,
               tokenAmount: event.tokenAmount,
               asset,
@@ -152,10 +96,9 @@ export function useUserHistory(): UserHistoryState {
               logIndex: event.logIndex,
             };
           }
-          // REDEEM
           return {
-            type: 'REDEEM',
-            timestamp: blockMap.get(log.blockNumber) ?? 0,
+            type: 'REDEEM' as const,
+            timestamp,
             pusdAmount: event.pusdBurned,
             tokenAmount: event.tokenAmount,
             asset,
@@ -171,13 +114,7 @@ export function useUserHistory(): UserHistoryState {
           return b.blockNumber > a.blockNumber ? 1 : -1;
         });
 
-        if (cancelled) return;
-        setState({
-          rows,
-          loading: false,
-          error: null,
-          updatedAt: Date.now(),
-        });
+        setState({ rows, loading: false, error: null, updatedAt: Date.now() });
       } catch (err) {
         if (cancelled) return;
         setState((prev) => ({
@@ -194,7 +131,7 @@ export function useUserHistory(): UserHistoryState {
       cancelled = true;
       clearInterval(id);
     };
-  }, [account, iface]);
+  }, [account]);
 
   return state;
 }

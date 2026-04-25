@@ -15,7 +15,7 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
       <div className="empty">
         <div className="empty__glyph">…</div>
         <div className="empty__title">SCANNING BLOCKS</div>
-        <div className="empty__sub">Reading Deposited / Redeemed events from the last 10,000 blocks.</div>
+        <div className="empty__sub">Reading Deposited / Redeemed events from Blockscout.</div>
       </div>
     );
   }

@@ -1128,6 +1128,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   flex-direction: column;
   gap: 10px;
   min-height: 148px;
+  position: relative;
 }
 
 .dispatch__card:nth-child(4n)      { border-right: none; }
@@ -1174,6 +1175,22 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   font-size: 10px;
   letter-spacing: 0.1em;
   color: var(--c-ink-mute);
+  margin-bottom: 16px;
+}
+
+.dispatch__time {
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  border-top: 1px solid var(--c-ink-mute);
+  border-left: 1px solid var(--c-ink-mute);
+  color: var(--c-ink-mute);
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 4px 8px;
+  pointer-events: none;
 }
 
 @media (max-width: 960px) {
@@ -1202,11 +1219,22 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 .footer__grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr);
-  gap: 40px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 40px 60px;
   align-items: start;
   padding: 0 0 32px 0;
+}
+
+.footer__brand {
+  flex: 1 1 260px;
+}
+
+.footer__cols {
+  display: flex;
+  gap: 48px;
+  flex-wrap: wrap;
+  flex-shrink: 0;
 }
 
 .footer__logo {
@@ -1286,13 +1314,8 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
 .footer__row em { font-style: italic; color: var(--c-ink-dim); }
 
-@media (max-width: 860px) {
-  .footer__grid { grid-template-columns: 1fr 1fr; }
-  .footer__brand { grid-column: span 2; }
-}
-@media (max-width: 520px) {
-  .footer__grid { grid-template-columns: 1fr; }
-  .footer__brand { grid-column: auto; }
+@media (max-width: 600px) {
+  .footer__cols { gap: 32px; }
 }
 
 /* ==========================================================================

@@ -31,54 +31,40 @@ export function Footer() {
             </p>
           </div>
 
-          <div>
-            <div className="footer__col-label">Protocol</div>
-            <ul className="footer__links">
-              <li>
-                <a href={explorerAddress(PUSD_ADDRESS)} target="_blank" rel="noreferrer">
-                  Contracts ↗
-                </a>
-              </li>
-              <li>
-                <a href="/reserves">Reserves</a>
-              </li>
-              <li>
-                <a href="/changelog">Changelog</a>
-              </li>
-              <li>
-                <a href="/history">Activity</a>
-              </li>
-            </ul>
-          </div>
+          <div className="footer__cols">
+            <div>
+              <div className="footer__col-label">Protocol</div>
+              <ul className="footer__links">
+                <li><a href="/reserves">Reserves</a></li>
+                <li><a href="/history">Activity</a></li>
+                <li>
+                  <a href="https://pusd.push.org/docs" target="_blank" rel="noreferrer">
+                    Docs ↗
+                  </a>
+                </li>
+              </ul>
+            </div>
 
-          <div>
-            <div className="footer__col-label">Elsewhere</div>
-            <ul className="footer__links">
-              <li>
-                <a href="https://pusd.push.org/docs" target="_blank" rel="noreferrer">
-                  Docs ↗
-                </a>
-              </li>
-              <li>
-                <a
-                  href="https://github.com/pushchain/push-chain-pusd"
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  GitHub ↗
-                </a>
-              </li>
-              <li>
-                <a href="https://donut.push.network" target="_blank" rel="noreferrer">
-                  Explorer ↗
-                </a>
-              </li>
-              <li>
-                <a href="https://push.org" target="_blank" rel="noreferrer">
-                  Push ↗
-                </a>
-              </li>
-            </ul>
+            <div>
+              <div className="footer__col-label">Elsewhere</div>
+              <ul className="footer__links">
+                <li>
+                  <a href="https://github.com/pushchain/push-chain-pusd" target="_blank" rel="noreferrer">
+                    GitHub ↗
+                  </a>
+                </li>
+                <li>
+                  <a href="https://donut.push.network" target="_blank" rel="noreferrer">
+                    Explorer ↗
+                  </a>
+                </li>
+                <li>
+                  <a href="https://push.org" target="_blank" rel="noreferrer">
+                    Push ↗
+                  </a>
+                </li>
+              </ul>
+            </div>
           </div>
         </div>
 
