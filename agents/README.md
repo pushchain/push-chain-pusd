@@ -1,12 +1,22 @@
 # Agents — Machine-Readable Context
 
-This directory is the entry point for AI coding agents working on the PUSD protocol.
-It contains dense, structured reference material that complements the human-readable
-design docs in [`/docs`](../docs/).
+This directory is the entry point for AI coding agents working on the
+**PUSD smart contracts**. It contains dense, structured reference
+material — storage layouts, function signatures, role tables, event
+schemas, invariant IDs — that complements the human-readable design
+docs in [`/docs`](../docs/).
 
-> **Start at the top:** if you are an agent, read [`/llms.txt`](../llms.txt) first
-> for navigation, then [`/docs/design/overview.md`](../docs/design/overview.md) for
-> product context, then the files here for per-contract specifics.
+> **Scope.** `/agents` is solidity-mechanics only. Frontend mechanics
+> live in [`/app/README.md`](../app/README.md). Don't move this
+> directory into `/app` — the two surfaces have different shapes
+> (storage slots vs. render trees), and conflating them dilutes both.
+
+> **Start at the top:** if you are an agent, the canonical entry point
+> is the served Skill at https://pusd.push.org/agents/skill/push-pusd/SKILL.md
+> (full integration guide) backed by https://pusd.push.org/llms.txt
+> (entry-point map). The files in this directory are deeper per-contract
+> mechanics — read them when you need storage layouts, role tables, or
+> invariant IDs that the Skill doesn't carry.
 
 ## Files
 

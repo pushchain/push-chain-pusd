@@ -39,7 +39,10 @@ React + Vite dApp for **Push USD (PUSD)** — a par-backed universal stablecoin 
 
 ```
 app/
-├── public/            ← static assets, favicons, og-image, 404.html
+├── public/            ← static assets served at site root
+│   ├── llms.txt                          ← agent entry point
+│   ├── agents/skill/push-pusd/SKILL.md   ← integration skill
+│   └── 404.html, favicons, og-image, …
 ├── src/
 │   ├── App.tsx        ← route shell
 │   ├── main.tsx       ← mounts <PushUniversalWalletProvider>
@@ -48,12 +51,59 @@ app/
 │   ├── pages/         ← HomePage, ConvertPage, ReservesDetailPage, DocsPage, …
 │   ├── hooks/         ← useReserves, useProtocolStats, useUserHistory, …
 │   ├── contracts/     ← addresses (env-driven), ABIs, supported token list
-│   ├── lib/           ← format, decimal, explorer, blockscout helpers
+│   ├── lib/           ← format, decimal, explorer, blockscout helpers, cascade.ts
 │   └── styles/        ← tokens.css + global.css (Direction C design system)
 ├── index.html
 ├── package.json
 └── vite.config.ts
 ```
+
+## Architecture
+
+### Provider tree
+
+```
+<StrictMode>
+  <PushChainProviders>            ← src/providers/PushChainProviders.tsx
+    <App>                         ← src/App.tsx
+      <BrowserRouter>
+        <EditorialBand />         ← top strip (live numbers)
+        <Masthead />              ← logo, nav, connect
+        <main><Routes>…</Routes></main>
+        <Footer />
+      </BrowserRouter>
+    </App>
+  </PushChainProviders>
+</StrictMode>
+```
+
+`PushUniversalWalletProvider` (inside `PushChainProviders`) is the only wallet context. Direction C tokens (cream, espresso, magenta) are bridged into the Push modal via theme overrides so the modal reads as native UI.
+
+### Read path (RPC → screen)
+
+1. A hook (`useReserves`, `useInvariants`, `useProtocolStats`, …) instantiates a fresh `ethers.JsonRpcProvider(RPC_URL)` from [`src/contracts/config.ts`](src/contracts/config.ts).
+2. It calls `PUSDManager` / `PUSD` using the JSON ABIs in [`src/contracts/`](src/contracts/).
+3. Results are normalised in [`src/lib/`](src/lib/) (decimals, address formatting, explorer URLs).
+4. The hook returns a typed object; consumers must check `error` before reading values.
+
+Reads never require a connected wallet.
+
+### Write path (UI → universal transaction)
+
+1. A page (typically [`ConvertPage`](src/pages/ConvertPage.tsx) via [`ConvertPanel`](src/components/ConvertPanel.tsx)) collects the user input.
+2. It composes a cascade of `{ to, value, data }` legs using the helpers in [`src/lib/cascade.ts`](src/lib/cascade.ts) — `buildApproveLeg`, `buildDepositLeg`, `buildRedeemLeg`.
+3. It calls `pushChainClient.universal.sendTransaction({ to: ZERO, value: 0n, data: legs, funds? })`. The `funds` field bridges the user's external-chain stable into Donut for cross-chain mints.
+4. After the tx resolves, the page invalidates / refetches the relevant hooks so the UI shows the new state.
+
+`ConvertPanel.tsx` is the canonical end-to-end reference for the write path. New write code should mirror its shape.
+
+### State
+
+No Redux / Zustand / global store. State is local to each hook and each page. Hooks self-cache via `useEffect` + `useState`-driven memoisation. There is no central refresh scheduler — pages re-fetch after a write completes.
+
+### Static deploy
+
+`yarn build` outputs `dist/`. `yarn deploy` writes a `CNAME` for `pusd.push.org` and pushes to `gh-pages` on a separate prod-deployment repo. `public/404.html` pairs with the SPA-rehydration script in `index.html` so deep links survive on static hosts that can't serve `index.html` for arbitrary paths.
 
 ## Local development
 
@@ -105,4 +155,4 @@ VITE_RPC_URL=https://evm.donut.rpc.push.org/
 - Protocol overview: [`/README.md`](../README.md)
 - Contracts: [`/contracts/README.md`](../contracts/README.md)
 - Protocol design specs: [`/docs`](../docs/)
-- Agent-facing context: [`/llms.txt`](../llms.txt)
+- Agent context (served): https://pusd.push.org/llms.txt + https://pusd.push.org/agents/skill/push-pusd/SKILL.md (sources in [`public/`](public/))
