@@ -20,11 +20,11 @@ import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useReserves, type ReserveRow } from '../hooks/useReserves';
 import {
-    explorerAddress,
-    formatAmount,
-    formatPct,
-    formatRelative,
-    truncAddr,
+  explorerAddress,
+  formatAmount,
+  formatPct,
+  formatRelative,
+  truncAddr,
 } from '../lib/format';
 
 const STATUS_LABEL: Record<string, string> = {
@@ -109,7 +109,7 @@ export default function ReservesDetailPage() {
           </h1>
           <p className="hero__lead" style={{ maxWidth: '72ch' }}>
             This page lists every token PUSDManager currently holds. Balances and statuses are
-            contract reads — not a snapshot. Refresh the page and the numbers refresh with it.
+            contract reads, not a snapshot. Refresh the page and the numbers refresh with it.
           </p>
         </div>
       </section>

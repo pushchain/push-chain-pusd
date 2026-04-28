@@ -15,10 +15,11 @@
  *   /redeem             → /convert/redeem (legacy)
  *   /reserves           ReservesDetailPage   — focused book-of-reserves view
  *   /history            HistoryPage          — user activity
+ *   /docs               DocsPage             — designed index of the protocol docs
  *   *                   → /
  *
- * /docs is an external link (pusd.push.org/docs) and is NOT handled in-app —
- * see Masthead for the anchor with target=_blank.
+ * Long-form prose still lives in /docs/*.md in the repository; DocsPage
+ * is the in-app entry point that surfaces the structure.
  */
 
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
@@ -26,6 +27,7 @@ import { EditorialBand } from './components/EditorialBand';
 import { Footer } from './components/Footer';
 import { Masthead } from './components/Masthead';
 import ConvertPage from './pages/ConvertPage';
+import DocsPage from './pages/DocsPage';
 import HistoryPage from './pages/HistoryPage';
 import HomePage from './pages/HomePage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
@@ -46,7 +48,8 @@ function App() {
             <Route path="/redeem" element={<Navigate to="/convert/redeem" replace />} />
             <Route path="/reserves" element={<ReservesDetailPage />} />
             <Route path="/history" element={<HistoryPage />} />
-            <Route path="/style-demo" element={<StyleDemoPage />} />
+            <Route path="/docs" element={<DocsPage />} />
+            {/* <Route path="/style-demo" element={<StyleDemoPage />} /> */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </main>

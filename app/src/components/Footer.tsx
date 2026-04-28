@@ -37,11 +37,7 @@ export function Footer() {
               <ul className="footer__links">
                 <li><a href="/reserves">Reserves</a></li>
                 <li><a href="/history">Activity</a></li>
-                <li>
-                  <a href="https://pusd.push.org/docs" target="_blank" rel="noreferrer">
-                    Docs ↗
-                  </a>
-                </li>
+                <li><a href="/docs">Docs</a></li>
               </ul>
             </div>
 
