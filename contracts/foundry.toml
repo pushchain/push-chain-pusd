@@ -25,6 +25,6 @@ push_testnet        = "https://evm.donut.rpc.push.org/"
 
 # This is a placeholder - BlockScout doesn't require an API key but Foundry expects a key field
 [etherscan]
-# push_testnet        = { key = "blockscout", url = "https://donut.push.network/api", chain = 42101 }
+push_testnet        = { key = "blockscout", url = "https://donut.push.network/api", chain = 42101 }
 
 # See more config options https://github.com/foundry-rs/foundry/blob/master/crates/config/README.md#all-options
