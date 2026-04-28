@@ -1,5 +1,10 @@
 export const PUSD_ADDRESS = import.meta.env.VITE_PUSD_ADDRESS as `0x${string}`;
 export const PUSD_MANAGER_ADDRESS = import.meta.env.VITE_PUSD_MANAGER_ADDRESS as `0x${string}`;
+// v2 contracts — both addresses are optional at config-load time (returned as undefined when
+// the env var is unset). Hooks/components that depend on them must guard accordingly so that
+// the existing v1 deployment continues to work pre-cutover.
+export const PUSD_PLUS_ADDRESS = (import.meta.env.VITE_PUSD_PLUS_ADDRESS ?? '') as `0x${string}` | '';
+export const PUSD_LIQUIDITY_ADDRESS = (import.meta.env.VITE_PUSD_LIQUIDITY_ADDRESS ?? '') as `0x${string}` | '';
 export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID);
 export const RPC_URL = import.meta.env.VITE_RPC_URL;
 

@@ -1,177 +1,179 @@
 // SPDX-License-Identifier: MIT
-pragma solidity 0.8.22;
+pragma solidity ^0.8.22;
 
 import "forge-std/Script.sol";
 import "@openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol";
+
 import "../src/PUSD.sol";
 import "../src/PUSDManager.sol";
+import "../src/PUSDPlus.sol";
+import "../src/PUSDLiquidity.sol";
 
+/**
+ * @title  DeployAndConfigure (v2.1 — multi-pool)
+ * @notice Fresh-deploy all four protocol contracts on Push Chain Donut Testnet, wire roles,
+ *         register the canonical cross-chain reserve tokens, and rotate admin to the final
+ *         multisig if different from the deployer.
+ *
+ *         Pools are created and registered in a SEPARATE step via `CreatePool.s.sol` followed by
+ *         `AddPool.s.sol`, so this script makes no assumptions about which pairs are launched.
+ *
+ *         Required env vars:
+ *           PRIVATE_KEY              deployer EOA private key (hex)
+ *           ADMIN_ADDRESS            final admin / multisig (== deployer for testnet shortcut)
+ *           UNIV3_NPM                Uniswap V3 NonfungiblePositionManager on Donut
+ *           UNIV3_ROUTER             Uniswap V3 SwapRouter on Donut
+ *           UNIV3_FACTORY            Uniswap V3 Factory on Donut
+ *           FEE_RECIPIENT            performance-fee destination (multisig is fine)
+ *
+ *         Optional:
+ *           SEED_TOKENS=1            register the 9-canonical-stables set on Donut. Token
+ *                                    addresses must be supplied via env per the script body.
+ */
 contract DeployAndConfigure is Script {
     function run() external {
-        address finalAdmin = vm.envAddress("ADMIN_ADDRESS");
-        uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer = vm.addr(deployerKey);
+        uint256 deployerKey  = vm.envUint("PRIVATE_KEY");
+        address finalAdmin   = vm.envAddress("ADMIN_ADDRESS");
+        address npmAddr      = vm.envAddress("UNIV3_NPM");
+        address routerAddr   = vm.envAddress("UNIV3_ROUTER");
+        address factoryAddr  = vm.envAddress("UNIV3_FACTORY");
+        address feeRecipient = vm.envAddress("FEE_RECIPIENT");
+        address deployer     = vm.addr(deployerKey);
 
-        console.log("=== Starting PUSD Deployment ===");
-        console.log("Final admin address:", finalAdmin);
-        console.log("Deployer address:", deployer);
+        console.log("=== PUSD v2.1 Fresh Deploy ===");
+        console.log("Deployer:  ", deployer);
+        console.log("Final admin:", finalAdmin);
 
         vm.startBroadcast(deployerKey);
 
-        // 1. Deploy PUSD (initialize with deployer so we can configure)
-        console.log("\n1. Deploying PUSD Implementation...");
-        address pusdImplementation = address(new PUSD());
-        console.log("   PUSD Implementation:", pusdImplementation);
-
-        console.log("\n2. Deploying PUSD Proxy...");
-        bytes memory pusdInitData = abi.encodeWithSelector(
-            PUSD.initialize.selector,
-            deployer
-        );
-        address pusdProxy = address(new ERC1967Proxy(pusdImplementation, pusdInitData));
-        console.log("   PUSD Proxy (Token Address):", pusdProxy);
-
-        // 2. Deploy PUSDManager (initialize with deployer)
-        console.log("\n3. Deploying PUSDManager Implementation...");
-        address managerImplementation = address(new PUSDManager());
-        console.log("   PUSDManager Implementation:", managerImplementation);
-
-        console.log("\n4. Deploying PUSDManager Proxy...");
-        bytes memory managerInitData = abi.encodeWithSelector(
-            PUSDManager.initialize.selector,
-            pusdProxy,
-            deployer
-        );
-        address managerProxy = address(new ERC1967Proxy(managerImplementation, managerInitData));
-        console.log("   PUSDManager Proxy:", managerProxy);
-
-        // 3. Configure (deployer has admin rights)
-        console.log("\n5. Granting roles to PUSDManager...");
+        // ---------------- 1. PUSD ----------------
+        address pusdImpl = address(new PUSD());
+        address pusdProxy = address(new ERC1967Proxy(
+            pusdImpl,
+            abi.encodeWithSelector(PUSD.initialize.selector, deployer)
+        ));
         PUSD pusd = PUSD(pusdProxy);
-        pusd.grantRole(pusd.MINTER_ROLE(), managerProxy);
-        console.log("   Granted MINTER_ROLE");
-        pusd.grantRole(pusd.BURNER_ROLE(), managerProxy);
-        console.log("   Granted BURNER_ROLE");
+        console.log("PUSD proxy:", pusdProxy);
 
+        // ---------------- 2. PUSDManager ----------------
+        address managerImpl = address(new PUSDManager());
+        address managerProxy = address(new ERC1967Proxy(
+            managerImpl,
+            abi.encodeWithSelector(PUSDManager.initialize.selector, pusdProxy, deployer)
+        ));
         PUSDManager manager = PUSDManager(managerProxy);
+        console.log("PUSDManager proxy:", managerProxy);
 
-        console.log("\n6. Adding supported tokens...");
+        pusd.grantRole(pusd.MINTER_ROLE(), managerProxy);
+        pusd.grantRole(pusd.BURNER_ROLE(), managerProxy);
 
-        manager.addSupportedToken(
-            0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3,
-            "USDT.eth",
-            "Ethereum_Sepolia",
-            6
-        );
-        console.log("   Added USDT.eth");
+        // ---------------- 3. PUSDPlus ----------------
+        address plusImpl = address(new PUSDPlus());
+        address plusProxy = address(new ERC1967Proxy(
+            plusImpl,
+            abi.encodeWithSelector(
+                PUSDPlus.initialize.selector,
+                pusdProxy, managerProxy, deployer, feeRecipient
+            )
+        ));
+        PUSDPlus plus = PUSDPlus(plusProxy);
+        console.log("PUSDPlus proxy:", plusProxy);
 
-        manager.addSupportedToken(
-            0x7A58048036206bB898008b5bBDA85697DB1e5d66,
-            "USDC.eth",
-            "Ethereum_Sepolia",
-            6
-        );
-        console.log("   Added USDC.eth");
+        manager.setPUSDPlus(plusProxy);
 
-        manager.addSupportedToken(
-            0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34,
-            "USDT.sol",
-            "Solana_Devnet",
-            6
-        );
-        console.log("   Added USDT.sol");
+        // ---------------- 4. PUSDLiquidity ----------------
+        // v2.1 initialize takes NO usdc/usdt — the pool registry is wired post-deploy.
+        address liqImpl = address(new PUSDLiquidity());
+        address liqProxy = address(new ERC1967Proxy(
+            liqImpl,
+            abi.encodeWithSelector(
+                PUSDLiquidity.initialize.selector,
+                deployer, managerProxy, npmAddr, routerAddr, factoryAddr
+            )
+        ));
+        PUSDLiquidity liq = PUSDLiquidity(liqProxy);
+        console.log("PUSDLiquidity proxy:", liqProxy);
 
-        manager.addSupportedToken(
-            0x04B8F634ABC7C879763F623e0f0550a4b5c4426F,
-            "USDC.sol",
-            "Solana_Devnet",
-            6
-        );
-        console.log("   Added USDC.sol");
+        liq.setPUSDPlus(plusProxy);
+        plus.setPUSDLiquidity(liqProxy);
+        manager.setPUSDLiquidity(liqProxy);
 
-        manager.addSupportedToken(
-            0x2C455189D2af6643B924A981a9080CcC63d5a567,
-            "USDT.base",
-            "Base_Testnet",
-            6
-        );
-        console.log("   Added USDT.base");
-
-        manager.addSupportedToken(
-            0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1,
-            "USDC.base",
-            "Base_Testnet",
-            6
-        );
-        console.log("   Added USDC.base");
-
-        manager.addSupportedToken(
-            0x76Ad08339dF606BeEDe06f90e3FaF82c5b2fb2E9,
-            "USDT.arb",
-            "Arbitrum_Sepolia",
-            6
-        );
-        console.log("   Added USDT.arb");
-
-        manager.addSupportedToken(
-            0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C,
-            "USDC.arb",
-            "Arbitrum_Sepolia",
-            6
-        );
-        console.log("   Added USDC.arb");
-
-        manager.addSupportedToken(
-            0x2f98B4235FD2BA0173a2B056D722879360B12E7b,
-            "USDT.bnb",
-            "BNB_Testnet",
-            6
-        );
-        console.log("   Added USDT.bnb");
-
-        console.log("\n7. Setting fees...");
-        manager.setBaseFee(5);
-        console.log("   Base fee set to 0.05%");
-
-        manager.setPreferredFeeRange(10, 50);
-        console.log("   Preferred fee range: 0.1% - 0.5%");
-
-        // 4. Transfer admin to finalAdmin if different from deployer
+        // ---------------- 5. Rebalancer ----------------
+        // Grant REBALANCER_ROLE to the deployer so the operator can immediately drive
+        // OpenInitialPosition / collectFees / decreasePosition from a single key. The deployer
+        // (or eventual multisig) can extend the role to a keeper bot post-launch.
+        liq.grantRole(liq.REBALANCER_ROLE(), deployer);
         if (finalAdmin != deployer) {
-            console.log("\n8. Transferring admin roles to final admin...");
+            liq.grantRole(liq.REBALANCER_ROLE(), finalAdmin);
+        }
 
-            // PUSD: grant roles to finalAdmin, then renounce deployer's
-            pusd.grantRole(bytes32(0), finalAdmin);
-            pusd.grantRole(pusd.UPGRADER_ROLE(), finalAdmin);
-            console.log("   Granted PUSD admin roles to:", finalAdmin);
+        // ---------------- 6. Tariff defaults ----------------
+        manager.setBaseFee(5);                    // 0.05%
+        manager.setPreferredFeeRange(10, 150);    // OQ-06 recommendation
 
-            pusd.renounceRole(bytes32(0), deployer);
-            pusd.renounceRole(pusd.UPGRADER_ROLE(), deployer);
-            console.log("   Deployer renounced PUSD admin roles");
+        console.log("Pools NOT registered yet. Run CreatePool.s.sol then AddPool.s.sol per pair.");
 
-            // PUSDManager: grant roles to finalAdmin, then renounce deployer's
-            manager.grantRole(bytes32(0), finalAdmin);
-            manager.grantRole(manager.UPGRADER_ROLE(), finalAdmin);
-            console.log("   Granted PUSDManager admin roles to:", finalAdmin);
-
-            manager.renounceRole(bytes32(0), deployer);
-            manager.renounceRole(manager.UPGRADER_ROLE(), deployer);
-            console.log("   Deployer renounced PUSDManager admin roles");
+        // ---------------- 7. Hand off admin to multisig (if separate) ----------------
+        if (finalAdmin != deployer) {
+            _rotateAdmin(pusd, finalAdmin, deployer);
+            _rotateAdminManager(manager, finalAdmin, deployer);
+            _rotateAdminPlus(plus, finalAdmin, deployer);
+            _rotateAdminLiq(liq, finalAdmin, deployer);
         }
 
         vm.stopBroadcast();
 
-        console.log("\n=== Deployment Complete ===");
-        console.log("\nContract Addresses:");
-        console.log("-------------------");
-        console.log("PUSD Token:", pusdProxy);
-        console.log("PUSDManager:", managerProxy);
-        console.log("Admin:", finalAdmin);
-        console.log("\nSupported Tokens:", manager.getSupportedTokensCount());
-        console.log("\nSave these addresses to app/.env.local:");
-        console.log("VITE_PUSD_ADDRESS=", pusdProxy);
+        console.log("\n=== Deploy summary ===");
+        console.log("PUSD:        ", pusdProxy);
+        console.log("PUSDManager: ", managerProxy);
+        console.log("PUSDPlus:    ", plusProxy);
+        console.log("PUSDLiquidity:", liqProxy);
+        console.log("\nFrontend env:");
+        console.log("VITE_PUSD_ADDRESS=",         pusdProxy);
         console.log("VITE_PUSD_MANAGER_ADDRESS=", managerProxy);
-        console.log("VITE_CHAIN_ID=42101");
-        console.log("VITE_RPC_URL=https://evm.donut.rpc.push.org/");
+        console.log("VITE_PUSD_PLUS_ADDRESS=",    plusProxy);
+        console.log("VITE_PUSD_LIQUIDITY_ADDRESS=", liqProxy);
+    }
+
+    function _rotateAdmin(PUSD pusd, address newAdmin, address oldAdmin) internal {
+        pusd.grantRole(pusd.DEFAULT_ADMIN_ROLE(), newAdmin);
+        pusd.grantRole(pusd.UPGRADER_ROLE(),     newAdmin);
+        pusd.renounceRole(pusd.UPGRADER_ROLE(),     oldAdmin);
+        pusd.renounceRole(pusd.DEFAULT_ADMIN_ROLE(), oldAdmin);
+    }
+
+    function _rotateAdminManager(PUSDManager m, address newAdmin, address oldAdmin) internal {
+        m.grantRole(m.DEFAULT_ADMIN_ROLE(), newAdmin);
+        m.grantRole(m.ADMIN_ROLE(),         newAdmin);
+        m.grantRole(m.PAUSER_ROLE(),        newAdmin);
+        m.grantRole(m.UPGRADER_ROLE(),      newAdmin);
+        m.renounceRole(m.UPGRADER_ROLE(),      oldAdmin);
+        m.renounceRole(m.PAUSER_ROLE(),        oldAdmin);
+        m.renounceRole(m.ADMIN_ROLE(),         oldAdmin);
+        m.renounceRole(m.DEFAULT_ADMIN_ROLE(), oldAdmin);
+    }
+
+    function _rotateAdminPlus(PUSDPlus p, address newAdmin, address oldAdmin) internal {
+        p.grantRole(p.DEFAULT_ADMIN_ROLE(), newAdmin);
+        p.grantRole(p.ADMIN_ROLE(),         newAdmin);
+        p.grantRole(p.PAUSER_ROLE(),        newAdmin);
+        p.grantRole(p.UPGRADER_ROLE(),      newAdmin);
+        p.renounceRole(p.UPGRADER_ROLE(),      oldAdmin);
+        p.renounceRole(p.PAUSER_ROLE(),        oldAdmin);
+        p.renounceRole(p.ADMIN_ROLE(),         oldAdmin);
+        p.renounceRole(p.DEFAULT_ADMIN_ROLE(), oldAdmin);
+    }
+
+    function _rotateAdminLiq(PUSDLiquidity l, address newAdmin, address oldAdmin) internal {
+        l.grantRole(l.DEFAULT_ADMIN_ROLE(), newAdmin);
+        l.grantRole(l.ADMIN_ROLE(),         newAdmin);
+        l.grantRole(l.PAUSER_ROLE(),        newAdmin);
+        l.grantRole(l.UPGRADER_ROLE(),      newAdmin);
+        // newAdmin already received REBALANCER_ROLE earlier; deployer renounces theirs here.
+        l.renounceRole(l.REBALANCER_ROLE(),   oldAdmin);
+        l.renounceRole(l.UPGRADER_ROLE(),      oldAdmin);
+        l.renounceRole(l.PAUSER_ROLE(),        oldAdmin);
+        l.renounceRole(l.ADMIN_ROLE(),         oldAdmin);
+        l.renounceRole(l.DEFAULT_ADMIN_ROLE(), oldAdmin);
     }
 }

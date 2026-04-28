@@ -1,4 +1,25 @@
-## Deployment 3 — New wallet
+################################################################################
+# v1 SUNSET NOTICE
+#
+# The deployments below are PUSD v1 contracts. They are no longer the canonical
+# protocol after the v2 fresh-deploy.
+#
+# Plain PUSD (v1) + PUSDManager (v1) keep functioning for anyone who already
+# interacted with them, but the frontend, llms.txt, and agent skill have been
+# cut over to the new v2 addresses (see "Deployment 4 — v2 fresh deploy" block
+# appended below this file once the v2 deploy script has run).
+#
+# v2 introduces:
+#   * parReserve / yieldShareReserve slicing in PUSDManager
+#   * mintForVault / redeemForVault for the PUSD+ vault path
+#   * PUSDPlus (ERC-4626 yield wrapper)
+#   * PUSDLiquidity (Uniswap V3 LP engine)
+#
+# Source of truth: docs/design/v2-contracts-plan.md and
+# /Users/Prodigy/.windsurf/plans/pusd-v2-contracts-35053d.md.
+################################################################################
+
+## Deployment 3 — New wallet (v1, SUNSET)
 Date: 2026-04-22
 Chain: Push Chain Testnet (42101)
 RPC: https://evm.donut.rpc.push.org/
@@ -22,3 +43,62 @@ Frontend env:
   VITE_RPC_URL=https://evm.donut.rpc.push.org/
 
 ---
+
+## Deployment 4 — v2 fresh deploy (LIVE)
+Date: 2026-04-29
+Chain: Push Chain Testnet (42101)
+RPC: https://evm.donut.rpc.push.org/
+Admin / Deployer / FeeRecipient: 0xA1c1AF949C5752E9714cFE54f444cE80f078069A (single-key testnet)
+
+Proxy addresses (verified on-chain, 130-byte ERC1967 runtime):
+  PUSD proxy:          0xbeA66EfaC5bB9B72f8d84f35Ee92e4170f703C29
+  PUSDManager proxy:   0x2D48aaeC25f771B39f69746647BF5C96374418e6
+  PUSDPlus proxy:      0xCE9E0778Ea6Ed61676fEca534a28c4B81c993Fe5
+  PUSDLiquidity proxy: 0x7d1c71FFC5d1f9e8FaD3D5063f9BD3694b13eA31
+
+Tariff at deploy:
+  baseFee             5    (0.05%)   ✓ verified
+  preferredFeeRange   10–150 bps
+  vaultHaircutBps     0    (set later via setVaultHaircutBps)
+  maxDeployableBps    3000 (30%)     ← PUSDLiquidity launch cap (hard ceiling 5000)
+
+Role wiring (verified on-chain):
+  PUSD.MINTER_ROLE        → PUSDManager   ✓
+  PUSD.BURNER_ROLE        → PUSDManager   ✓
+  PUSDManager.pusdPlus    = PUSDPlus      ✓
+  PUSDManager.pusdLiquidity = PUSDLiquidity ✓
+  PUSDPlus.pusdLiquidity  = PUSDLiquidity ✓
+  PUSDLiquidity.pusdPlus  = PUSDPlus      ✓
+  PUSDLiquidity.REBALANCER_ROLE → Admin (also deployer)
+  All DEFAULT_ADMIN_ROLE / ADMIN_ROLE / PAUSER_ROLE / UPGRADER_ROLE → Admin
+
+UniV3 wiring (Donut, from .env):
+  Factory: 0x81b8Bca02580C7d6b636051FDb7baAC436bFb454
+  NPM:     0xf9b3ac66aed14A2C7D9AA7696841aB6B27a6231e
+  Router:  0x5D548bB9E305AAe0d6dc6e6fdc3ab419f6aC0037
+
+EVM compatibility note:
+  Push Chain Donut runs a pre-Cancun EVM and rejects MCOPY (opcode 0x5e). Fix: pin
+  evm_version="shanghai" in foundry.toml and patch OZ 5.5.0 vendored libs to replace
+  inline `mcopy(...)` with a portable word-copy loop (28 sites across both OZ trees).
+  See Deployment 4 commit for the patch script.
+
+Pools registered with PUSDLiquidity:
+  TBD — run CreatePool.s.sol then AddPool.s.sol per pair
+
+Supported reserve tokens registered on PUSDManager:
+  TBD — run AddSupportedTokens.s.sol
+
+Frontend env (paste into app/.env.local):
+  VITE_PUSD_ADDRESS=0xbeA66EfaC5bB9B72f8d84f35Ee92e4170f703C29
+  VITE_PUSD_MANAGER_ADDRESS=0x2D48aaeC25f771B39f69746647BF5C96374418e6
+  VITE_PUSD_PLUS_ADDRESS=0xCE9E0778Ea6Ed61676fEca534a28c4B81c993Fe5
+  VITE_PUSD_LIQUIDITY_ADDRESS=0x7d1c71FFC5d1f9e8FaD3D5063f9BD3694b13eA31
+  VITE_CHAIN_ID=42101
+  VITE_RPC_URL=https://evm.donut.rpc.push.org/
+
+Explorer:
+  PUSD:          https://donut.push.network/address/0xbeA66EfaC5bB9B72f8d84f35Ee92e4170f703C29
+  PUSDManager:   https://donut.push.network/address/0x2D48aaeC25f771B39f69746647BF5C96374418e6
+  PUSDPlus:      https://donut.push.network/address/0xCE9E0778Ea6Ed61676fEca534a28c4B81c993Fe5
+  PUSDLiquidity: https://donut.push.network/address/0x7d1c71FFC5d1f9e8FaD3D5063f9BD3694b13eA31

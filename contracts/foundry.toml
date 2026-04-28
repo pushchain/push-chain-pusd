@@ -1,12 +1,23 @@
 [profile.default]
-solc_version        = "0.8.22"
+solc_version        = "0.8.28"
 optimizer           = true
 optimizer_runs      = 200
+via_ir              = true
+# Push Chain Donut testnet runs a pre-Cancun EVM and rejects MCOPY (0x5e). Pinning to
+# shanghai keeps solc from emitting Cancun-only opcodes. Verified by cast estimate failing
+# with "invalid opcode: opcode 0x5e not defined" against the default cancun build.
+evm_version         = "shanghai"
 
 src                 = "src"
 out                 = "out"
 libs                = ["lib"]
 remappings          = ["@openzeppelin/=lib/openzeppelin-contracts/"]
+
+[invariant]
+runs                = 64
+depth               = 64
+fail_on_revert      = false
+call_override       = false
 
 # Push Chain Testnet configuration
 [rpc_endpoints]

@@ -117,14 +117,19 @@ cp .env.local.example .env.local   # or create manually
 yarn dev    # http://localhost:5173
 ```
 
-Required env vars (current deployment):
+Required env vars (v2 deployment — see `contracts/deployed.txt` for live addresses):
 
 ```ini
-VITE_PUSD_ADDRESS=0x488d080e16386379561a47a4955d22001d8a9d89
-VITE_PUSD_MANAGER_ADDRESS=0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46
+VITE_PUSD_ADDRESS=0x...                # PUSDProxy
+VITE_PUSD_MANAGER_ADDRESS=0x...        # PUSDManagerProxy
+VITE_PUSD_PLUS_ADDRESS=0x...           # PUSDPlusProxy (v2 — required for /save)
+VITE_PUSD_LIQUIDITY_ADDRESS=0x...      # PUSDLiquidityProxy (v2 — used by stats/dashboards)
 VITE_CHAIN_ID=42101
 VITE_RPC_URL=https://evm.donut.rpc.push.org/
 ```
+
+The `/save` route renders a "PUSD+ NOT YET CONFIGURED" warning when `VITE_PUSD_PLUS_ADDRESS`
+is unset, so it's safe to launch the rest of the app while the v2 broadcast is pending.
 
 ## Scripts
 

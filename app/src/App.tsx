@@ -13,6 +13,9 @@
  *   /convert/redeem     ConvertPage (redeem tab)
  *   /mint               → /convert/mint   (legacy)
  *   /redeem             → /convert/redeem (legacy)
+ *   /save               → /save/deposit
+ *   /save/deposit       SavePage (deposit tab)   — PUSD+ vault deposit
+ *   /save/withdraw      SavePage (withdraw tab)  — PUSD+ vault redeem
  *   /reserves           ReservesDetailPage   — focused book-of-reserves view
  *   /history            HistoryPage          — user activity
  *   /docs               DocsPage             — designed index of the protocol docs
@@ -31,6 +34,7 @@ import DocsPage from './pages/DocsPage';
 import HistoryPage from './pages/HistoryPage';
 import HomePage from './pages/HomePage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
+import SavePage from './pages/SavePage';
 import StyleDemoPage from './pages/StyleDemoPage';
 
 function App() {
@@ -46,6 +50,8 @@ function App() {
             <Route path="/convert/:mode" element={<ConvertPage />} />
             <Route path="/mint" element={<Navigate to="/convert/mint" replace />} />
             <Route path="/redeem" element={<Navigate to="/convert/redeem" replace />} />
+            <Route path="/save" element={<Navigate to="/save/deposit" replace />} />
+            <Route path="/save/:mode" element={<SavePage />} />
             <Route path="/reserves" element={<ReservesDetailPage />} />
             <Route path="/history" element={<HistoryPage />} />
             <Route path="/docs" element={<DocsPage />} />

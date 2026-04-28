@@ -17,6 +17,7 @@ type NavItem = { to: string; label: string; end?: boolean };
 const NAV: readonly NavItem[] = [
   { to: '/',          label: 'HOME',      end: true },
   { to: '/convert',   label: 'CONVERT' },
+  { to: '/save',      label: 'SAVE' },
   { to: '/reserves',  label: 'RESERVES' },
   { to: '/history',   label: 'ACTIVITY' },
   { to: '/docs',      label: 'DOCS' },
