@@ -31,7 +31,6 @@ import DocsPage from './pages/DocsPage';
 import HistoryPage from './pages/HistoryPage';
 import HomePage from './pages/HomePage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
-import StyleDemoPage from './pages/StyleDemoPage';
 
 function App() {
   return (
