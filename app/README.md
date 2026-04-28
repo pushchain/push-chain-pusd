@@ -1,170 +1,108 @@
-# Simple Counter Frontend
+# PUSD — Frontend (`/app`)
 
-A minimal React application demonstrating how to interact with a simple counter smart contract on PushChain using the PushChain UI Kit.
+React + Vite dApp for **Push USD (PUSD)** — a par-backed universal stablecoin on Push Chain Donut Testnet. Brutalist editorial visual (Direction C). All wallet interactions go through `@pushchain/ui-kit`.
 
-👉 Full Tutorial: [Read the step-by-step guide on Push.org](https://push.org/docs/chain/tutorials/basics/tutorial-simple-counter/)
+## What this app does
 
-## Overview
+- **Mint** — deposit a supported stablecoin from any external chain (Ethereum / Solana / Base / Arbitrum / BNB testnets), receive PUSD 1:1 on Push Chain.
+- **Redeem** — burn PUSD, receive a preferred reserve token; falls back to basket payout if the preferred token is short.
+- **Reserves** — live per-token PUSDManager balances, total supply, and I-01 solvency invariant.
+- **Activity** — connected-account `Deposited` / `Redeemed` event log.
+- **Docs** — in-app developer reference at `/docs`.
 
-This frontend application provides a clean, simple interface for interacting with the Counter smart contract. It demonstrates the basics of PushChain dApp development with a focus on simplicity and clarity.
+## Stack
 
-## Features
+| Layer       | Choice                                                             |
+| ----------- | ------------------------------------------------------------------ |
+| Framework   | React 19 + Vite 7 + TypeScript 5                                   |
+| Wallet / tx | `@pushchain/ui-kit` (bundles `@pushchain/core`)                    |
+| RPC reads   | `ethers` v6 `JsonRpcProvider` against `https://evm.donut.rpc.push.org/` |
+| Routing     | `react-router-dom` v6                                              |
+| Styling     | CSS custom properties — `src/styles/tokens.css` + `global.css`    |
 
-- **Clean UI**: Minimal white background with centered layout
-- **Wallet Integration**: Connect wallet using Push Universal Account Button
-- **Real-time Counter**: Displays current counter value immediately on page load
-- **Transaction Support**: Increment counter using PushChain transactions
-- **Error Handling**: Proper error messages and loading states
-- **TypeScript**: Fully typed for better development experience
+> **Do not** add `wagmi`, `viem`, `@rainbow-me/*`, or standalone MetaMask / WalletConnect SDKs. `@pushchain/ui-kit` is the only wallet surface.
 
-## Prerequisites
+## Routes
 
-- Node.js (v16 or higher)
-- npm or yarn
-- A deployed Counter contract on PushChain testnet
+| Path              | Page                   | Purpose                                          |
+| ----------------- | ---------------------- | ------------------------------------------------ |
+| `/`               | `HomePage`             | Editorial landing — stats, dispatch feed, design principles |
+| `/convert/mint`   | `ConvertPage` (mint)   | Mint PUSD from any supported stablecoin          |
+| `/convert/redeem` | `ConvertPage` (redeem) | Redeem PUSD for a preferred token or basket      |
+| `/reserves`       | `ReservesDetailPage`   | Per-token reserve breakdown                      |
+| `/history`        | `HistoryPage`          | Connected-account event log                      |
+| `/docs`           | `DocsPage`             | In-app developer reference                       |
 
-## Installation
+`/convert`, `/mint`, `/redeem` redirect to the canonical paths above.
 
-1. Install dependencies:
-```bash
-npm install
-```
-
-2. Update the contract address in `src/App.tsx`:
-```typescript
-const COUNTER_CONTRACT_ADDRESS = 'YOUR_DEPLOYED_CONTRACT_ADDRESS'
-```
-
-3. Start the development server:
-```bash
-npm run dev
-```
-
-## Project Structure
+## Project layout
 
 ```
 app/
+├── public/            ← static assets, favicons, og-image, 404.html
 ├── src/
-│   ├── App.tsx          # Main application component
-│   ├── App.css          # Application styles
-│   ├── index.css        # Global styles
-│   └── abi/
-│       └── Counter.json # Contract ABI
-├── package.json         # Dependencies and scripts
-└── README.md           # This file
+│   ├── App.tsx        ← route shell
+│   ├── main.tsx       ← mounts <PushUniversalWalletProvider>
+│   ├── providers/     ← PushUniversalWalletProvider wrapper
+│   ├── components/    ← Masthead, Footer, ConvertPanel, DispatchFeed, …
+│   ├── pages/         ← HomePage, ConvertPage, ReservesDetailPage, DocsPage, …
+│   ├── hooks/         ← useReserves, useProtocolStats, useUserHistory, …
+│   ├── contracts/     ← addresses (env-driven), ABIs, supported token list
+│   ├── lib/           ← format, decimal, explorer, blockscout helpers
+│   └── styles/        ← tokens.css + global.css (Direction C design system)
+├── index.html
+├── package.json
+└── vite.config.ts
 ```
 
-## Key Components
+## Local development
 
-### App.tsx
+```sh
+cd app
+yarn install
 
-The main application component that includes:
+# Copy and fill in the env vars below
+cp .env.local.example .env.local   # or create manually
 
-- **PushChain Hooks**: Uses `usePushWalletContext`, `usePushChainClient`, and `usePushChain`
-- **State Management**: Manages counter value, loading states, and errors
-- **Contract Interaction**: Reads counter value and sends increment transactions
-- **UI Components**: Clean, centered layout with wallet connection and counter display
-
-### Contract Integration
-
-The app demonstrates proper PushChain integration patterns:
-
-```typescript
-// Reading contract state
-const provider = new ethers.JsonRpcProvider(
-  "https://evm.donut.rpc.push.org/"
-);
-const contract = new ethers.Contract(CONTRACT_ADDRESS, CounterABI, provider);
-const currentCount = await contract.countPC();
-
-// Sending transactions
-const tx = await pushChainClient.universal.sendTransaction({
-  to: CONTRACT_ADDRESS,
-  data: getTxData(),
-  value: BigInt(0),
-});
+yarn dev    # http://localhost:5173
 ```
 
-## Configuration
+Required env vars (current deployment):
 
-### Contract Address
-
-Update the contract address after deploying your Counter contract:
-
-```typescript
-const COUNTER_CONTRACT_ADDRESS = '0x9F95857e43d25Bb9DaFc6376055eFf63bC0887C1'
+```ini
+VITE_PUSD_ADDRESS=0x488d080e16386379561a47a4955d22001d8a9d89
+VITE_PUSD_MANAGER_ADDRESS=0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46
+VITE_CHAIN_ID=42101
+VITE_RPC_URL=https://evm.donut.rpc.push.org/
 ```
 
-### RPC Endpoint
+## Scripts
 
-The app uses the PushChain testnet RPC endpoint:
+| Command        | What it does                                   |
+| -------------- | ---------------------------------------------- |
+| `yarn dev`     | Start Vite dev server                          |
+| `yarn build`   | TypeScript typecheck + Vite production build   |
+| `yarn preview` | Serve the production build locally             |
+| `yarn lint`    | ESLint over `src/`                             |
 
-```typescript
-const provider = new ethers.JsonRpcProvider(
-  "https://evm.donut.rpc.push.org/"
-);
-```
+## Push Chain conventions
 
-## User Experience
+**Reads** use `ethers` `JsonRpcProvider` directly against the Donut RPC — no wallet required.
 
-1. **Page Load**: Counter value displays immediately
-2. **Wallet Connection**: Click "Connect Account" to connect wallet
-3. **Counter Interaction**: Click "Increment Counter" to increase the value
-4. **Real-time Updates**: Counter updates automatically after transactions
+**Writes** use `pushChainClient.universal.sendTransaction(...)`. Two write paths exist depending on the wallet type:
 
-## Development
+- **External-chain wallet** (MetaMask, Phantom, etc.) → the user gets a relay-managed Donut account that supports multicall. `approve` + `deposit` are batched into one signature: pass both legs in the `data` array with `to` set to the zero address (the multicall sentinel).
+- **Native Push EOA** (Push Wallet or a key pointed at the Donut RPC) → standard EVM EOA, no multicall. Mint takes two signed transactions (approve, then deposit). Redeem is a single transaction — `PUSDManager` burns via `BURNER_ROLE` directly.
 
-### Available Scripts
+**Cross-chain mint** — if the reserve token lives on the user's origin chain, attach a `funds: { amount, token }` param. The relay bridges the token to the user's Push Chain account before the multicall executes.
 
-- `npm run dev` - Start development server
-- `npm run build` - Build for production
-- `npm run preview` - Preview production build
+**Hook guard pattern** — every consumer of `usePushChain()` / `usePushChainClient()` must check `error → isInitialized → pushChainClient` before rendering. Silent failures are the most common bug.
 
-### Styling
+**No mock state** — all reserve and supply values come from on-chain reads. Render `—` (em-dash) for unknown values, never a placeholder number.
 
-The app uses inline styles for simplicity, with a focus on:
-- Clean white background
-- Centered layout
-- Responsive design
-- Clear visual hierarchy
+## Pointers
 
-## Dependencies
-
-Key dependencies include:
-
-- **@pushchain/ui-kit**: PushChain UI components and hooks
-- **ethers**: Ethereum library for blockchain interactions
-- **react**: Frontend framework
-- **typescript**: Type safety
-- **vite**: Build tool and development server
-
-## Troubleshooting
-
-### Common Issues
-
-1. **Contract not found**: Ensure the contract address is correct
-2. **Transaction fails**: Check wallet connection and network
-3. **Counter not updating**: Verify RPC endpoint and contract deployment
-
-### Error Messages
-
-The app provides clear error messages for:
-- Wallet connection issues
-- Transaction failures
-- Contract interaction problems
-
-## Next Steps
-
-After running this tutorial, you can:
-
-- Explore the more advanced Universal Counter tutorial
-- Add more contract functions (reset, custom increment values)
-- Enhance the UI with additional features
-- Deploy to other networks supported by PushChain
-
-## Resources
-
-- [PushChain Documentation](https://push.org/docs)
-- [PushChain UI Kit](https://www.npmjs.com/package/@pushchain/ui-kit)
-- [React Documentation](https://react.dev/)
-- [Vite Documentation](https://vitejs.dev/)
+- Protocol overview: [`/README.md`](../README.md)
+- Contracts: [`/contracts/README.md`](../contracts/README.md)
+- Protocol design specs: [`/docs`](../docs/)
+- Agent-facing context: [`/llms.txt`](../llms.txt)

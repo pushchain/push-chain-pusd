@@ -1,248 +1,60 @@
-# PUSD - Push USD
+# PUSD — Push USD
 
-PUSD (Push USD) is a pegged USD stablecoin designed to pool liquidity from USDT and USDC across all chains and honor redeems. This repository contains the smart contract implementation for the PUSD token on Push Chain.
+**PUSD** is a par-backed universal stablecoin on Push Chain. Deposit USDC or USDT from any supported chain, receive PUSD 1:1 on Push Chain. Burn PUSD, receive a reserve token back. Rules-based, redeemable, reversible.
 
-## Overview
+- **Chain:** Push Chain Donut Testnet (chain ID 42101)
+- **RPC:** `https://evm.donut.rpc.push.org/`
+- **Explorer:** [donut.push.network](https://donut.push.network)
 
-PUSD is an upgradeable ERC-20 token with the following features:
+## Live contracts
 
-- **Upgradeable**: Built using OpenZeppelin's UUPS proxy pattern
-- **Access Control**: Role-based permissions for minting, burning, and upgrading
-- **6 Decimals**: Matches USDT and USDC standard
-- **Protocol-Controlled**: Mint and burn functions restricted to authorized protocol addresses
+| Contract    | Proxy address                                |
+| ----------- | -------------------------------------------- |
+| PUSD        | `0x488d080e16386379561a47a4955d22001d8a9d89` |
+| PUSDManager | `0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46` |
 
-## Architecture
+Both are UUPS proxies. Historical deployments are in [`contracts/deployed.txt`](contracts/deployed.txt).
 
-The contract uses:
-- **UUPS Proxy Pattern**: For upgradeability without changing the proxy address
-- **Access Control**: Three main roles:
-  - `MINTER_ROLE`: Can mint new PUSD tokens
-  - `BURNER_ROLE`: Can burn PUSD tokens
-  - `UPGRADER_ROLE`: Can upgrade the implementation contract
-  - `DEFAULT_ADMIN_ROLE`: Can manage all roles
-
-## Prerequisites
-
-- [Foundry](https://book.getfoundry.sh/getting-started/installation)
-- Git
-
-## Installation
-
-### 1. Install Foundry
-
-```bash
-curl -L https://foundry.paradigm.xyz | bash
-foundryup
-```
-
-### 2. Clone and Setup
-
-```bash
-git clone <repository-url>
-cd push-chain-pusd
-```
-
-### 3. Install Dependencies
-
-```bash
-forge install OpenZeppelin/openzeppelin-contracts
-forge install OpenZeppelin/openzeppelin-contracts-upgradeable
-forge install foundry-rs/forge-std
-```
-
-### 4. Build
-
-```bash
-forge build
-```
-
-## Testing
-
-Run the test suite:
-
-```bash
-forge test
-```
-
-Run tests with verbosity:
-
-```bash
-forge test -vvv
-```
-
-Run tests with gas reporting:
-
-```bash
-forge test --gas-report
-```
-
-## Deployment
-
-### 1. Set up Environment
-
-Copy the example environment file:
-
-```bash
-cp .env.example .env
-```
-
-Edit `.env` and set your admin address:
-
-```
-ADMIN_ADDRESS=0xYourAdminAddress
-```
-
-### 2. Set up Deployer Wallet
-
-Following best security practices, use Foundry's wallet management:
-
-```bash
-cast wallet import deployer --interactive
-```
-
-You'll be prompted to enter your private key and create a password to encrypt it.
-
-### 3. Get Testnet Tokens
-
-Ensure you have testnet tokens from the [Push Chain faucet](https://faucet.push.org/).
-
-### 4. Deploy to Push Chain Testnet
-
-```bash
-forge script script/DeployPUSD.s.sol:DeployPUSD \
-  --rpc-url push_testnet \
-  --chain 42101 \
-  --account deployer \
-  --broadcast
-```
-
-### 5. Verify Contract
-
-Verify the implementation contract:
-
-```bash
-forge verify-contract \
-  --chain 42101 \
-  --verifier blockscout \
-  <IMPLEMENTATION_ADDRESS> \
-  src/PUSD.sol:PUSD
-```
-
-Verify the proxy contract:
-
-```bash
-forge verify-contract \
-  --chain 42101 \
-  --verifier blockscout \
-  <PROXY_ADDRESS> \
-  @openzeppelin/contracts/proxy/ERC1967/ERC1967Proxy.sol:ERC1967Proxy
-```
-
-## Contract Interaction
-
-### Mint Tokens
-
-```bash
-cast send <PROXY_ADDRESS> \
-  "mint(address,uint256)" \
-  <RECIPIENT_ADDRESS> \
-  <AMOUNT> \
-  --rpc-url push_testnet \
-  --account deployer
-```
-
-### Burn Tokens
-
-```bash
-cast send <PROXY_ADDRESS> \
-  "burn(address,uint256)" \
-  <FROM_ADDRESS> \
-  <AMOUNT> \
-  --rpc-url push_testnet \
-  --account deployer
-```
-
-### Grant Minter Role
-
-```bash
-cast send <PROXY_ADDRESS> \
-  "grantRole(bytes32,address)" \
-  $(cast keccak "MINTER_ROLE") \
-  <NEW_MINTER_ADDRESS> \
-  --rpc-url push_testnet \
-  --account deployer
-```
-
-### Check Balance
-
-```bash
-cast call <PROXY_ADDRESS> \
-  "balanceOf(address)(uint256)" \
-  <ADDRESS> \
-  --rpc-url push_testnet
-```
-
-## Upgrading
-
-To upgrade the contract:
-
-1. Deploy new implementation:
-
-```solidity
-// Create new implementation contract (e.g., PUSDv2.sol)
-forge create src/PUSDv2.sol:PUSDv2 \
-  --rpc-url push_testnet \
-  --account deployer
-```
-
-2. Upgrade the proxy:
-
-```bash
-cast send <PROXY_ADDRESS> \
-  "upgradeToAndCall(address,bytes)" \
-  <NEW_IMPLEMENTATION_ADDRESS> \
-  0x \
-  --rpc-url push_testnet \
-  --account deployer
-```
-
-## Security Considerations
-
-- Never commit private keys or `.env` files
-- Use hardware wallets or secure key management for mainnet deployments
-- Always test upgrades on testnet first
-- Ensure proper role management and access control
-- Consider multi-sig for admin roles in production
-
-## Project Structure
+## Repository layout
 
 ```
 push-chain-pusd/
-├── src/
-│   └── PUSD.sol              # Main PUSD contract
-├── script/
-│   └── DeployPUSD.s.sol      # Deployment script
-├── test/
-│   └── PUSD.t.sol            # Test suite
-├── foundry.toml              # Foundry configuration
-├── remappings.txt            # Import remappings
-└── README.md                 # This file
+├── app/          ← React + Vite dApp  (see app/README.md)
+├── contracts/    ← Foundry contracts  (see contracts/README.md)
+├── docs/         ← Human-readable protocol design specs
+├── agents/       ← Machine-readable contract context for AI agents
+├── scripts/      ← Utility scripts
+├── llms.txt      ← Agent-facing entry point (root)
+└── DEPLOYMENT.md ← Deployment runbook
 ```
 
-## Next Steps
+## How it works
 
-- Implement liquidity pooling mechanism for USDT/USDC
-- Add cross-chain bridge integration
-- Implement redemption logic
-- Add pause/unpause functionality for emergency situations
-- Implement rate limiting for mints/burns
-- Add comprehensive event logging for off-chain tracking
+1. **Mint** — call `PUSDManager.deposit(token, amount, recipient)` after approving the reserve token. PUSD is minted 1:1 minus any `surplusHaircutBps` (currently 0%).
+2. **Redeem** — call `PUSDManager.redeem(pusdAmount, preferredAsset, allowBasket, recipient)`. PUSDManager holds `BURNER_ROLE` and burns directly — no PUSD approval needed from the caller. A `baseFee` (currently 5 bps) is deducted.
+3. **Basket fallback** — if the preferred asset is short on liquidity and `allowBasket = true`, the manager pays out a proportional basket of all reserve tokens instead of reverting.
+
+Cross-chain mints and redeems (user holds the stablecoin on an external chain) are handled by the Push Chain universal transaction layer — see [`app/README.md`](app/README.md) for the SDK call shapes.
+
+## Quick start
+
+```bash
+# Contracts
+cd contracts
+forge build
+forge test
+
+# dApp
+cd app
+yarn install
+yarn dev        # http://localhost:5173
+```
 
 ## Resources
 
-- [Push Chain Documentation](https://docs.push.org/chain)
-- [Foundry Book](https://book.getfoundry.sh/)
-- [OpenZeppelin Upgradeable Contracts](https://docs.openzeppelin.com/contracts/4.x/upgradeable)
+- [Push Chain docs](https://docs.push.org/chain)
+- [Foundry book](https://book.getfoundry.sh/)
+- [OpenZeppelin upgradeable contracts](https://docs.openzeppelin.com/contracts/4.x/upgradeable)
 
 ## License
 
