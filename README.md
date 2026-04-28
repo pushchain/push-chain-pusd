@@ -24,9 +24,26 @@ push-chain-pusd/
 ├── docs/         ← Human-readable protocol design specs
 ├── agents/       ← Machine-readable contract context for AI agents
 ├── scripts/      ← Utility scripts
-├── llms.txt      ← Agent-facing entry point (root)
 └── DEPLOYMENT.md ← Deployment runbook
 ```
+
+## For AI agents
+
+Agent context is served, not stored in the repo. Point any LLM-based
+coding tool at the deployed entry points:
+
+- **llms.txt:** https://pusd.push.org/llms.txt
+- **Skill (full integration guide):** https://pusd.push.org/agents/skill/push-pusd/SKILL.md
+
+The Skill is self-contained — addresses, both write paths, every code
+example, ABI fragments, common mistakes. One prompt is enough:
+
+```
+Read https://pusd.push.org/agents/skill/push-pusd/SKILL.md and
+integrate PUSD mint + redeem into my dApp.
+```
+
+The source for both files lives in [`app/public/`](app/public/).
 
 ## How it works
 

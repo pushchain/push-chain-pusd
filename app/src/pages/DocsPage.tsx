@@ -229,7 +229,7 @@ function SubChapter({
           gridTemplateColumns: "72px 1fr",
           gap: 16,
           alignItems: "baseline",
-          borderTop: "2px solid var(--c-ink)",
+          borderTop: "1px solid var(--c-ink)",
           paddingTop: 18,
         }}
       >
@@ -375,6 +375,7 @@ export default function DocsPage() {
               { label: "On-Chain Contract Call", href: "#on-chain" },
               { label: "ABI Fragments", href: "#abi" },
               { label: "Quick Ref", href: "#quick-ref" },
+              { label: "For AI · LLMs.txt", href: "#machine-readable" },
             ].map(({ label, href }) => (
               <a
                 key={href}
@@ -1199,11 +1200,7 @@ const REDEEM_ABI = [{ type: 'function', name: 'redeem', stateMutability: 'nonpay
           </div>
 
           {/* ── Quick reference ──────────────────────────────────────────── */}
-          <div
-            className="docs__chapter"
-            id="quick-ref"
-            style={{ borderBottom: "none" }}
-          >
+          <div className="docs__chapter" id="quick-ref">
             <div className="docs__chapter-head">
               <div className="docs__chapter-num">v.</div>
               <div className="docs__chapter-meta">
@@ -1284,41 +1281,126 @@ const REDEEM_ABI = [{ type: 'function', name: 'redeem', stateMutability: 'nonpay
               ]}
             />
 
-            {/* footer links */}
-            <div
+          </div>
+
+          {/* ── vi. Machine Readable ──────────────────────────────────────── */}
+          <div
+            className="docs__chapter"
+            id="machine-readable"
+            style={{ borderBottom: "none" }}
+          >
+            <div className="docs__chapter-head">
+              <div className="docs__chapter-num">vi.</div>
+              <div className="docs__chapter-meta">
+                <h2 className="docs__chapter-title">
+                  Machine Readable · LLMs.txt for AI
+                </h2>
+                <p className="docs__chapter-lede">
+                  Two artifacts ship with this app for AI coding agents:
+                  a <strong>Skill</strong> (a single self-contained
+                  integration guide an agent can drop into its toolkit)
+                  and an <Ic>llms.txt</Ic> map (an entry point that
+                  points agents at every other agent-readable resource
+                  in the repo).
+                </p>
+              </div>
+            </div>
+
+            <Note>
+              Point your AI coding assistant (Claude Code, Cursor, Cline,
+              etc.) at the URLs below. The Skill is self-contained —
+              every address, every code path, every gotcha lives inside
+              it. <Ic>llms.txt</Ic> is the agent's table of contents for
+              the broader repo.
+            </Note>
+
+            <SubChapter
+              num="vi.i"
+              title="Agent Skill"
+              lede="A single markdown file an LLM can ingest to get
+                everything it needs to integrate PUSD: addresses, two
+                write paths, every code example, ABI fragments, common
+                mistakes."
+            />
+            <Lead>
+              Source of truth for every example you've just read.
+              Mirrors chapters i-v above; updated whenever those
+              chapters change.
+            </Lead>
+            <Block lang="url">
+              {`https://pusd.push.org/agents/skill/push-pusd/SKILL.md`}
+            </Block>
+            <p
               style={{
-                marginTop: 40,
-                paddingTop: 20,
-                borderTop: "var(--rule-thin)",
-                display: "flex",
-                gap: 20,
-                flexWrap: "wrap",
+                fontFamily: "var(--f-mono)",
+                fontSize: 12,
+                lineHeight: 1.65,
+                color: "var(--c-ink-dim)",
+                margin: "8px 0 0",
               }}
             >
-              {[
-                { label: "Agent skill", href: "/agents/skill/push-pusd" },
-                {
-                  label: "Machine-readable",
-                  href: "/agents/docs/developer.md",
-                },
-                {
-                  label: "Source",
-                  href: "https://github.com/pushchain/push-chain-pusd",
-                },
-                { label: "Explorer", href: "https://explorer.donut.push.org/" },
-              ].map(({ label, href }) => (
-                <a
-                  key={label}
-                  href={href}
-                  target={href.startsWith("http") ? "_blank" : undefined}
-                  rel={href.startsWith("http") ? "noreferrer" : undefined}
-                  className="docs__entry-meta"
-                  style={{ textDecoration: "none" }}
-                >
-                  {label} ↗
-                </a>
-              ))}
-            </div>
+              <a
+                href="/agents/skill/push-pusd/SKILL.md"
+                style={{ color: "var(--c-magenta)" }}
+              >
+                Open the Skill →
+              </a>
+            </p>
+
+            <SubChapter
+              num="vi.ii"
+              title="LLMs.txt"
+              lede="A served entry-point map at the site root. Smaller
+                than the Skill -> it just tells an agent where the
+                Skill, repo, and design docs live. Useful when the
+                agent landed on the domain but doesn't yet know what's
+                here."
+            />
+            <Lead>
+              One file, one URL. Following the{" "}
+              <a
+                href="https://llmstxt.org/"
+                target="_blank"
+                rel="noreferrer"
+                style={{ color: "var(--c-magenta)" }}
+              >
+                llms.txt convention
+              </a>
+              , agents will fetch <Ic>/llms.txt</Ic> by default.
+            </Lead>
+            <Block lang="url">{`https://pusd.push.org/llms.txt`}</Block>
+            <p
+              style={{
+                fontFamily: "var(--f-mono)",
+                fontSize: 12,
+                lineHeight: 1.65,
+                color: "var(--c-ink-dim)",
+                margin: "8px 0 0",
+              }}
+            >
+              <a
+                href="/llms.txt"
+                style={{ color: "var(--c-magenta)" }}
+              >
+                Open LLMs.txt →
+              </a>
+            </p>
+
+            <SubChapter
+              num="vi.iii"
+              title="How to use them"
+              lede="One-line prompts you can paste into any LLM-backed
+                coding tool to get it productive on PUSD instantly."
+            />
+            <Block lang="prompt">
+              {`# Fastest path -- the Skill is self-contained:
+"Read https://pusd.push.org/agents/skill/push-pusd/SKILL.md
+ and integrate PUSD mint + redeem into my dApp."
+
+# Or start at the entry-point map:
+"Read https://pusd.push.org/llms.txt and follow the link
+ to the Skill."`}
+            </Block>
           </div>
         </div>
       </section>

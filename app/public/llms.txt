@@ -1,0 +1,79 @@
+# PUSD — Push USD
+
+> Par-backed USD stablecoin on Push Chain. 6-decimal ERC-20, minted by
+> depositing USDC/USDT from any supported chain (Ethereum, Base,
+> Arbitrum, Solana, BNB), redeemed back to any reserve token. Live on
+> Push Chain Donut Testnet (chain ID 42101).
+>
+> This file is served at https://pusd.push.org/llms.txt and is the
+> agent entry point for everything PUSD: integration, contracts,
+> design.
+
+## I want to integrate PUSD
+
+Read the Skill — it's the single, self-contained integration guide.
+Mint and redeem code for both off-chain SDK paths and on-chain
+Solidity, plus addresses, fees, ABI fragments, and gotchas:
+
+- **Skill (markdown):** https://pusd.push.org/agents/skill/push-pusd/SKILL.md
+- **Human-rendered version:** https://pusd.push.org/docs#developer
+
+## Live deployment (Donut Testnet)
+
+| Field      | Value                                        |
+| ---------- | -------------------------------------------- |
+| Chain      | Push Chain Donut Testnet (chain ID 42101)    |
+| RPC        | `https://evm.donut.rpc.push.org/`            |
+| Explorer   | `https://donut.push.network`                 |
+| PUSD       | `0x488d080e16386379561a47a4955d22001d8a9d89` |
+| PUSDManager | `0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46` |
+
+Always interact with the **proxy** addresses. Implementations change
+on upgrade; the proxies do not.
+
+## The two integration paths (the architectural fact every integrator needs)
+
+PUSD writes go through `pushChainClient.universal.sendTransaction(...)`.
+The shape of the payload depends on the wallet that signed in:
+
+- **Path A · External-chain wallet** (MetaMask on Sepolia, Phantom on
+  Solana, etc.) — the user gets a relay-managed account on Donut that
+  supports multicall. Mint = approve + deposit batched in one signed
+  multicall. Optional `funds` param bridges the reserve into the
+  user's Push Chain account first.
+- **Path B · Native Push EOA** (Push Wallet, or any private key
+  signing directly against the Donut RPC) — vanilla EVM EOA, no
+  multicall. Mint takes two separate signatures.
+
+**Redeem is one signed call on either path.** `PUSDManager` holds
+`BURNER_ROLE` on PUSD and burns `msg.sender` directly — no PUSD
+approval is required.
+
+Full code for each path lives in the Skill.
+
+## How to use this with your AI coding tool
+
+```
+Read https://pusd.push.org/agents/skill/push-pusd/SKILL.md and
+integrate PUSD mint + redeem into my dApp.
+```
+
+That's the whole prompt. The Skill is self-contained: every address,
+every code path, every gotcha lives inside it.
+
+## Source code
+
+The full source — frontend, contracts, design docs, deploy scripts —
+lives in the open-source repo. Use it when you need to read the actual
+contracts, modify the dApp, or deploy your own instance:
+
+- **Repo:** https://github.com/pushchain/push-chain-pusd
+- **Solidity:** https://github.com/pushchain/push-chain-pusd/tree/main/contracts/src
+- **React app:** https://github.com/pushchain/push-chain-pusd/tree/main/app
+- **Design docs and ADRs:** https://github.com/pushchain/push-chain-pusd/tree/main/docs
+
+## When the Skill and the Solidity disagree
+
+The Solidity in `contracts/src/` is ground truth. Then tests in
+`contracts/test/`. The Skill is downstream of those — file an issue
+on the repo if you find drift.
