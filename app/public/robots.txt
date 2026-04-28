@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+
+# AI agent entry point
+LLMs: https://pusd.push.org/llms.txt
