@@ -442,8 +442,8 @@ PUSDManager.sol — reserve orchestrator, UUPS proxy
             <DevTable
               head={["Contract", "Proxy address"]}
               rows={[
-                ["PUSD", "`0x488d080e16386379561a47a4955d22001d8a9d89`"],
-                ["PUSDManager", "`0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46`"],
+                ["PUSD", "`0x488d080e16386379561a47A4955D22001d8A9D89`"],
+                ["PUSDManager", "`0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46`"],
               ]}
             />
             <p className="docs__entry-meta" style={{ marginTop: 6 }}>
@@ -1053,7 +1053,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PUSDMinter {
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46);
+        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
     /// @notice Pull \`amount\` of \`token\` from caller, deposit it into
     ///         PUSDManager, mint PUSD straight to \`recipient\`.
@@ -1091,7 +1091,7 @@ contract PUSDMinter {
     IPUSD        public constant PUSD =
         IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46);
+        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
     /// @notice Pull PUSD from the caller, redeem it for \`preferredAsset\`,
     ///         deliver the proceeds to \`recipient\`.
@@ -1135,7 +1135,7 @@ contract PUSDMinter {
     IPUSD        public constant PUSD =
         IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46);
+        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
     /// Quote how much PUSD a user would get from depositing \`amount\` of
     /// \`token\`, accounting for the manager's base fee (in basis points).

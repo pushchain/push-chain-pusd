@@ -10,8 +10,8 @@
 
 | Contract    | Proxy address                                |
 | ----------- | -------------------------------------------- |
-| PUSD        | `0x488d080e16386379561a47a4955d22001d8a9d89` |
-| PUSDManager | `0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46` |
+| PUSD        | `0x488d080e16386379561a47A4955D22001d8A9D89` |
+| PUSDManager | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
 
 Both are UUPS proxies. Historical deployments are in [`contracts/deployed.txt`](contracts/deployed.txt).
 

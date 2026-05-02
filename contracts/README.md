@@ -6,8 +6,8 @@ Foundry project containing the two on-chain contracts that power PUSD on Push Ch
 
 | File                  | Proxy address                                | Purpose                                      |
 | --------------------- | -------------------------------------------- | -------------------------------------------- |
-| `src/PUSD.sol`        | `0x488d080e16386379561a47a4955d22001d8a9d89` | ERC-20 token, 6 decimals, UUPS proxy         |
-| `src/PUSDManager.sol` | `0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46` | Reserve orchestrator, UUPS proxy             |
+| `src/PUSD.sol`        | `0x488d080e16386379561a47A4955D22001d8A9D89` | ERC-20 token, 6 decimals, UUPS proxy         |
+| `src/PUSDManager.sol` | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` | Reserve orchestrator, UUPS proxy             |
 
 Both verified on [donut.push.network](https://donut.push.network). Historical deployments in [`deployed.txt`](deployed.txt).
 
@@ -109,17 +109,17 @@ forge verify-contract \
 
 ```bash
 # Check PUSD total supply (6 decimals)
-cast call 0x488d080e16386379561a47a4955d22001d8a9d89 \
+cast call 0x488d080e16386379561a47A4955D22001d8A9D89 \
   "totalSupply()(uint256)" \
   --rpc-url https://evm.donut.rpc.push.org/
 
 # Check base fee (bps)
-cast call 0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46 \
+cast call 0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46 \
   "baseFee()(uint256)" \
   --rpc-url https://evm.donut.rpc.push.org/
 
 # Check token status (0=REMOVED 1=ENABLED 2=REDEEM_ONLY 3=EMERGENCY_REDEEM)
-cast call 0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46 \
+cast call 0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46 \
   "getTokenStatus(address)(uint8)" \
   <TOKEN_ADDRESS> \
   --rpc-url https://evm.donut.rpc.push.org/

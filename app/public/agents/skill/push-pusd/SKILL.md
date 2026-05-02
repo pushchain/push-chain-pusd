@@ -7,8 +7,8 @@ chain_id: 42101
 rpc: https://evm.donut.rpc.push.org/
 explorer: https://donut.push.network
 contracts:
-  pusd: '0x488d080e16386379561a47a4955d22001d8a9d89'
-  pusd_manager: '0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46'
+  pusd: '0x488d080e16386379561a47A4955D22001d8A9D89'
+  pusd_manager: '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46'
 packages:
   frontend: '@pushchain/ui-kit'
   backend: '@pushchain/core'
@@ -50,8 +50,8 @@ PUSDManager.sol ─ reserve orchestrator, UUPS proxy
 
 | Contract    | Proxy                                        |
 | ----------- | -------------------------------------------- |
-| PUSD        | `0x488d080e16386379561a47a4955d22001d8a9d89` |
-| PUSDManager | `0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46` |
+| PUSD        | `0x488d080e16386379561a47A4955D22001d8A9D89` |
+| PUSDManager | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
 
 RPC: `https://evm.donut.rpc.push.org/` — Explorer: `https://donut.push.network`
 
@@ -157,7 +157,7 @@ function MintButton() {
     const amount = h.parseUnits('100', 6);
     const recipient = pushChainClient.universal.account.address as `0x${string}`;
     const TOKEN = '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3' as const; // USDT-Sepolia on Donut
-    const MANAGER = '0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46' as const;
+    const MANAGER = '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46' as const;
 
     const multicall = [
       { to: TOKEN, value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
@@ -292,7 +292,7 @@ await (await pc.universal.sendTransaction({
 ### React — single call
 
 ```tsx
-const MANAGER = '0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46' as const;
+const MANAGER = '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46' as const;
 const TOKEN = '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3' as const; // the asset you want back
 
 const redeem = async () => {
@@ -430,7 +430,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PUSDMinter {
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46);
+        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
     /// @notice Pull `amount` of `token` from caller, deposit it into
     ///         PUSDManager, mint PUSD straight to `recipient`.
@@ -451,7 +451,7 @@ contract PUSDRedeemer {
     IPUSD        public constant PUSD =
         IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46);
+        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
     function redeemFor(
         uint256 pusdAmount,
@@ -475,7 +475,7 @@ contract PUSDReader {
     IPUSD        public constant PUSD =
         IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7a24EEa43a1095e9Dc652Ab9Cba156A93eD5Ed46);
+        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
     /// Quote how much PUSD a user would get from depositing `amount` of `token`,
     /// accounting for the manager's base fee in basis points. 6-dec math.

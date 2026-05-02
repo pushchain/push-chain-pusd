@@ -40,7 +40,7 @@ The frontend is located in the `app/` directory and uses:
 ### Environment Variables
 Create `app/.env.local`:
 ```
-VITE_PUSD_ADDRESS=0x5eb3Bc0a489C5A8288765d2336659EbCA68FCd00
+VITE_PUSD_ADDRESS=0x488d080e16386379561a47A4955D22001d8A9D89
 VITE_PUSD_MANAGER_ADDRESS=0x809d550fca64d94Bd9F66E60752A544199cfAC3D
 VITE_CHAIN_ID=42101
 VITE_RPC_URL=https://evm.donut.rpc.push.org/
