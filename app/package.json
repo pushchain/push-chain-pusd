@@ -14,7 +14,7 @@
     "@fontsource/fraunces": "^5.1.0",
     "@fontsource/ibm-plex-mono": "^5.1.0",
     "@fontsource/inter": "^5.1.0",
-    "@pushchain/ui-kit": "^5.2.7",
+    "@pushchain/ui-kit": "^5.2.8",
     "buffer": "^6.0.3",
     "ethers": "6.16.0",
     "react": "^19.1.1",
