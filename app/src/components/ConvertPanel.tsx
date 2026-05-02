@@ -203,6 +203,24 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const [recipientTouched, setRecipientTouched] = useState(false);
   const needsExternalRecipient = mode === 'redeem' && isExternalRoute;
 
+  // --- mint recipient ---------------------------------------------------
+  // Mint always lands on Push Chain (an EVM address). The contract supports
+  // depositing to an arbitrary recipient; default to the connected UEA so
+  // the common case is friction-free, and let advanced users override.
+  const [mintRecipient, setMintRecipient] = useState('');
+  const [mintRecipientTouched, setMintRecipientTouched] = useState(false);
+
+  useEffect(() => {
+    if (mintRecipientTouched) return;
+    setMintRecipient(account ?? '');
+  }, [account, mintRecipientTouched]);
+
+  // Reset touched flag when mode/account changes — switching tabs or accounts
+  // should restore the auto-derived default.
+  useEffect(() => { setMintRecipientTouched(false); }, [mode, account]);
+
+  const mintRecipientValid = isValidAddress(mintRecipient);
+
   // Auto-derive the default recipient for redeem based on three branches:
   //  1. Push route   → account (UEA)
   //  2. Same chain   → originAddress
@@ -265,15 +283,20 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     if (!pushChainClient || !PushChain || !account) return;
     if (!amountValid || exceedsBalance || solventHalt || externalBlocked || reserveShortfall) return;
     if (mode === 'redeem' && !externalRecipientValid) return;
+    if (mode === 'mint' && !mintRecipientValid) return;
 
     const helpers = PushChain.utils.helpers as unknown as HelpersLike;
-    // For external-route redeems, the UEA holds the reserve between hops of the
-    // cascade; the final recipient is delivered by the outbound leg. For push
-    // route redeems, the unified recipient field IS the direct destination on
-    // Push Chain (defaults to UEA).
-    const target = (
-      mode === 'redeem' && !isExternalRoute ? externalRecipient : account
-    ) as `0x${string}`;
+    // Three branches for the on-chain "recipient" arg to deposit/redeem:
+    //   - mint                        → mintRecipient (Push Chain EVM, defaults to UEA)
+    //   - redeem · push route         → externalRecipient (Push Chain EVM, defaults to UEA)
+    //   - redeem · external route     → account (UEA holds the reserve between hops; the
+    //                                   outbound leg's `to` field carries the real
+    //                                   external-chain destination)
+    const target = (() => {
+      if (mode === 'mint') return mintRecipient;
+      if (!isExternalRoute) return externalRecipient;
+      return account;
+    })() as `0x${string}`;
 
     setStage({ kind: 'preparing' });
     setProgressNote('');
@@ -483,6 +506,9 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     if (mode === 'redeem' && account && !externalRecipientValid) {
       return `INVALID ${isExternalRoute ? selected.chainShort : 'PUSH CHAIN'} RECIPIENT`;
     }
+    if (mode === 'mint' && account && !mintRecipientValid) {
+      return 'INVALID PUSH CHAIN RECIPIENT';
+    }
     const amt = formatAmount(parsedAmount, decimals, { maxFractionDigits: 2 });
     if (mode === 'mint') return `MINT ${amt} PUSD →`;
     return needsExternalRecipient
@@ -498,7 +524,8 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     solventHalt ||
     externalBlocked ||
     reserveShortfall ||
-    (mode === 'redeem' && !!account && !externalRecipientValid);
+    (mode === 'redeem' && !!account && !externalRecipientValid) ||
+    (mode === 'mint' && !!account && !mintRecipientValid);
 
   // --- render helpers ----------------------------------------------------
   const title = advanced ? (mode === 'mint' ? 'Mint PUSD' : 'Redeem PUSD') : 'Convert.';
@@ -787,6 +814,52 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             </div>
           )}
         </div>
+
+        {/* DESTINATION + recipient — mint. Destination chain is fixed
+            (Push Chain), so it lives inline with the recipient input
+            instead of in a separate header row. */}
+        {mode === 'mint' && account && (
+          <div>
+            <div className="input-head">
+              <span>DESTINATION (PUSH CHAIN)</span>
+              {mintRecipientTouched && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMintRecipientTouched(false);
+                    setMintRecipient(account);
+                  }}
+                  disabled={submitting}
+                >
+                  USE MY ADDRESS
+                </button>
+              )}
+            </div>
+            <div className="input-row">
+              <input
+                type="text"
+                placeholder="0x…"
+                value={mintRecipient}
+                onChange={(e) => {
+                  setMintRecipientTouched(true);
+                  setMintRecipient(e.target.value.trim());
+                }}
+                disabled={submitting}
+                spellCheck={false}
+              />
+              {!mintRecipientTouched && mintRecipient && (
+                <span className="input-row__hint">
+                  Your connected wallet on Push Chain. Change to mint to a different address.
+                </span>
+              )}
+              {mintRecipient && !mintRecipientValid && (
+                <span className="input-row__hint input-row__hint--warn">
+                  ✕ Not a valid EVM address for Push Chain.
+                </span>
+              )}
+            </div>
+          </div>
+        )}
 
         {reserveShortfall && mode === 'redeem' && (
           <div className="feedback feedback--warn">
