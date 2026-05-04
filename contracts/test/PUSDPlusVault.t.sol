@@ -757,6 +757,51 @@ contract PUSDPlusVaultTest is Test {
     }
 
     // -----------------------------------------------------------------
+    // UUPS upgrade — confirms the deploy script's upgrade flow works on
+    // the deployed PUSDManager (v2 src is the current impl; we upgrade to a
+    // freshly-deployed copy of the same source as a smoke test for the
+    // upgradeToAndCall mechanics + storage preservation).
+    // -----------------------------------------------------------------
+
+    function testManagerUpgradePreservesState() public {
+        // Pre-upgrade: alice has 1k PUSD+. State to preserve includes
+        // plusVault, feeExempt, accruedHaircut, supportedTokens, etc.
+        vm.startPrank(alice);
+        usdc.approve(address(manager), 1_000e6);
+        manager.depositToPlus(address(usdc), 1_000e6, alice);
+        vm.stopPrank();
+
+        address plusVaultBefore = manager.plusVault();
+        bool feeExemptBefore    = manager.feeExempt(address(vault));
+        uint256 supplyBefore    = vault.totalSupply();
+
+        // Deploy a new impl (same source) and upgrade the proxy. Caller is
+        // `admin` who holds UPGRADER_ROLE in setUp().
+        PUSDManager newImpl = new PUSDManager();
+        vm.prank(admin);
+        (bool ok, ) = address(manager).call(
+            abi.encodeWithSignature(
+                "upgradeToAndCall(address,bytes)",
+                address(newImpl),
+                bytes("")
+            )
+        );
+        assertTrue(ok, "upgrade failed");
+
+        // Post-upgrade: storage preserved.
+        assertEq(manager.plusVault(), plusVaultBefore);
+        assertEq(manager.feeExempt(address(vault)), feeExemptBefore);
+        assertEq(vault.totalSupply(), supplyBefore);
+
+        // And the v2 surface still works after the upgrade.
+        vm.startPrank(alice);
+        usdc.approve(address(manager), 100e6);
+        manager.depositToPlus(address(usdc), 100e6, alice);
+        vm.stopPrank();
+        assertEq(vault.balanceOf(alice), 1_100e6);
+    }
+
+    // -----------------------------------------------------------------
     // Two depositors share a single NAV
     // -----------------------------------------------------------------
 
