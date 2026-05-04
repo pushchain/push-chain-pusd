@@ -128,7 +128,12 @@ abstract contract DeployBase is Script {
     // V2 helpers
     // =================================================================
 
-    function _upgradeManager(address managerProxy) internal {
+    function _upgradeManager(address managerProxy, address deployer) internal {
+        // Fail-fast role precheck — clearer error than an opaque revert mid-upgrade.
+        _assertHasRole(managerProxy, keccak256("UPGRADER_ROLE"), deployer, "PUSDManager UPGRADER_ROLE");
+        _assertHasRole(managerProxy, bytes32(0),                 deployer, "PUSDManager DEFAULT_ADMIN_ROLE");
+        _assertHasRole(managerProxy, keccak256("ADMIN_ROLE"),    deployer, "PUSDManager ADMIN_ROLE");
+
         PUSDManager newImpl = new PUSDManager();
         console.log("New PUSDManager impl:    ", address(newImpl));
         (bool ok, bytes memory ret) = managerProxy.call(
@@ -142,7 +147,9 @@ abstract contract DeployBase is Script {
         console.log("PUSDManager proxy upgraded to v2");
     }
 
-    function _upgradePusd(address pusdProxy) internal {
+    function _upgradePusd(address pusdProxy, address deployer) internal {
+        _assertHasRole(pusdProxy, keccak256("UPGRADER_ROLE"), deployer, "PUSD UPGRADER_ROLE");
+
         PUSD newImpl = new PUSD();
         console.log("New PUSD impl:           ", address(newImpl));
         (bool ok, bytes memory ret) = pusdProxy.call(
@@ -154,6 +161,25 @@ abstract contract DeployBase is Script {
         );
         require(ok, _revertReason(ret, "PUSD upgrade failed"));
         console.log("PUSD proxy upgraded");
+    }
+
+    /// @dev Reverts with a friendly message if `account` doesn't hold `role` on
+    ///      `target`. Used as a precheck on the deployer key BEFORE we do any
+    ///      destructive work (impl deploy, upgrade, atomic config), so a
+    ///      misconfigured PRIVATE_KEY surfaces as an obvious error instead of a
+    ///      mid-flight revert.
+    function _assertHasRole(address target, bytes32 role, address account, string memory roleLabel) internal view {
+        (bool ok, bytes memory ret) = target.staticcall(
+            abi.encodeWithSignature("hasRole(bytes32,address)", role, account)
+        );
+        require(ok && ret.length == 32, string.concat(
+            "DeployBase: hasRole call failed for ", roleLabel
+        ));
+        bool hasIt = abi.decode(ret, (bool));
+        require(hasIt, string.concat(
+            "DeployBase: deployer lacks ", roleLabel,
+            " - check PRIVATE_KEY matches the chain admin"
+        ));
     }
 
     function _deployVault(Wiring memory w) internal returns (PUSDPlusVault) {

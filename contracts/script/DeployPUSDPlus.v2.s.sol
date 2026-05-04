@@ -39,11 +39,21 @@ contract DeployPUSDPlusV2 is DeployBase {
         console.log("Existing PUSD:          ", w.pusdProxy);
         console.log("Existing PUSDManager:   ", w.managerProxy);
 
+        // Pre-broadcast role check — avoids wasting gas on impl deploys if the
+        // signing key isn't the admin.
+        _assertHasRole(w.managerProxy, keccak256("UPGRADER_ROLE"), deployer, "PUSDManager UPGRADER_ROLE");
+        _assertHasRole(w.managerProxy, bytes32(0),                 deployer, "PUSDManager DEFAULT_ADMIN_ROLE");
+        _assertHasRole(w.managerProxy, keccak256("ADMIN_ROLE"),    deployer, "PUSDManager ADMIN_ROLE");
+        if (w.upgradePusd) {
+            _assertHasRole(w.pusdProxy, keccak256("UPGRADER_ROLE"), deployer, "PUSD UPGRADER_ROLE");
+        }
+        console.log("Role precheck OK.");
+
         vm.startBroadcast(deployerKey);
 
         // Steps 1–3 — upgrade existing proxies
-        _upgradeManager(w.managerProxy);
-        if (w.upgradePusd) _upgradePusd(w.pusdProxy);
+        _upgradeManager(w.managerProxy, deployer);
+        if (w.upgradePusd) _upgradePusd(w.pusdProxy, deployer);
 
         // Steps 4–6 — deploy vault + IF, run atomic config
         r = _deployV2(w);
