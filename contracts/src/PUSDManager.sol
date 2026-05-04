@@ -7,6 +7,7 @@ import "@openzeppelin/contracts-upgradeable/proxy/utils/UUPSUpgradeable.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./PUSD.sol";
+import "./interfaces/IPUSDPlusVault.sol";
 
 /**
  * @title PUSDManager
@@ -34,7 +35,7 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         bool exists;
         TokenStatus status;
         uint8 decimals;
-        uint16 surplusHaircutBps;  // 0..4000, haircut on deposit minting (max 40%)
+        uint16 surplusHaircutBps;  // 0..1000, haircut on deposit minting (max 10% in v2)
         string name;
         string chainNamespace;
     }
@@ -55,6 +56,19 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     mapping(address => uint256) public sweptFees;             // Total fees swept to treasury per token
     mapping(address => uint256) public sweptHaircut;          // Total haircut swept to treasury per token
 
+    // ------------------------------------------------------------------
+    // v2 state (PUSD+) — APPEND-ONLY. Verify with `forge inspect` diff.
+    // ------------------------------------------------------------------
+
+    /// @notice The PUSD+ vault. Settable only by DEFAULT_ADMIN_ROLE (timelock).
+    address public plusVault;
+
+    /// @notice Addresses exempt from the redeem fee. The PUSD+ vault is the only
+    ///         intended exempt address at v2; the mapping is generalised so
+    ///         future protocol-internal actors can be added without another
+    ///         upgrade.
+    mapping(address => bool) public feeExempt;
+
     uint256 private constant _NOT_ENTERED = 1;
     uint256 private constant _ENTERED = 2;
     uint256 private constant BASIS_POINTS = 10000; // 100% = 10000 basis points
@@ -70,6 +84,12 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     event SurplusHaircutUpdated(address indexed token, uint256 oldBps, uint256 newBps);
     event SurplusAccrued(address indexed token, uint256 feeDelta, uint256 haircutDelta);
     event SurplusSwept(address indexed token, address indexed treasury, uint256 feeSwept, uint256 haircutSwept);
+
+    // ---- v2 events (PUSD+) ----
+    event PlusVaultUpdated(address indexed oldVault, address indexed newVault);
+    event FeeExemptSet(address indexed account, bool exempt);
+    event DepositedToPlus(address indexed user, address indexed tokenIn, uint256 amountIn, uint256 plusOut, address indexed recipient);
+    event RedeemedFromPlus(address indexed user, uint256 plusIn, address indexed preferredAsset, bool basket, address indexed recipient);
 
     modifier nonReentrant() {
         require(_status != _ENTERED, "ReentrancyGuard: reentrant call");
@@ -161,8 +181,10 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     function setSurplusHaircutBps(address token, uint16 newBps) external onlyRole(ADMIN_ROLE) {
         TokenInfo storage tokenInfo = supportedTokens[token];
         require(tokenInfo.exists, "PUSDManager: token not added");
-        require(newBps <= 4000, "PUSDManager: haircut too high"); // Max 40%
-        
+        // v2: reduced from 4000 (40%) → 1000 (10%). Soft lever, not stealth
+        // delisting. Hard delistings use REDEEM_ONLY / EMERGENCY_REDEEM status.
+        require(newBps <= 1000, "PUSDManager: haircut too high"); // Max 10%
+
         uint256 oldBps = tokenInfo.surplusHaircutBps;
         tokenInfo.surplusHaircutBps = newBps;
         emit SurplusHaircutUpdated(token, oldBps, newBps);
@@ -305,14 +327,21 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
                                 preferredInfo.status == TokenStatus.REDEEM_ONLY ||
                                 preferredInfo.status == TokenStatus.EMERGENCY_REDEEM;
         
+        // v2: vault-initiated redemptions skip fees entirely. The fee-exempt
+        // branch is restricted to msg.sender == plusVault AND feeExempt[plusVault]
+        // — flipping the mapping pauses the exemption without rotating the
+        // address, useful in incident response.
+        bool isFeeExempt = (msg.sender == plusVault) && feeExempt[plusVault];
+
         if (isPreferredValid && !hasEmergencyTokens) {
             uint256 requiredAmount = _convertFromPUSD(pusdAmount, preferredInfo.decimals);
-            
+
             if (_getAvailableLiquidity(preferredAsset) >= requiredAmount) {
-                // Preferred asset is available and no emergency tokens, use it
-                // Charge base fee + preferred fee
-                uint256 preferredFee = _calculatePreferredFee(preferredAsset);
-                uint256 totalFee = baseFee + preferredFee;
+                // Preferred asset is available and no emergency tokens, use it.
+                // Charge base fee + preferred fee — unless caller is fee-exempt.
+                uint256 totalFee = isFeeExempt
+                    ? 0
+                    : (baseFee + _calculatePreferredFee(preferredAsset));
                 _executeRedeem(preferredAsset, pusdAmount, requiredAmount, true, totalFee, recipient);
                 return;
             }
@@ -332,39 +361,52 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
     
     function _executeBasketRedeem(uint256 pusdAmount, address recipient) internal {
+        // v2: vault-initiated direct redeems are fee-exempt.
+        uint256 effectiveBaseFee = ((msg.sender == plusVault) && feeExempt[plusVault]) ? 0 : baseFee;
+        _executeBasketRedeemFrom(pusdAmount, recipient, msg.sender, effectiveBaseFee);
+    }
+
+    /// @dev v2 — extracted internal so redeemFromPlus can run the same cascade
+    ///      with an explicit burn source (the manager itself) and explicit fee
+    ///      (zero for the v2 compose; baseFee from the public redeem wrapper).
+    function _executeBasketRedeemFrom(
+        uint256 pusdAmount,
+        address recipient,
+        address burnFrom,
+        uint256 effectiveBaseFee
+    ) internal {
+
         // Calculate total available liquidity across all tokens (in PUSD terms)
         uint256 totalLiquidityPUSD = 0;
         uint256[] memory availableLiquidity = new uint256[](tokenCount);
-        
+
         for (uint256 i = 0; i < tokenCount; i++) {
             address token = tokenList[i];
             TokenInfo memory info = supportedTokens[token];
             if (info.status == TokenStatus.REMOVED) continue;
-            
+
             uint256 balance = _getAvailableLiquidity(token);
             uint256 balanceInPUSD = _normalizeDecimalsToPUSD(balance, info.decimals);
-            
+
             availableLiquidity[i] = balanceInPUSD;
             totalLiquidityPUSD += balanceInPUSD;
         }
-        
+
         require(totalLiquidityPUSD >= pusdAmount, "PUSDManager: insufficient total liquidity");
-        
-        // Burn PUSD once upfront
-        pusd.burn(msg.sender, pusdAmount);
-        
+
+        // Burn PUSD once upfront (from explicit source — vault for v2 compose,
+        // user for direct redeem).
+        pusd.burn(burnFrom, pusdAmount);
+
         // Distribute redemption proportionally across tokens
         uint256 remainingPUSD = pusdAmount;
-        
+
         for (uint256 i = 0; i < tokenCount && remainingPUSD > 0; i++) {
             if (availableLiquidity[i] == 0) continue;
-            
-            address token = tokenList[i];
-            TokenInfo memory info = supportedTokens[token];
-            
+
             // Calculate this token's share (proportional to its liquidity)
             uint256 tokenSharePUSD = (pusdAmount * availableLiquidity[i]) / totalLiquidityPUSD;
-            
+
             // Don't exceed remaining or available
             if (tokenSharePUSD > remainingPUSD) {
                 tokenSharePUSD = remainingPUSD;
@@ -372,34 +414,43 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             if (tokenSharePUSD > availableLiquidity[i]) {
                 tokenSharePUSD = availableLiquidity[i];
             }
-            
+
             if (tokenSharePUSD > 0) {
-                uint256 tokenAmount = _convertFromPUSD(tokenSharePUSD, info.decimals);
-                _executeRedeem(token, tokenSharePUSD, tokenAmount, false, baseFee, recipient);
+                _payShare(tokenList[i], tokenSharePUSD, effectiveBaseFee, recipient);
                 remainingPUSD -= tokenSharePUSD;
                 availableLiquidity[i] -= tokenSharePUSD;
             }
         }
-        
+
         // Handle any remaining PUSD due to rounding by allocating to the token with largest liquidity
         if (remainingPUSD > 0) {
             uint256 maxLiquidityIndex = 0;
             uint256 maxLiquidity = 0;
-            
+
             for (uint256 i = 0; i < tokenCount; i++) {
                 if (availableLiquidity[i] > maxLiquidity) {
                     maxLiquidity = availableLiquidity[i];
                     maxLiquidityIndex = i;
                 }
             }
-            
+
             require(maxLiquidity >= remainingPUSD, "PUSDManager: unable to fully redeem PUSD");
-            
-            address token = tokenList[maxLiquidityIndex];
-            TokenInfo memory info = supportedTokens[token];
-            uint256 tokenAmount = _convertFromPUSD(remainingPUSD, info.decimals);
-            _executeRedeem(token, remainingPUSD, tokenAmount, false, baseFee, recipient);
+
+            _payShare(tokenList[maxLiquidityIndex], remainingPUSD, effectiveBaseFee, recipient);
         }
+    }
+
+    /// @dev v2 — small helper that lifts the inner loop body out of the basket
+    ///      / emergency callers. Without it, both functions hit "stack too deep"
+    ///      under the project's non-viaIR foundry profile.
+    function _payShare(
+        address token,
+        uint256 sharePusd,
+        uint256 effectiveBaseFee,
+        address recipient
+    ) internal {
+        uint256 tokenAmount = _convertFromPUSD(sharePusd, supportedTokens[token].decimals);
+        _executeRedeem(token, sharePusd, tokenAmount, false, effectiveBaseFee, recipient);
     }
     
     function _hasEmergencyTokens() internal view returns (bool) {
@@ -416,6 +467,21 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
     
     function _executeEmergencyRedeem(uint256 pusdAmount, address preferredAsset, address recipient) internal {
+        // v2: vault-initiated direct redeems are fee-exempt.
+        uint256 effectiveBaseFee = ((msg.sender == plusVault) && feeExempt[plusVault]) ? 0 : baseFee;
+        _executeEmergencyRedeemFrom(pusdAmount, preferredAsset, recipient, msg.sender, effectiveBaseFee);
+    }
+
+    /// @dev v2 — extracted internal so redeemFromPlus can run the same cascade
+    ///      with an explicit burn source (the manager itself) and explicit fee
+    ///      (zero for the v2 compose; baseFee from the public redeem wrapper).
+    function _executeEmergencyRedeemFrom(
+        uint256 pusdAmount,
+        address preferredAsset,
+        address recipient,
+        address burnFrom,
+        uint256 effectiveBaseFee
+    ) internal {
         // Calculate total liquidity of preferred + emergency tokens
         uint256 totalLiquidityPUSD = 0;
         uint256[] memory availableLiquidity = new uint256[](tokenCount);
@@ -448,54 +514,48 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         }
         
         require(totalLiquidityPUSD >= pusdAmount, "PUSDManager: insufficient liquidity for emergency redemption");
-        
-        // Burn PUSD upfront
-        pusd.burn(msg.sender, pusdAmount);
+
+        // Burn PUSD upfront (from explicit source — vault for v2 compose,
+        // user for direct redeem).
+        pusd.burn(burnFrom, pusdAmount);
         
         // Distribute proportionally across preferred + emergency tokens
         uint256 remainingPUSD = pusdAmount;
-        
+
         for (uint256 i = 0; i < tokenCount && remainingPUSD > 0; i++) {
             if (availableLiquidity[i] == 0) continue;
-            
-            address token = tokenList[i];
-            TokenInfo memory info = supportedTokens[token];
-            
+
             uint256 tokenSharePUSD = (pusdAmount * availableLiquidity[i]) / totalLiquidityPUSD;
-            
+
             if (tokenSharePUSD > remainingPUSD) {
                 tokenSharePUSD = remainingPUSD;
             }
             if (tokenSharePUSD > availableLiquidity[i]) {
                 tokenSharePUSD = availableLiquidity[i];
             }
-            
+
             if (tokenSharePUSD > 0) {
-                uint256 tokenAmount = _convertFromPUSD(tokenSharePUSD, info.decimals);
-                _executeRedeem(token, tokenSharePUSD, tokenAmount, false, baseFee, recipient);
+                _payShare(tokenList[i], tokenSharePUSD, effectiveBaseFee, recipient);
                 remainingPUSD -= tokenSharePUSD;
                 availableLiquidity[i] -= tokenSharePUSD;
             }
         }
-        
+
         // Handle rounding remainder
         if (remainingPUSD > 0) {
             uint256 maxLiquidityIndex = 0;
             uint256 maxLiquidity = 0;
-            
+
             for (uint256 i = 0; i < tokenCount; i++) {
                 if (availableLiquidity[i] > maxLiquidity) {
                     maxLiquidity = availableLiquidity[i];
                     maxLiquidityIndex = i;
                 }
             }
-            
+
             require(maxLiquidity >= remainingPUSD, "PUSDManager: unable to fully redeem PUSD");
-            
-            address token = tokenList[maxLiquidityIndex];
-            TokenInfo memory info = supportedTokens[token];
-            uint256 tokenAmount = _convertFromPUSD(remainingPUSD, info.decimals);
-            _executeRedeem(token, remainingPUSD, tokenAmount, false, baseFee, recipient);
+
+            _payShare(tokenList[maxLiquidityIndex], remainingPUSD, effectiveBaseFee, recipient);
         }
     }
     
@@ -700,4 +760,194 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     }
 
     function _authorizeUpgrade(address newImplementation) internal override onlyRole(UPGRADER_ROLE) {}
+
+    // =====================================================================
+    // v2 — PUSD+ composed entrypoints + setters
+    // =====================================================================
+
+    /**
+     * @notice One-shot mint of PUSD+. If `tokenIn == address(pusd)`, wraps PUSD
+     *         straight into PUSD+. Otherwise pulls reserve from caller, mints
+     *         PUSD to the vault, then mints PUSD+ to recipient at vault NAV.
+     * @dev    Reserve path strictly preserves PUSD's 1:1 invariant: every
+     *         reserve unit pulled mints exactly one PUSD; that PUSD is the sole
+     *         basis for the PUSD+ being minted. The wrap leg charges no fee.
+     */
+    function depositToPlus(address tokenIn, uint256 amount, address recipient) external nonReentrant {
+        require(plusVault != address(0), "PUSDManager: plusVault unset");
+        require(amount > 0, "PUSDManager: amount must be greater than 0");
+        require(recipient != address(0), "PUSDManager: recipient cannot be zero address");
+
+        if (tokenIn == address(pusd)) {
+            // Wrap path: PUSD already exists — forward to vault, mint PUSD+.
+            IERC20(address(pusd)).safeTransferFrom(msg.sender, plusVault, amount);
+            uint256 plusOut = IPUSDPlusVault(plusVault).mintPlus(amount, recipient);
+            emit DepositedToPlus(msg.sender, tokenIn, amount, plusOut, recipient);
+            return;
+        }
+
+        // Mint path: reserve → PUSD → PUSD+. Re-uses existing deposit invariants.
+        TokenInfo memory tokenInfo = supportedTokens[tokenIn];
+        require(tokenInfo.status == TokenStatus.ENABLED, "PUSDManager: token not enabled for deposits");
+
+        IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amount);
+
+        // Apply the existing surplus haircut on entry (cap is now 1000 bps).
+        uint256 surplusTokenAmount = (amount * tokenInfo.surplusHaircutBps) / BASIS_POINTS;
+        uint256 netTokenAmount = amount - surplusTokenAmount;
+        if (surplusTokenAmount > 0) {
+            accruedHaircut[tokenIn] += surplusTokenAmount;
+            emit SurplusAccrued(tokenIn, 0, surplusTokenAmount);
+        }
+
+        // Mint PUSD straight to the vault (no detour through msg.sender).
+        uint256 pusdAmount = _normalizeDecimalsToPUSD(netTokenAmount, tokenInfo.decimals);
+        pusd.mint(plusVault, pusdAmount);
+
+        uint256 plusOutMinted = IPUSDPlusVault(plusVault).mintPlus(pusdAmount, recipient);
+        emit DepositedToPlus(msg.sender, tokenIn, amount, plusOutMinted, recipient);
+    }
+
+    /**
+     * @notice One-shot redeem of PUSD+. Calls vault.burnPlus to compute pusdOwed
+     *         and move PUSD into this contract, then either forwards PUSD direct
+     *         (when preferredAsset == PUSD) or runs the existing reserve payout
+     *         logic with fees zeroed (this is a protocol-internal compose, not
+     *         a fresh user redeem).
+     */
+    function redeemFromPlus(
+        uint256 plusAmount,
+        address preferredAsset,
+        bool    allowBasket,
+        address recipient
+    ) external nonReentrant {
+        require(plusVault != address(0), "PUSDManager: plusVault unset");
+        require(plusAmount > 0, "PUSDManager: amount must be greater than 0");
+        require(recipient != address(0), "PUSDManager: recipient cannot be zero address");
+
+        // Vault burns PUSD+ from msg.sender, hands PUSD to this contract (or
+        // queues a residual). `pusdReturned` is what's already on hand right now.
+        // queueId is captured by the BurnedPlus event in the vault and the
+        // QueueClaimFilled event later — no need to thread it through here.
+        (uint256 pusdReturned, ) = IPUSDPlusVault(plusVault).burnPlus(
+            plusAmount,
+            msg.sender,
+            address(this),
+            preferredAsset,
+            allowBasket
+        );
+
+        // queueId != 0 → user accepted the NAV at this block and waits.
+        // Settlement happens later via vault.fulfillQueueClaim.
+        if (pusdReturned == 0) {
+            emit RedeemedFromPlus(msg.sender, plusAmount, preferredAsset, allowBasket, recipient);
+            return;
+        }
+
+        if (preferredAsset == address(pusd)) {
+            // Unwrap path: forward PUSD direct. No fee, no reserve leg.
+            IERC20(address(pusd)).safeTransfer(recipient, pusdReturned);
+        } else {
+            // Compose path: burn vault-supplied PUSD and pay reserves to user.
+            // Fees are zero — this is a protocol-internal compose, distinct
+            // from a user's direct redeem and from vault-initiated LP seeding.
+            _payoutToUser(pusdReturned, preferredAsset, allowBasket, recipient);
+        }
+        emit RedeemedFromPlus(msg.sender, plusAmount, preferredAsset, allowBasket, recipient);
+    }
+
+    /**
+     * @dev Internal payout used by redeemFromPlus. Mirrors the public redeem's
+     *      preferred → basket → emergency cascade but charges zero fees and
+     *      burns PUSD from this contract (rather than the user) since the user
+     *      already paid by burning PUSD+ in the vault.
+     */
+    function _payoutToUser(
+        uint256 pusdAmount,
+        address preferredAsset,
+        bool    allowBasket,
+        address recipient
+    ) internal {
+        bool hasEmergencyTokens = _hasEmergencyTokens();
+        TokenInfo memory preferredInfo = supportedTokens[preferredAsset];
+        bool isPreferredValid = preferredInfo.status == TokenStatus.ENABLED ||
+                                preferredInfo.status == TokenStatus.REDEEM_ONLY ||
+                                preferredInfo.status == TokenStatus.EMERGENCY_REDEEM;
+
+        if (isPreferredValid && !hasEmergencyTokens) {
+            uint256 requiredAmount = _convertFromPUSD(pusdAmount, preferredInfo.decimals);
+            if (_getAvailableLiquidity(preferredAsset) >= requiredAmount) {
+                // Burn the manager's PUSD (received from vault) directly.
+                pusd.burn(address(this), pusdAmount);
+                // shouldBurn = false — burn already done above; fee = 0.
+                _executeRedeem(preferredAsset, pusdAmount, requiredAmount, false, 0, recipient);
+                return;
+            }
+        }
+
+        if (hasEmergencyTokens && isPreferredValid) {
+            // Emergency cascade: helper burns its own argument from `burnFrom`.
+            _executeEmergencyRedeemFrom(pusdAmount, preferredAsset, recipient, address(this), 0);
+            return;
+        }
+
+        require(allowBasket, "PUSDManager: preferred asset unavailable and basket not allowed");
+        _executeBasketRedeemFrom(pusdAmount, recipient, address(this), 0);
+    }
+
+    /**
+     * @notice Set the PUSD+ vault address. DEFAULT_ADMIN (= timelock) only.
+     * @dev    Once set, fee exemption must be granted explicitly via
+     *         setFeeExempt. The two operations are intentionally separate so an
+     *         admin can pause exemption without rotating the vault address.
+     */
+    function setPlusVault(address vault) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(vault != address(0), "PUSDManager: vault cannot be zero address");
+        emit PlusVaultUpdated(plusVault, vault);
+        plusVault = vault;
+    }
+
+    /**
+     * @notice Toggle fee-exempt status for an account. ADMIN_ROLE-gated.
+     * @dev    The redeem fee-exempt branch checks BOTH msg.sender == plusVault
+     *         AND feeExempt[plusVault] — flipping the mapping pauses the
+     *         exemption without rotating the address.
+     */
+    function setFeeExempt(address account, bool exempt) external onlyRole(ADMIN_ROLE) {
+        require(account != address(0), "PUSDManager: account cannot be zero address");
+        feeExempt[account] = exempt;
+        emit FeeExemptSet(account, exempt);
+    }
+
+    /**
+     * @notice Vault-only deposit path used during burnPlus / fulfillQueueClaim
+     *         to convert idle non-PUSD reserves back into PUSD.
+     *
+     * @dev    Differences from the public `deposit`:
+     *           1. No nonReentrant — `deposit` and `redeemFromPlus` both take
+     *              the manager's lock; without this bypass, vault.burnPlus
+     *              (called from inside redeemFromPlus) would deadlock when it
+     *              tries to convert idle reserves back to PUSD.
+     *           2. No surplus haircut — this is a protocol-internal value-
+     *              preserving conversion, not a user mint. Applying the haircut
+     *              here would silently bleed value from PUSD+ holders.
+     *           3. Restricted to plusVault AND feeExempt — same gate as the
+     *              public redeem fee-exempt branch.
+     *
+     *         Caller (vault) MUST have approved this contract for `amount`.
+     */
+    function depositForVault(address token, uint256 amount) external returns (uint256 pusdMinted) {
+        require(msg.sender == plusVault && feeExempt[plusVault], "PUSDManager: not vault");
+        TokenInfo memory info = supportedTokens[token];
+        require(info.exists && info.status == TokenStatus.ENABLED, "PUSDManager: token not enabled");
+        require(amount > 0, "PUSDManager: amount must be greater than 0");
+
+        IERC20(token).safeTransferFrom(msg.sender, address(this), amount);
+        pusdMinted = _normalizeDecimalsToPUSD(amount, info.decimals);
+        pusd.mint(msg.sender, pusdMinted);
+        return pusdMinted;
+    }
+
+    /// @dev Reserve gap for future v2 patch versions without colliding with v3+.
+    uint256[48] private __gap_v2;
 }
