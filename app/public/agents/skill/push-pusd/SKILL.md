@@ -1,7 +1,7 @@
 ---
 name: push-pusd
-description: Integrate with PUSD — the cross-chain par-backed stablecoin on Push Chain Donut Testnet. Mint PUSD by depositing USDC/USDT from any supported chain, redeem PUSD for any reserve token, read protocol state, or call the contracts on-chain from another smart contract. Two integration paths from off-chain (external-chain wallet via multicall, or native Push EOA) and a Solidity interface for on-chain integrations.
-version: 2.0.0
+description: Integrate with PUSD and PUSD+ — the cross-chain par-backed stablecoin and yield-bearing companion on Push Chain Donut Testnet. Mint PUSD by depositing USDC/USDT from any supported chain, redeem PUSD for any reserve token, mint/redeem PUSD+ in one call, read protocol state, or call the contracts on-chain from another smart contract. Two integration paths from off-chain (external-chain wallet via multicall, or native Push EOA) and a Solidity interface for on-chain integrations.
+version: 3.0.0
 network: testnet
 chain_id: 42101
 rpc: https://evm.donut.rpc.push.org/
@@ -9,6 +9,8 @@ explorer: https://donut.push.network
 contracts:
   pusd: '0x488d080e16386379561a47A4955D22001d8A9D89'
   pusd_manager: '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46'
+  pusd_plus_vault: '0xb55a5B36d82D3B7f18Afe42F390De565080A49a1'
+  insurance_fund: '0xFF7E741621ad5d39015759E3d606A631Fa319a62'
 packages:
   frontend: '@pushchain/ui-kit'
   backend: '@pushchain/core'
@@ -19,41 +21,59 @@ resources:
   - https://pusd.push.org/docs
 ---
 
-# Skill: PUSD Integration
+# Skill: PUSD + PUSD+ Integration
 
-**Intent**: Mint and redeem PUSD — the cross-chain par-backed stablecoin on Push Chain — from any frontend, backend, or on-chain context.
+**Intent**: Mint and redeem PUSD (par-backed) and PUSD+ (yield-bearing) on Push Chain — from any frontend, backend, or on-chain context.
 
-PUSD is a 6-decimal ERC-20 stablecoin pegged 1:1 to reserve stablecoins (USDC / USDT bridged from Ethereum, Base, Arbitrum, Solana, BNB). It lives entirely on Push Chain Donut Testnet (chain ID 42101). All accounting is at 6 decimals across PUSD and every reserve token.
+PUSD is a 6-decimal ERC-20 stablecoin pegged 1:1 to reserve stablecoins (USDC / USDT bridged from Ethereum, Base, Arbitrum, Solana, BNB). PUSD+ is a 6-decimal yield-bearing companion whose NAV grows monotonically as the vault collects LP fees from Uniswap V3 stable/stable pools on Push Chain. Both live on Push Chain Donut Testnet (chain ID 42101). All accounting is at 6 decimals.
 
 Integration choices:
 
 - **Off-chain SDK** — `@pushchain/ui-kit` (React) or `@pushchain/core` (Node). Goes through Push Chain's universal transaction layer. Handles cross-chain wallet identity, payload encoding, and optional bridging. Recommended for new integrations.
-- **On-chain Solidity** — Another contract on Donut imports the PUSD / PUSDManager interfaces and calls them directly. Used when your protocol holds PUSD or mints / burns PUSD on behalf of users.
+- **On-chain Solidity** — Another contract on Donut imports the PUSD / PUSDManager / PUSDPlusVault interfaces and calls them directly. Used when your protocol holds PUSD/PUSD+ or mints / burns on behalf of users.
 
 ---
 
 ## Architecture
 
-Two upgradeable contracts on Donut. PUSD is a minimal ERC-20; PUSDManager owns all reserve logic.
+Three contracts plus a passive sidecar on Donut. All UUPS proxies.
 
 ```
-PUSD.sol ─ ERC-20, 6 decimals, UUPS proxy
+PUSD.sol              ─ ERC-20, 6 decimals
   mint(to, amount)            ← MINTER_ROLE only  → held by PUSDManager
   burn(from, amount)          ← BURNER_ROLE only  → held by PUSDManager
 
-PUSDManager.sol ─ reserve orchestrator, UUPS proxy
+PUSDManager.sol       ─ reserve orchestrator (v2)
+  // par-backed entrypoints (v1, unchanged)
   deposit(token, amount, recipient)                            → mints PUSD
   redeem(pusdAmount, preferredAsset, allowBasket, recipient)   → burns PUSD
+  // yield-product entrypoints (v2)
+  depositToPlus(tokenIn, amount, recipient)                    → mints PUSD+
+  redeemFromPlus(plusAmount, preferredAsset, allowBasket, recipient)  → burns PUSD+
+
+PUSDPlusVault.sol     ─ NAV-bearing custom ERC-20 (PUSD+, 6 decimals)
+  // user-facing reads
+  nav() / totalAssets() / previewMintPlus() / previewBurnPlus()
+  // user-facing claim path (queued redeems)
+  fulfillQueueClaim(queueId)
+
+InsuranceFund.sol     ─ passive sidecar; receives the LP-fee haircut
 ```
+
+> PUSD+ is a **custom 6-decimal ERC-20 with NAV-per-share**, not ERC-4626. Use `previewMintPlus` / `previewBurnPlus` to quote.
 
 ### Live addresses — Donut Testnet (chain 42101)
 
-| Contract    | Proxy                                        |
-| ----------- | -------------------------------------------- |
-| PUSD        | `0x488d080e16386379561a47A4955D22001d8A9D89` |
-| PUSDManager | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
+| Contract       | Proxy                                        |
+| -------------- | -------------------------------------------- |
+| PUSD           | `0x488d080e16386379561a47A4955D22001d8A9D89` |
+| PUSDManager    | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
+| PUSDPlusVault  | `0xb55a5B36d82D3B7f18Afe42F390De565080A49a1` |
+| InsuranceFund  | `0xFF7E741621ad5d39015759E3d606A631Fa319a62` |
 
 RPC: `https://evm.donut.rpc.push.org/` — Explorer: `https://donut.push.network`
+
+Always interact with the **proxy** addresses. Implementations change on upgrade; the proxies do not.
 
 ### Reserve tokens (9 total, 5 chains, all 6 decimals on Donut)
 
@@ -62,22 +82,28 @@ RPC: `https://evm.donut.rpc.push.org/` — Explorer: `https://donut.push.network
 | USDT   | Ethereum Sepolia | `0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3` |
 | USDC   | Ethereum Sepolia | `0x7A58048036206bB898008b5bBDA85697DB1e5d66` |
 | USDT   | Solana Devnet    | `0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34` |
-| USDC   | Solana Devnet    | `0xCd6e2e7A43E0Cfd0Df83dCb0EdB5c5EC4F27Ce8f` |
-| USDT   | Base Sepolia     | `0x9f475519ac7bdbEC65F00E2f6A6CB26c20B5Ff52` |
-| USDC   | Base Sepolia     | `0x2fCC0Ef4F0b0Ffb5Ee93F48B48F50Ef5e66c0b5b` |
-| USDT   | Arbitrum Sepolia | `0x3A3c8aFC2e7BCBe3d79Af9dD4cA4CD7C1eEDD23c` |
-| USDC   | Arbitrum Sepolia | `0x9fa527Fe5e16b9e1bfa72Cb9C01d40aaab11EBC2` |
-| USDT   | BNB Testnet      | `0xEc9E90Dc88D86dB0e9E1f4aA59a61Df5f7A5E3b1` |
+| USDC   | Solana Devnet    | `0x04B8F634ABC7C879763F623e0f0550a4b5c4426F` |
+| USDT   | Base Sepolia     | `0x2C455189D2af6643B924A981a9080CcC63d5a567` |
+| USDC   | Base Sepolia     | `0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1` |
+| USDT   | Arbitrum Sepolia | `0x76Ad08339dF606BeEDe06f90e3FaF82c5b2fb2E9` |
+| USDC   | Arbitrum Sepolia | `0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C` |
+| USDT   | BNB Testnet      | `0x2f98B4235FD2BA0173a2B056D722879360B12E7b` |
+
+> Source of truth: this list ≡ on-chain enumeration via `PUSDManager.getSupportedTokenAt(i)` ≡ [`app/src/contracts/tokens.ts`](https://github.com/pushchain/push-chain-pusd/blob/main/app/src/contracts/tokens.ts). On-chain `chainNamespace` strings are `Ethereum_Sepolia`, `Solana_Devnet`, `Base_Testnet`, `Arbitrum_Sepolia`, `BNB_Testnet`.
+
+> `setPlusVault`, `setFeeExempt`, `depositForVault` on PUSDManager are **vault-only** — gated by a two-key check (`msg.sender == plusVault && feeExempt[plusVault]`). Don't call them from integrator code.
 
 ---
 
 ## Fee model
 
-| Fee                    | When               | Default       | Max             | Effect                                                   |
-| ---------------------- | ------------------ | ------------- | --------------- | -------------------------------------------------------- |
-| Deposit haircut        | On mint            | 0 bps (0%)    | 4000 bps (40%)  | Stays in reserve as surplus, used to deprecate risky tokens |
-| Base redemption fee    | On every redeem    | 5 bps (0.05%) | 100 bps (1%)    | Accrued per-token, swept to treasury                     |
+| Fee                     | When               | Default       | Max             | Effect                                                   |
+| ----------------------- | ------------------ | ------------- | --------------- | -------------------------------------------------------- |
+| Deposit haircut         | On mint            | 0 bps (0%)    | 1000 bps (10%)  | Stays in reserve as surplus, used to deprecate risky tokens |
+| Base redemption fee     | On every redeem    | 5 bps (0.05%) | 100 bps (1%)    | Accrued per-token, swept to treasury                     |
 | Preferred asset premium | Single-token redeem | preferredFeeMin–Max | 200 bps (2%) | Interpolated by token liquidity                          |
+| PUSD+ mint              | depositToPlus      | 0 bps         | —               | Wrap leg charges no fee; mint leg still applies haircut on the token |
+| PUSD+ redeem            | redeemFromPlus     | 0 bps         | —               | Protocol-internal compose; reserve payout charges no base or preferred fee |
 
 ```
 Net PUSD minted  = amount − floor(amount × haircutBps / 10000)
@@ -86,9 +112,9 @@ Net token out    = pusdAmount − floor(pusdAmount × (baseFee + preferredFee) /
 
 ---
 
-## Redemption routing
+## Redemption routing (PUSDManager.redeem)
 
-Three paths, picked automatically by PUSDManager based on preferred-asset liquidity and token status:
+Three paths, picked automatically based on preferred-asset liquidity and token status:
 
 | Route           | Condition                                         | Fee                      |
 | --------------- | ------------------------------------------------- | ------------------------ |
@@ -100,9 +126,21 @@ Three paths, picked automatically by PUSDManager based on preferred-asset liquid
 
 ---
 
+## PUSD+ redemption — three-tier fulfilment
+
+`redeemFromPlus` first burns PUSD+ from the caller (committing them to current NAV), then sources PUSD via:
+
+1. **Instant** — vault has idle PUSD ≥ pusdOwed → ship now.
+2. **Convert** — idle PUSD short, vault converts idle non-PUSD basket tokens via fee-exempt manager path. Still no peg risk.
+3. **Queue** — residual is enqueued. PUSD+ is already burned, NAV is fixed at the burn block. Keeper fills on the next rebalance; anyone can call `fulfillQueueClaim(queueId)` once the vault has PUSD on hand.
+
+If your call returns and `pusdReturned == 0`, the entire amount was queued — listen for the `QueueClaimFilled` event from the vault to know when it settles.
+
+---
+
 ## Off-chain SDK — two write paths
 
-Every PUSD mutation (mint, redeem) goes through `pushChainClient.universal.sendTransaction(...)`. The **shape of the payload** depends on which wallet signed in.
+Every PUSD/PUSD+ mutation goes through `pushChainClient.universal.sendTransaction(...)`. The **shape of the payload** depends on which wallet signed in.
 
 **Path A — External-chain wallet** (MetaMask on Sepolia, Phantom on Solana, Coinbase Wallet, etc.) — the user gets a relay-managed account on Donut that supports multicall. Approve + deposit ride in **one signature**, batched as a multicall. Outer `to` is the zero address — the marker the relay reads as "walk each leg against its own `to`".
 
@@ -371,9 +409,83 @@ await (await pc.universal.sendTransaction({
 
 ---
 
-## On-chain Solidity (calling PUSD / PUSDManager from another contract)
+## Mint PUSD+ (depositToPlus)
 
-When your protocol on Donut wants to mint PUSD on behalf of users, hold PUSD as a treasury asset, or read PUSDManager state mid-transaction — import the interfaces below.
+`depositToPlus(tokenIn, amount, recipient)` accepts **either** PUSD or any reserve token. The reserve path mints PUSD into the vault and immediately wraps; the wrap leg charges no fee. Surplus haircut on the reserve still applies.
+
+**Path A — multicall, reserve → PUSD+ in one signature:**
+
+```tsx
+const VAULT = '0xb55a5B36d82D3B7f18Afe42F390De565080A49a1' as const;
+
+const mintPlus = async () => {
+  const h = PushChain.utils.helpers;
+  const amount = h.parseUnits('100', 6);
+  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+
+  const multicall = [
+    { to: TOKEN, value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
+    { to: MANAGER, value: 0n, data: h.encodeTxData({ abi: DEPOSIT_TO_PLUS_ABI, functionName: 'depositToPlus', args: [TOKEN, amount, recipient] }) },
+  ];
+
+  await (await pushChainClient.universal.sendTransaction({
+    to: ZERO, value: 0n, data: multicall,
+  })).wait();
+};
+```
+
+**Wrap path — already hold PUSD, want PUSD+:**
+
+```tsx
+const wrapPusd = async () => {
+  const h = PushChain.utils.helpers;
+  const amount = h.parseUnits('100', 6);
+  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+  const PUSD = '0x488d080e16386379561a47A4955D22001d8A9D89' as const;
+
+  const multicall = [
+    { to: PUSD, value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
+    { to: MANAGER, value: 0n, data: h.encodeTxData({ abi: DEPOSIT_TO_PLUS_ABI, functionName: 'depositToPlus', args: [PUSD, amount, recipient] }) },
+  ];
+
+  await (await pushChainClient.universal.sendTransaction({
+    to: ZERO, value: 0n, data: multicall,
+  })).wait();
+};
+```
+
+> The amount of PUSD+ minted is determined by **pre-deposit NAV**: `plusOut = pusdIn × supply / (totalAssets − pusdIn)`. Quote off-chain with `vault.previewMintPlus(pusdIn)`.
+
+---
+
+## Redeem PUSD+ (redeemFromPlus)
+
+`redeemFromPlus(plusAmount, preferredAsset, allowBasket, recipient)` — burns PUSD+ from the caller, computes pusdOwed at current NAV, and either pays out instantly, queues for keeper fulfilment, or both. **PUSD+ approval is not required** — the vault burns `from = msg.sender` directly via the manager (manager holds `MANAGER_ROLE` on the vault).
+
+```tsx
+const redeemPlus = async () => {
+  const h = PushChain.utils.helpers;
+  const plusAmount = h.parseUnits('99', 6);
+  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+  // Pass PUSD address as preferredAsset to receive PUSD directly (unwrap path).
+  const PUSD = '0x488d080e16386379561a47A4955D22001d8A9D89' as const;
+
+  await (await pushChainClient.universal.sendTransaction({
+    to: MANAGER, value: 0n,
+    data: h.encodeTxData({
+      abi: REDEEM_FROM_PLUS_ABI,
+      functionName: 'redeemFromPlus',
+      args: [plusAmount, PUSD, true, recipient],
+    }),
+  })).wait();
+};
+```
+
+If you want a reserve token back (e.g. USDC.eth), pass that as `preferredAsset`. The compose path runs the same preferred → basket cascade as `redeem`, but with **zero fees** (this is a protocol-internal compose, not a fresh user redeem). If the vault can't fulfil instantly, the residual is queued — your tx returns successfully but the user receives funds when `vault.fulfillQueueClaim(queueId)` runs.
+
+---
+
+## On-chain Solidity (calling the contracts from another contract)
 
 ### Minimal interfaces
 
@@ -402,29 +514,49 @@ interface IPUSDManager {
         string  chainNamespace;
     }
 
-    // Mutators -- called by the integrating contract.
+    // Mutators -- v1 par-backed.
     function deposit(address token, uint256 amount, address recipient) external;
     function redeem(uint256 pusdAmount, address preferredAsset, bool allowBasket, address recipient) external;
+
+    // Mutators -- v2 yield product.
+    function depositToPlus(address tokenIn, uint256 amount, address recipient) external;
+    function redeemFromPlus(uint256 plusAmount, address preferredAsset, bool allowBasket, address recipient) external;
 
     // Reads -- safe to call from any context.
     function baseFee() external view returns (uint256);
     function preferredFeeMin() external view returns (uint256);
     function preferredFeeMax() external view returns (uint256);
     function getSupportedTokensCount() external view returns (uint256);
+    function getSupportedTokenAt(uint256 index) external view returns (address);
     function getTokenStatus(address token) external view returns (uint8);
     function getTokenInfo(address token) external view returns (TokenInfo memory);
     function getAccruedSurplus(address token) external view returns (uint256);
+    function plusVault() external view returns (address);
+}
+
+interface IPUSDPlusVault {
+    // ERC-20 surface (PUSD+ is a 6-decimal ERC-20)
+    function balanceOf(address) external view returns (uint256);
+    function totalSupply() external view returns (uint256);
+    function transfer(address, uint256) external returns (bool);
+    function approve(address, uint256) external returns (bool);
+
+    // NAV-style reads
+    function nav() external view returns (uint256);                    // 1e18 fixed-point
+    function totalAssets() external view returns (uint256);            // 6-dec PUSD-equiv
+    function previewMintPlus(uint256 pusdIn) external view returns (uint256);
+    function previewBurnPlus(uint256 plusIn) external view returns (uint256);
+
+    // Queue
+    function fulfillQueueClaim(uint256 queueId) external;
+    function nextQueueId() external view returns (uint256);
+    function totalQueuedPusd() external view returns (uint256);
 }
 ```
 
 ### Deposit — mint PUSD from another contract
 
-Pull reserve from caller, approve PUSDManager, call `deposit`. `safeTransferFrom` inside the manager pulls from `address(this)`, so the allowance is from your contract, not from the user.
-
 ```solidity
-// SPDX-License-Identifier: MIT
-pragma solidity ^0.8.20;
-
 import {IPUSD, IPUSDManager} from "./IPUSD.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
@@ -432,8 +564,8 @@ contract PUSDMinter {
     IPUSDManager public constant MANAGER =
         IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
-    /// @notice Pull `amount` of `token` from caller, deposit it into
-    ///         PUSDManager, mint PUSD straight to `recipient`.
+    /// @notice Pull `amount` of `token` from caller, deposit into PUSDManager,
+    ///         mint PUSD straight to `recipient`.
     function mintFor(address token, uint256 amount, address recipient) external {
         IERC20(token).transferFrom(msg.sender, address(this), amount);
         IERC20(token).approve(address(MANAGER), amount);
@@ -442,62 +574,64 @@ contract PUSDMinter {
 }
 ```
 
-### Redeem — burn PUSD from another contract
-
-Pull PUSD into your contract, then call `redeem`. **No approval needed** — `PUSDManager` burns from `msg.sender` directly via `BURNER_ROLE` on PUSD.
+### Mint PUSD+ from another contract
 
 ```solidity
-contract PUSDRedeemer {
-    IPUSD        public constant PUSD =
-        IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
+contract PUSDPlusMinter {
     IPUSDManager public constant MANAGER =
         IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
 
-    function redeemFor(
-        uint256 pusdAmount,
-        address preferredAsset,
-        bool    allowBasket,
-        address recipient
-    ) external {
-        PUSD.transferFrom(msg.sender, address(this), pusdAmount);
-        // No approve. PUSDManager calls pusd.burn(msg.sender, ...) under BURNER_ROLE.
-        MANAGER.redeem(pusdAmount, preferredAsset, allowBasket, recipient);
+    function mintPlusFor(address token, uint256 amount, address recipient) external {
+        IERC20(token).transferFrom(msg.sender, address(this), amount);
+        IERC20(token).approve(address(MANAGER), amount);
+        MANAGER.depositToPlus(token, amount, recipient);
+    }
+}
+```
+
+### Redeem PUSD+ from another contract
+
+```solidity
+contract PUSDPlusRedeemer {
+    IPUSDManager   public constant MANAGER =
+        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+    IPUSDPlusVault public constant VAULT =
+        IPUSDPlusVault(0xb55a5B36d82D3B7f18Afe42F390De565080A49a1);
+
+    /// @notice Burn caller's PUSD+ and pay out into a reserve token. PUSD+
+    ///         approval not required — vault burns msg.sender via the manager.
+    function redeemFor(uint256 plusAmount, address preferredAsset, address recipient) external {
+        // forward msg.sender semantics: this contract is the caller into the manager,
+        // so it must hold the PUSD+ that gets burned. Pull first.
+        IERC20(address(VAULT)).transferFrom(msg.sender, address(this), plusAmount);
+        MANAGER.redeemFromPlus(plusAmount, preferredAsset, true, recipient);
     }
 }
 ```
 
 ### Read — quote and inspect protocol state
 
-All read helpers are `view`, so any contract can call them in the same transaction it's executing in.
-
 ```solidity
 contract PUSDReader {
-    IPUSD        public constant PUSD =
-        IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
-    IPUSDManager public constant MANAGER =
+    IPUSDManager   public constant MANAGER =
         IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+    IPUSDPlusVault public constant VAULT =
+        IPUSDPlusVault(0xb55a5B36d82D3B7f18Afe42F390De565080A49a1);
 
-    /// Quote how much PUSD a user would get from depositing `amount` of `token`,
-    /// accounting for the manager's base fee in basis points. 6-dec math.
     function quoteMint(address token, uint256 amount)
-        external view returns (uint256 expectedPUSD, IPUSDManager.TokenStatus status)
+        external view returns (uint256 expectedPUSD)
     {
         IPUSDManager.TokenInfo memory info = MANAGER.getTokenInfo(token);
         require(info.exists, "PUSDReader: unsupported token");
-
         uint256 baseFeeBps = MANAGER.baseFee();
-        uint256 fee = (amount * baseFeeBps) / 10_000;
-        expectedPUSD = amount - fee;
-        status = IPUSDManager.TokenStatus(info.status);
+        expectedPUSD = amount - (amount * baseFeeBps) / 10_000;
     }
 
-    function reserveOf(address token) external view returns (uint256) {
-        return IERC20(token).balanceOf(address(MANAGER));
+    function quoteMintPlus(uint256 pusdIn) external view returns (uint256) {
+        return VAULT.previewMintPlus(pusdIn);
     }
 
-    function circulating() external view returns (uint256) {
-        return PUSD.totalSupply();
-    }
+    function plusNav() external view returns (uint256) { return VAULT.nav(); }
 }
 ```
 
@@ -532,6 +666,27 @@ const REDEEM_ABI = [{
   ],
   outputs: [],
 }] as const;
+
+const DEPOSIT_TO_PLUS_ABI = [{
+  type: 'function', name: 'depositToPlus', stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'tokenIn',   type: 'address' },
+    { name: 'amount',    type: 'uint256' },
+    { name: 'recipient', type: 'address' },
+  ],
+  outputs: [],
+}] as const;
+
+const REDEEM_FROM_PLUS_ABI = [{
+  type: 'function', name: 'redeemFromPlus', stateMutability: 'nonpayable',
+  inputs: [
+    { name: 'plusAmount',     type: 'uint256' },
+    { name: 'preferredAsset', type: 'address' },
+    { name: 'allowBasket',    type: 'bool'    },
+    { name: 'recipient',      type: 'address' },
+  ],
+  outputs: [],
+}] as const;
 ```
 
 ---
@@ -541,10 +696,12 @@ const REDEEM_ABI = [{
 | Mistake                                          | Fix                                                                                  |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `sendTransaction([leg1, leg2])` — bare array     | Cascade rides in `data`: `sendTransaction({ to: ZERO, value: 0n, data: legs })`      |
-| Adding an approve before redeem                  | Redeem doesn't need it — `PUSDManager` burns `msg.sender` directly via `BURNER_ROLE` |
-| `parseUnits(value, 18)`                          | PUSD + every reserve uses 6 decimals — `parseUnits(value, 6)`                        |
-| `recipient = address(0)`                         | Both `deposit` and `redeem` revert on zero address                                   |
-| Preferred redeem always expected to succeed      | Pass `allowBasket = true`; basket route activates if preferred is short              |
+| Adding an approve before redeem / redeemFromPlus | Neither needs it — `PUSDManager` burns `msg.sender` directly via `BURNER_ROLE`/vault-`MANAGER_ROLE` |
+| `parseUnits(value, 18)`                          | PUSD, PUSD+, and every reserve use 6 decimals — `parseUnits(value, 6)`               |
+| `recipient = address(0)`                         | Every entrypoint reverts on zero address                                             |
+| Treating PUSD+ as ERC-4626                       | PUSD+ is a custom ERC-20 with `nav() / totalAssets() / previewMint/Burn`, no `convertToShares` |
+| Expecting `redeemFromPlus` to always pay instantly | If the vault is short on PUSD, residual is queued; `pusdReturned == 0` means fully queued |
+| Calling `mintPlus` / `burnPlus` / `depositForVault` from app code | Vault-only — only PUSDManager (with MANAGER_ROLE) calls into the vault, and only the vault calls back into `depositForVault` |
 | `npm install @pushchain/core` in a UI Kit app    | `@pushchain/core` is bundled in `@pushchain/ui-kit` — use `usePushChain()` instead   |
 | Path-B mint as a single multicall                | Native Push EOAs have no multicall; mint is **two sequential** transactions          |
 
@@ -552,13 +709,19 @@ const REDEEM_ABI = [{
 
 ## Quick reference
 
-| Operation       | Contract       | Function                                                  |
-| --------------- | -------------- | --------------------------------------------------------- |
-| Mint PUSD       | PUSDManager    | `deposit(token, amount, recipient)`                       |
-| Redeem PUSD     | PUSDManager    | `redeem(pusdAmount, preferredAsset, allowBasket, recipient)` |
-| PUSD balance    | PUSD           | `balanceOf(address)`                                      |
-| Total supply    | PUSD           | `totalSupply()`                                           |
-| Token info      | PUSDManager    | `getTokenInfo(token)`                                     |
-| Fee config      | PUSDManager    | `baseFee()`, `preferredFeeMin()`, `preferredFeeMax()`     |
-| Reserve balance | reserve token  | `balanceOf(PUSDManager)`                                  |
-| Accrued surplus | PUSDManager    | `getAccruedSurplus(token)`                                |
+| Operation         | Contract       | Function                                                  |
+| ----------------- | -------------- | --------------------------------------------------------- |
+| Mint PUSD         | PUSDManager    | `deposit(token, amount, recipient)`                       |
+| Redeem PUSD       | PUSDManager    | `redeem(pusdAmount, preferredAsset, allowBasket, recipient)` |
+| Mint PUSD+        | PUSDManager    | `depositToPlus(tokenIn, amount, recipient)`               |
+| Redeem PUSD+      | PUSDManager    | `redeemFromPlus(plusAmount, preferredAsset, allowBasket, recipient)` |
+| Settle queued PUSD+ redeem | PUSDPlusVault | `fulfillQueueClaim(queueId)`                          |
+| PUSD balance      | PUSD           | `balanceOf(address)`                                      |
+| PUSD+ balance     | PUSDPlusVault  | `balanceOf(address)`                                      |
+| PUSD+ NAV (1e18)  | PUSDPlusVault  | `nav()`                                                   |
+| Quote mint PUSD+  | PUSDPlusVault  | `previewMintPlus(pusdIn)`                                 |
+| Quote burn PUSD+  | PUSDPlusVault  | `previewBurnPlus(plusIn)`                                 |
+| Token info        | PUSDManager    | `getTokenInfo(token)`                                     |
+| Fee config        | PUSDManager    | `baseFee()`, `preferredFeeMin()`, `preferredFeeMax()`     |
+| Reserve balance   | reserve token  | `balanceOf(PUSDManager)`                                  |
+| Accrued surplus   | PUSDManager    | `getAccruedSurplus(token)`                                |

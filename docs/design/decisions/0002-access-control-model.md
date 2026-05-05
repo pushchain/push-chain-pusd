@@ -1,10 +1,23 @@
 # ADR 0002 — Access Control Model
 
-**Status:** Accepted
-**Date:** 2024 (extended 2026-04-22 for ADR 0003 contracts)
+**Status:** Accepted (principles); role tables superseded by ADR 0004
+**Date:** 2026-02-22 (extended 2026-04-22 for the scrapped ADR 0003 contracts)
 
-> **Extended by ADR 0003.** The two new contracts `PUSDPlus` and `PUSDLiquidity`
-> adopt the same role pattern. Roles for each contract are listed below.
+> **The principles still hold** — `AccessControl` over `Ownable`, separate
+> `ADMIN_ROLE` from `DEFAULT_ADMIN_ROLE`, timelock the `UPGRADER_ROLE`,
+> bind mint authority to a specific call path that preserves the reserve
+> invariant.
+>
+> **The role tables below are stale.** They describe the scrapped 4-contract
+> plan (`PUSDPlus` as ERC-4626, separate `PUSDLiquidity`, `VAULT_ROLE` /
+> `LIQUIDITY_ROLE` / `REBALANCER_ROLE`, `mintForVault`/`redeemForVault`
+> functions). What shipped is 3 contracts + InsuranceFund sidecar with a
+> different role layout — see:
+>
+> - [ADR 0004 — Shipped V2 architecture](0004-shipped-v2-architecture.md) for the diff
+> - [`docs/research/pusdmanager.md`](../../research/pusdmanager.md), [`pusdplusvault.md`](../../research/pusdplusvault.md), and [`insurancefund.md`](../../research/insurancefund.md) for the current role tables per contract
+>
+> Per ADR convention the body below is preserved as-is for historical record.
 
 ---
 
