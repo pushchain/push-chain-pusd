@@ -17,9 +17,18 @@ import "../src/interfaces/INonfungiblePositionManager.sol";
 
 contract MockERC20 is ERC20 {
     uint8 private _decimals;
-    constructor(string memory n, string memory s, uint8 d) ERC20(n, s) { _decimals = d; }
-    function decimals() public view virtual override returns (uint8) { return _decimals; }
-    function mint(address to, uint256 amount) external { _mint(to, amount); }
+
+    constructor(string memory n, string memory s, uint8 d) ERC20(n, s) {
+        _decimals = d;
+    }
+
+    function decimals() public view virtual override returns (uint8) {
+        return _decimals;
+    }
+
+    function mint(address to, uint256 amount) external {
+        _mint(to, amount);
+    }
 }
 
 /// @dev Mock V3 pool — slot0 returns sqrtPriceX96 = 2^96 (price = 1.0).
@@ -32,10 +41,12 @@ contract MockUniV3Pool {
 /// @dev Mock V3 factory — keys pools by (sortedPair, fee).
 contract MockUniV3Factory {
     mapping(bytes32 => address) public pools;
+
     function setPool(address t0, address t1, uint24 fee, address pool) external {
         if (t0 > t1) (t0, t1) = (t1, t0);
         pools[keccak256(abi.encode(t0, t1, fee))] = pool;
     }
+
     function getPool(address t0, address t1, uint24 fee) external view returns (address) {
         if (t0 > t1) (t0, t1) = (t1, t0);
         return pools[keccak256(abi.encode(t0, t1, fee))];
@@ -51,12 +62,12 @@ contract MockNPM {
     struct PosData {
         address token0;
         address token1;
-        uint24  fee;
-        int24   tickLower;
-        int24   tickUpper;
-        uint128 totalAmount0;   // raw underlying (excluding fees)
+        uint24 fee;
+        int24 tickLower;
+        int24 tickUpper;
+        uint128 totalAmount0; // raw underlying (excluding fees)
         uint128 totalAmount1;
-        uint128 fees0;          // accrued fees, on top of underlying
+        uint128 fees0; // accrued fees, on top of underlying
         uint128 fees1;
     }
 
@@ -64,28 +75,36 @@ contract MockNPM {
     uint256 public nextId = 1;
     address public factoryAddr;
 
-    function setFactory(address f) external { factoryAddr = f; }
-    function factory() external view returns (address) { return factoryAddr; }
+    function setFactory(address f) external {
+        factoryAddr = f;
+    }
+
+    function factory() external view returns (address) {
+        return factoryAddr;
+    }
 
     function mint(INonfungiblePositionManager.MintParams calldata p)
-        external returns (uint256 tokenId, uint128 liquidity, uint256 a0, uint256 a1)
+        external
+        returns (uint256 tokenId, uint128 liquidity, uint256 a0, uint256 a1)
     {
-        if (p.amount0Desired > 0)
+        if (p.amount0Desired > 0) {
             ERC20(p.token0).transferFrom(msg.sender, address(this), p.amount0Desired);
-        if (p.amount1Desired > 0)
+        }
+        if (p.amount1Desired > 0) {
             ERC20(p.token1).transferFrom(msg.sender, address(this), p.amount1Desired);
+        }
 
         tokenId = nextId++;
         posData[tokenId] = PosData({
-            token0:       p.token0,
-            token1:       p.token1,
-            fee:          p.fee,
-            tickLower:    p.tickLower,
-            tickUpper:    p.tickUpper,
+            token0: p.token0,
+            token1: p.token1,
+            fee: p.fee,
+            tickLower: p.tickLower,
+            tickUpper: p.tickUpper,
             totalAmount0: uint128(p.amount0Desired),
             totalAmount1: uint128(p.amount1Desired),
-            fees0:        0,
-            fees1:        0
+            fees0: 0,
+            fees1: 0
         });
         // Return liquidity == amount0+amount1 for the openPool event only.
         liquidity = uint128(p.amount0Desired + p.amount1Desired);
@@ -93,7 +112,8 @@ contract MockNPM {
     }
 
     function increaseLiquidity(INonfungiblePositionManager.IncreaseLiquidityParams calldata p)
-        external returns (uint128 liquidity, uint256, uint256)
+        external
+        returns (uint128 liquidity, uint256, uint256)
     {
         PosData storage pd = posData[p.tokenId];
         if (p.amount0Desired > 0) ERC20(pd.token0).transferFrom(msg.sender, address(this), p.amount0Desired);
@@ -107,7 +127,8 @@ contract MockNPM {
     /// @dev Treats `liquidity` argument as PUSD-equivalent (amount0+amount1) to
     ///      withdraw, splitting it 50/50. Sufficient for tests.
     function decreaseLiquidity(INonfungiblePositionManager.DecreaseLiquidityParams calldata p)
-        external returns (uint256 amount0, uint256 amount1)
+        external
+        returns (uint256 amount0, uint256 amount1)
     {
         PosData storage pd = posData[p.tokenId];
         uint256 share0 = uint256(p.liquidity) / 2;
@@ -128,7 +149,8 @@ contract MockNPM {
     ///      calls `collect` repeatedly without `decreaseLiquidity`) from
     ///      draining underlying, we only sweep `fees0/fees1` here.
     function collect(INonfungiblePositionManager.CollectParams calldata p)
-        external returns (uint256 amount0, uint256 amount1)
+        external
+        returns (uint256 amount0, uint256 amount1)
     {
         PosData storage pd = posData[p.tokenId];
         amount0 = pd.fees0;
@@ -140,7 +162,9 @@ contract MockNPM {
         return (amount0, amount1);
     }
 
-    function burn(uint256 tokenId) external { delete posData[tokenId]; }
+    function burn(uint256 tokenId) external {
+        delete posData[tokenId];
+    }
 
     /// @dev Test helper — drains the position underlying back to the vault.
     ///      Real V3 routes this through `decreaseLiquidity → collect`; our
@@ -172,19 +196,36 @@ contract MockNPM {
     ///      `tokensOwed*` (real V3 separates underlying from fees, but for the
     ///      vault's sum-at-$1 valuation that distinction doesn't matter).
     function positions(uint256 tokenId)
-        external view
+        external
+        view
         returns (
-            uint96, address, address token0, address token1, uint24 fee,
-            int24 tickLower, int24 tickUpper, uint128 liquidity,
-            uint256, uint256, uint128 owed0, uint128 owed1
+            uint96,
+            address,
+            address token0,
+            address token1,
+            uint24 fee,
+            int24 tickLower,
+            int24 tickUpper,
+            uint128 liquidity,
+            uint256,
+            uint256,
+            uint128 owed0,
+            uint128 owed1
         )
     {
         PosData storage pd = posData[tokenId];
         return (
-            0, address(0), pd.token0, pd.token1, pd.fee, pd.tickLower, pd.tickUpper,
-            0,                                      // liquidity = 0 — bypass V3Math
-            0, 0,
-            pd.totalAmount0 + pd.fees0,             // underlying + uncollected fees
+            0,
+            address(0),
+            pd.token0,
+            pd.token1,
+            pd.fee,
+            pd.tickLower,
+            pd.tickUpper,
+            0, // liquidity = 0 — bypass V3Math
+            0,
+            0,
+            pd.totalAmount0 + pd.fees0, // underlying + uncollected fees
             pd.totalAmount1 + pd.fees1
         );
     }
@@ -195,40 +236,37 @@ contract MockNPM {
 // =============================================================================
 
 contract PUSDPlusVaultTest is Test {
-    PUSD          public pusd;
-    PUSDManager   public manager;
+    PUSD public pusd;
+    PUSDManager public manager;
     PUSDPlusVault public vault;
     InsuranceFund public ifund;
 
-    MockERC20      public usdc;
-    MockERC20      public usdt;
-    MockNPM        public npm;
-    MockUniV3Pool  public pool;
+    MockERC20 public usdc;
+    MockERC20 public usdt;
+    MockNPM public npm;
+    MockUniV3Pool public pool;
     MockUniV3Factory public factory;
 
-    address public admin     = address(0xA1);
-    address public keeper    = address(0xA2);
+    address public admin = address(0xA1);
+    address public keeper = address(0xA2);
     address public poolAdmin = address(0xA3);
     address public vaultAdmin = address(0xA4);
-    address public guardian  = address(0xA5);
-    address public alice     = address(0xB1);
-    address public bob       = address(0xB2);
+    address public guardian = address(0xA5);
+    address public alice = address(0xB1);
+    address public bob = address(0xB2);
 
     uint256 internal constant ONE_M = 1_000_000e6;
 
     function setUp() public {
         // ---- PUSD + PUSDManager ----
         PUSD pusdImpl = new PUSD();
-        ERC1967Proxy pusdProxy = new ERC1967Proxy(
-            address(pusdImpl),
-            abi.encodeWithSelector(PUSD.initialize.selector, admin)
-        );
+        ERC1967Proxy pusdProxy =
+            new ERC1967Proxy(address(pusdImpl), abi.encodeWithSelector(PUSD.initialize.selector, admin));
         pusd = PUSD(address(pusdProxy));
 
         PUSDManager mgrImpl = new PUSDManager();
         ERC1967Proxy mgrProxy = new ERC1967Proxy(
-            address(mgrImpl),
-            abi.encodeWithSelector(PUSDManager.initialize.selector, address(pusd), admin)
+            address(mgrImpl), abi.encodeWithSelector(PUSDManager.initialize.selector, address(pusd), admin)
         );
         manager = PUSDManager(address(mgrProxy));
 
@@ -248,8 +286,8 @@ contract PUSDPlusVaultTest is Test {
 
         // ---- V3 mocks ----
         factory = new MockUniV3Factory();
-        npm     = new MockNPM();
-        pool    = new MockUniV3Pool();
+        npm = new MockNPM();
+        pool = new MockUniV3Pool();
         npm.setFactory(address(factory));
         factory.setPool(address(usdc), address(usdt), 500, address(pool));
 
@@ -258,29 +296,26 @@ contract PUSDPlusVaultTest is Test {
         ERC1967Proxy vProxy = new ERC1967Proxy(
             address(vImpl),
             abi.encodeCall(
-                PUSDPlusVault.initialize,
-                (admin, address(pusd), address(manager), address(npm), address(factory))
+                PUSDPlusVault.initialize, (admin, address(pusd), address(manager), address(npm), address(factory))
             )
         );
         vault = PUSDPlusVault(address(vProxy));
 
         // ---- Insurance fund ----
         InsuranceFund iImpl = new InsuranceFund();
-        ERC1967Proxy iProxy = new ERC1967Proxy(
-            address(iImpl),
-            abi.encodeCall(InsuranceFund.initialize, (admin, vaultAdmin, guardian))
-        );
+        ERC1967Proxy iProxy =
+            new ERC1967Proxy(address(iImpl), abi.encodeCall(InsuranceFund.initialize, (admin, vaultAdmin, guardian)));
         ifund = InsuranceFund(address(iProxy));
         vm.prank(admin);
         ifund.setVault(address(vault));
 
         // ---- Atomic config (mirrors §12 step 3) ----
         vm.startPrank(admin);
-        vault.grantRole(vault.MANAGER_ROLE(),     address(manager));
-        vault.grantRole(vault.KEEPER_ROLE(),      keeper);
-        vault.grantRole(vault.POOL_ADMIN_ROLE(),  poolAdmin);
+        vault.grantRole(vault.MANAGER_ROLE(), address(manager));
+        vault.grantRole(vault.KEEPER_ROLE(), keeper);
+        vault.grantRole(vault.POOL_ADMIN_ROLE(), poolAdmin);
         vault.grantRole(vault.VAULT_ADMIN_ROLE(), vaultAdmin);
-        vault.grantRole(vault.GUARDIAN_ROLE(),    guardian);
+        vault.grantRole(vault.GUARDIAN_ROLE(), guardian);
         vm.stopPrank();
 
         vm.startPrank(vaultAdmin);
@@ -304,8 +339,8 @@ contract PUSDPlusVaultTest is Test {
         // ---- Fund users ----
         usdc.mint(alice, ONE_M);
         usdt.mint(alice, ONE_M);
-        usdc.mint(bob,   ONE_M);
-        usdt.mint(bob,   ONE_M);
+        usdc.mint(bob, ONE_M);
+        usdt.mint(bob, ONE_M);
     }
 
     // -----------------------------------------------------------------
@@ -313,8 +348,8 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testInitialization() public {
-        assertEq(vault.name(),     "PUSD Plus");
-        assertEq(vault.symbol(),   "PUSD+");
+        assertEq(vault.name(), "PUSD Plus");
+        assertEq(vault.symbol(), "PUSD+");
         assertEq(vault.decimals(), 6);
         assertEq(vault.haircutBps(), 200);
         assertEq(vault.unwindCapBps(), 500);
@@ -486,14 +521,21 @@ contract PUSDPlusVaultTest is Test {
 
         // POOL_ADMIN locks 800+800 = 1600 PUSD-equivalent into LP.
         vm.prank(poolAdmin);
-        (uint256 tokenId, ) = vault.openPool(INonfungiblePositionManager.MintParams({
-            token0: address(usdc), token1: address(usdt),
-            fee: 500, tickLower: -20, tickUpper: 20,
-            amount0Desired: 800e6, amount1Desired: 800e6,
-            amount0Min: 0, amount1Min: 0,
-            recipient: address(vault),
-            deadline: block.timestamp + 60
-        }));
+        (uint256 tokenId,) = vault.openPool(
+            INonfungiblePositionManager.MintParams({
+                token0: address(usdc),
+                token1: address(usdt),
+                fee: 500,
+                tickLower: -20,
+                tickUpper: 20,
+                amount0Desired: 800e6,
+                amount1Desired: 800e6,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(vault),
+                deadline: block.timestamp + 60
+            })
+        );
         // Vault: 0 PUSD + 200 USDC + 200 USDT idle + 1600 in LP. NAV = 1.
 
         // Alice redeems 800 PUSD+ for USDC. pusdOwed = 800 (NAV unchanged).
@@ -550,14 +592,21 @@ contract PUSDPlusVaultTest is Test {
 
         // Open a 400+400 LP position.
         vm.prank(poolAdmin);
-        (uint256 tokenId, ) = vault.openPool(INonfungiblePositionManager.MintParams({
-            token0: address(usdc), token1: address(usdt),
-            fee: 500, tickLower: -20, tickUpper: 20,
-            amount0Desired: 400e6, amount1Desired: 400e6,
-            amount0Min: 0, amount1Min: 0,
-            recipient: address(vault),
-            deadline: block.timestamp + 60
-        }));
+        (uint256 tokenId,) = vault.openPool(
+            INonfungiblePositionManager.MintParams({
+                token0: address(usdc),
+                token1: address(usdt),
+                fee: 500,
+                tickLower: -20,
+                tickUpper: 20,
+                amount0Desired: 400e6,
+                amount1Desired: 400e6,
+                amount0Min: 0,
+                amount1Min: 0,
+                recipient: address(vault),
+                deadline: block.timestamp + 60
+            })
+        );
 
         uint256 supplyBefore = vault.totalSupply();
         uint256 navAtMintTime = vault.nav();
@@ -570,7 +619,7 @@ contract PUSDPlusVaultTest is Test {
         usdt.mint(address(npm), 10e6);
         npm.accrueFees(tokenId, 10e6, 10e6);
         uint256 navWithUncollected = vault.nav();
-        assertGt(navWithUncollected, navAtMintTime);   // NAV grew with fees
+        assertGt(navWithUncollected, navAtMintTime); // NAV grew with fees
 
         // Keeper harvests. 2% haircut → 0.2 USDC + 0.2 USDT to IF; the rest
         // (9.8 USDC + 9.8 USDT) stays in the vault as idle. Net NAV after
@@ -635,16 +684,22 @@ contract PUSDPlusVaultTest is Test {
         vm.expectRevert();
         vault.rebalance();
         vm.prank(keeper);
-        vault.rebalance();          // no-op when no positions; must not revert
+        vault.rebalance(); // no-op when no positions; must not revert
     }
 
     function testOnlyPoolAdminCanOpenPool() public {
         INonfungiblePositionManager.MintParams memory p = INonfungiblePositionManager.MintParams({
-            token0: address(usdc), token1: address(usdt),
-            fee: 500, tickLower: -20, tickUpper: 20,
-            amount0Desired: 100, amount1Desired: 100,
-            amount0Min: 0, amount1Min: 0,
-            recipient: address(vault), deadline: block.timestamp + 60
+            token0: address(usdc),
+            token1: address(usdt),
+            fee: 500,
+            tickLower: -20,
+            tickUpper: 20,
+            amount0Desired: 100,
+            amount1Desired: 100,
+            amount0Min: 0,
+            amount1Min: 0,
+            recipient: address(vault),
+            deadline: block.timestamp + 60
         });
         vm.prank(alice);
         vm.expectRevert();
@@ -678,7 +733,7 @@ contract PUSDPlusVaultTest is Test {
     function testVaultPublicRedeemIsFeeExempt() public {
         // Set non-zero base fee so we'd notice if it's charged.
         vm.prank(admin);
-        manager.setBaseFee(50);    // 0.5% — well below 1% cap
+        manager.setBaseFee(50); // 0.5% — well below 1% cap
 
         // Get reserves into manager via a normal user deposit.
         vm.startPrank(alice);
@@ -698,7 +753,7 @@ contract PUSDPlusVaultTest is Test {
 
     function testNonVaultRedeemStillChargesFee() public {
         vm.prank(admin);
-        manager.setBaseFee(50);    // 0.5%
+        manager.setBaseFee(50); // 0.5%
 
         // Alice deposits via plain deposit, then redeems via plain redeem (NOT
         // through the vault path) — the fee-exempt branch must NOT fire.
@@ -772,20 +827,15 @@ contract PUSDPlusVaultTest is Test {
         vm.stopPrank();
 
         address plusVaultBefore = manager.plusVault();
-        bool feeExemptBefore    = manager.feeExempt(address(vault));
-        uint256 supplyBefore    = vault.totalSupply();
+        bool feeExemptBefore = manager.feeExempt(address(vault));
+        uint256 supplyBefore = vault.totalSupply();
 
         // Deploy a new impl (same source) and upgrade the proxy. Caller is
         // `admin` who holds UPGRADER_ROLE in setUp().
         PUSDManager newImpl = new PUSDManager();
         vm.prank(admin);
-        (bool ok, ) = address(manager).call(
-            abi.encodeWithSignature(
-                "upgradeToAndCall(address,bytes)",
-                address(newImpl),
-                bytes("")
-            )
-        );
+        (bool ok,) = address(manager)
+            .call(abi.encodeWithSignature("upgradeToAndCall(address,bytes)", address(newImpl), bytes("")));
         assertTrue(ok, "upgrade failed");
 
         // Post-upgrade: storage preserved.
@@ -817,9 +867,9 @@ contract PUSDPlusVaultTest is Test {
         vm.stopPrank();
 
         assertEq(vault.balanceOf(alice), 1_000e6);
-        assertEq(vault.balanceOf(bob),     500e6);
-        assertEq(vault.totalSupply(),    1_500e6);
-        assertEq(vault.totalAssets(),    1_500e6);
+        assertEq(vault.balanceOf(bob), 500e6);
+        assertEq(vault.totalSupply(), 1_500e6);
+        assertEq(vault.totalAssets(), 1_500e6);
         assertEq(vault.nav(), 1e18);
     }
 }

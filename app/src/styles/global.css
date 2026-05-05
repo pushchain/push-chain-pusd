@@ -237,7 +237,10 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 40px;
-  padding: 24px 0;
+  /* Vertical only — horizontal gutter comes from .container so the
+     masthead aligns with the editorial band, footer, and content sections. */
+  padding-top: 24px;
+  padding-bottom: 24px;
 }
 
 .masthead__logo {
@@ -354,6 +357,17 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 @media (max-width: 560px) {
   .masthead__nav   { gap: 14px; font-size: 11px; }
   .masthead__addr  { display: none; }
+}
+/* The masthead `.container` reads `--gutter` (12–16–24px) like every other
+   page section. On the narrowest phones the big logotype + CONNECT button
+   feel cramped against the screen edge — bump the masthead's horizontal
+   padding past the global gutter so the visual rhythm matches the footer's
+   internal breathing room. */
+@media (max-width: 480px) {
+  .masthead__inner { padding-left: 20px; padding-right: 20px; }
+}
+@media (max-width: 380px) {
+  .masthead__inner { padding-left: 16px; padding-right: 16px; }
 }
 
 /* ==========================================================================
@@ -1317,6 +1331,12 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 .footer__row em { font-style: italic; color: var(--c-ink-dim); }
+.footer__addrs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  align-items: center;
+}
 
 @media (max-width: 600px) {
   .footer__cols { gap: 32px; }
@@ -1355,6 +1375,77 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--c-ink-mute);
+}
+
+.convert__wrap-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--c-magenta);
+  color: var(--c-cream);
+  padding: 10px 16px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.convert__wrap-banner-x {
+  background: none;
+  border: 1px solid currentColor;
+  color: currentColor;
+  width: 22px;
+  height: 22px;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.convert__wrap-banner-x:hover {
+  background: var(--c-cream);
+  color: var(--c-magenta);
+}
+
+.convert__product {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border-bottom: var(--rule-thin);
+  background: var(--c-cream);
+}
+
+.convert__product-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 16px;
+  background: transparent;
+  border: none;
+  border-right: var(--rule-thin);
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+.convert__product-btn:last-child { border-right: none; }
+.convert__product-btn:hover:not(:disabled) { background: var(--c-paper); }
+.convert__product-btn--active {
+  background: var(--c-magenta);
+  color: var(--c-cream);
+}
+.convert__product-btn--active:hover:not(:disabled) {
+  background: var(--c-magenta);
+  color: var(--c-cream);
+}
+.convert__product-tag {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  opacity: 0.7;
+  border: 1px solid currentColor;
+  padding: 1px 4px;
+  border-radius: 2px;
 }
 
 .convert__tabs {
@@ -1805,6 +1896,28 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   border-collapse: collapse;
   font-family: var(--f-body);
   font-size: 14px;
+}
+
+/* Wrap a table in `.table-wrap` to allow horizontal scrolling on narrow
+   viewports without breaking the desktop layout. Pair with `.table--responsive`
+   on the table itself to disable column-shrink and pull-out the
+   `.cell-md-up` / `.cell-sm-up` modifiers below. */
+.table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.table--responsive { min-width: 0; }
+
+/* Visibility helpers — `.cell-md-up` is the de-emphasised "show on tablet+"
+   class. `.cell-sm-up` is "show on phone+ but you can drop it on the
+   narrowest widths." Used to hide CHAIN / ADDRESS columns on phones so the
+   table fits without horizontal scroll for the common case. */
+@media (max-width: 720px) {
+  .cell-md-up { display: none !important; }
+}
+@media (max-width: 380px) {
+  .cell-sm-up { display: none !important; }
 }
 
 .table thead th {
@@ -2840,7 +2953,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   }
 
   /* ── Masthead ── */
-  .masthead__inner { padding: 16px 0; gap: 10px; }
+  .masthead__inner { padding-top: 16px; padding-bottom: 16px; gap: 10px; }
   .masthead__logo  { font-size: 22px; }
   .masthead__nav   { gap: 10px; font-size: 10px; letter-spacing: 0.06em; }
 
@@ -2915,6 +3028,219 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
   /* Footer bottom row — stack copyright + links */
   .footer__row { flex-direction: column; gap: 8px; }
+}
+
+/* ==========================================================================
+   27.4 RESERVES VIEW TOGGLE — segmented control between PUSD and PUSD+
+   ========================================================================== */
+.reserves-toggle {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  border: var(--rule-thin);
+  background: var(--c-paper);
+}
+.reserves-toggle__btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  padding: 14px 18px;
+  background: transparent;
+  border: none;
+  border-right: var(--rule-thin);
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.1s, color 0.1s;
+}
+.reserves-toggle__btn:last-child { border-right: none; }
+.reserves-toggle__btn:hover:not(.reserves-toggle__btn--active) { background: var(--c-cream); }
+.reserves-toggle__btn--active {
+  background: var(--c-ink);
+  color: var(--c-cream);
+}
+.reserves-toggle__btn--plus.reserves-toggle__btn--active {
+  background: var(--c-magenta);
+  color: var(--c-cream);
+}
+.reserves-toggle__tag {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  opacity: 0.7;
+  font-weight: 400;
+}
+@media (max-width: 480px) {
+  .reserves-toggle__btn { padding: 12px 14px; font-size: 11px; }
+}
+
+/* ==========================================================================
+   27.5 VAULT BOOK — /reserves PUSD+ section helpers
+   ========================================================================== */
+.vault-nav-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 1fr) auto;
+  gap: 24px;
+  align-items: end;
+  margin-top: 12px;
+}
+.vault-nav-grid__chart {
+  background: var(--c-paper);
+  border: var(--rule-thin);
+  padding: 12px 16px;
+}
+.vault-nav-grid__apy {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0;
+  border: var(--rule-thin);
+  background: var(--c-paper);
+}
+.vault-apy-cell {
+  padding: 12px 16px;
+  border-right: var(--rule-thin);
+  min-width: 80px;
+  text-align: center;
+}
+.vault-apy-cell:last-child { border-right: none; }
+.vault-apy-cell__label {
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--c-ink-mute);
+}
+.vault-apy-cell__value {
+  font-family: var(--f-mono);
+  font-size: 18px;
+  margin-top: 4px;
+  color: var(--c-magenta);
+}
+@media (max-width: 720px) {
+  .vault-nav-grid { grid-template-columns: 1fr; }
+}
+
+/* ==========================================================================
+   28. BALANCE STRIP — dashboard balance cards + queue claims
+   ========================================================================== */
+.balance-strip {
+  margin-bottom: 32px;
+}
+.balance-strip__cards {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0;
+  border: var(--rule-thin);
+  background: var(--c-paper);
+}
+.balance-strip__cards .balance-card + .balance-card {
+  border-left: var(--rule-thin);
+}
+.balance-card {
+  padding: 20px 24px;
+  background: var(--c-paper);
+}
+.balance-card--plus {
+  background: linear-gradient(180deg, rgba(255, 61, 165, 0.04) 0%, var(--c-paper) 100%);
+}
+.balance-card__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.balance-card__label {
+  font-family: var(--f-display);
+  font-size: 24px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.balance-card--plus .balance-card__label { color: var(--c-magenta); }
+.balance-card__tag {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+}
+.balance-card__amount {
+  font-family: var(--f-mono);
+  font-size: 32px;
+  letter-spacing: 0.01em;
+  margin: 8px 0 16px;
+  color: var(--c-ink);
+}
+.balance-card__actions {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+.balance-card__action {
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--c-ink);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  padding-bottom: 1px;
+}
+.balance-card__action:hover { color: var(--c-magenta); }
+.balance-card__action--accent { color: var(--c-magenta); }
+.balance-card__action--accent:hover { color: var(--c-ink); }
+
+.balance-strip__queue {
+  margin-top: 16px;
+  border: var(--rule-thin);
+  background: var(--c-paper);
+  padding: 12px 16px;
+}
+.balance-strip__queue-head {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+  margin-bottom: 8px;
+}
+.claim-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 8px 0;
+  border-top: 1px dashed var(--c-ink-mute-2, rgba(0, 0, 0, 0.1));
+  font-family: var(--f-mono);
+  font-size: 13px;
+}
+.claim-row:first-of-type { border-top: none; }
+.claim-row__id { color: var(--c-magenta); font-weight: 600; }
+.claim-row__amount { flex: 1; }
+.claim-row__btn {
+  background: var(--c-ink);
+  color: var(--c-cream);
+  border: none;
+  padding: 6px 12px;
+  font-family: var(--f-mono);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  cursor: pointer;
+}
+.claim-row__btn:disabled { opacity: 0.4; cursor: wait; }
+.claim-row__error {
+  margin-top: 8px;
+  color: var(--c-oxblood);
+  font-family: var(--f-mono);
+  font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .balance-strip__cards { grid-template-columns: 1fr; }
+  .balance-strip__cards .balance-card + .balance-card {
+    border-left: none;
+    border-top: var(--rule-thin);
+  }
 }
 
 /* ==========================================================================

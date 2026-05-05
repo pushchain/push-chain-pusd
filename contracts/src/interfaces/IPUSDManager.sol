@@ -8,12 +8,7 @@ pragma solidity 0.8.22;
 interface IPUSDManager {
     function deposit(address token, uint256 amount, address recipient) external;
 
-    function redeem(
-        uint256 pusdAmount,
-        address preferredAsset,
-        bool    allowBasket,
-        address recipient
-    ) external;
+    function redeem(uint256 pusdAmount, address preferredAsset, bool allowBasket, address recipient) external;
 
     /// @notice Vault-only path: skips reentrancy lock + surplus haircut.
     function depositForVault(address token, uint256 amount) external returns (uint256 pusdMinted);

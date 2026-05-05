@@ -18,7 +18,7 @@ const NAV: readonly NavItem[] = [
   { to: '/',          label: 'HOME',      end: true },
   { to: '/convert',   label: 'CONVERT' },
   { to: '/reserves',  label: 'RESERVES' },
-  { to: '/history',   label: 'ACTIVITY' },
+  { to: '/dashboard', label: 'DASHBOARD' },
   { to: '/docs',      label: 'DOCS' },
 ];
 

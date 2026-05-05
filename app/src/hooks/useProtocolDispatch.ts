@@ -68,38 +68,44 @@ export function useProtocolDispatch(limit = 8): DispatchState {
         const items = await fetchManagerLogs({ limit });
         if (cancelled) return;
 
-        const rows: DispatchRow[] = items.map(({ event, timestamp }) => {
-          const asset =
-            (TOKENS.find((t) => t.address.toLowerCase() === event.token.toLowerCase())
-              ?? tokenByAddress(event.token))
-              ?? unknownAsset(event.token);
-          if (event.type === 'MINT') {
+        const rows: DispatchRow[] = items
+          // The public dispatch feed only surfaces plain PUSD mint/redeem.
+          // PUSD+ events render in the user's own dashboard.
+          .filter(({ event }) => event.type === 'MINT' || event.type === 'REDEEM')
+          .map(({ event, timestamp }) => {
+            // Type guard above narrows event to DepositedEvent | RedeemedEvent.
+            const e = event as Extract<typeof event, { type: 'MINT' | 'REDEEM' }>;
+            const asset =
+              (TOKENS.find((t) => t.address.toLowerCase() === e.token.toLowerCase())
+                ?? tokenByAddress(e.token))
+                ?? unknownAsset(e.token);
+            if (e.type === 'MINT') {
+              return {
+                type: 'MINT' as const,
+                timestamp,
+                pusdAmount: e.pusdMinted,
+                tokenAmount: e.tokenAmount,
+                asset,
+                user: e.user,
+                recipient: e.recipient,
+                txHash: e.txHash,
+                blockNumber: e.blockNumber,
+                logIndex: e.logIndex,
+              };
+            }
             return {
-              type: 'MINT' as const,
+              type: 'REDEEM' as const,
               timestamp,
-              pusdAmount: event.pusdMinted,
-              tokenAmount: event.tokenAmount,
+              pusdAmount: e.pusdBurned,
+              tokenAmount: e.tokenAmount,
               asset,
-              user: event.user,
-              recipient: event.recipient,
-              txHash: event.txHash,
-              blockNumber: event.blockNumber,
-              logIndex: event.logIndex,
+              user: e.user,
+              recipient: e.recipient,
+              txHash: e.txHash,
+              blockNumber: e.blockNumber,
+              logIndex: e.logIndex,
             };
-          }
-          return {
-            type: 'REDEEM' as const,
-            timestamp,
-            pusdAmount: event.pusdBurned,
-            tokenAmount: event.tokenAmount,
-            asset,
-            user: event.user,
-            recipient: event.recipient,
-            txHash: event.txHash,
-            blockNumber: event.blockNumber,
-            logIndex: event.logIndex,
-          };
-        });
+          });
 
         setState({ rows, loading: false, error: null, updatedAt: Date.now() });
       } catch (err) {

@@ -20,9 +20,9 @@ import "./DeployBase.s.sol";
  */
 contract DeployPUSDV1 is DeployBase {
     function run() external returns (V1Result memory r) {
-        address finalAdmin  = vm.envAddress("ADMIN_ADDRESS");
+        address finalAdmin = vm.envAddress("ADMIN_ADDRESS");
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer    = vm.addr(deployerKey);
+        address deployer = vm.addr(deployerKey);
 
         console.log("=== PUSD V1 deploy ===");
         console.log("Deployer:    ", deployer);

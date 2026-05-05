@@ -55,7 +55,7 @@ contract PUSDPlusVault is
     // -- inline reentrancy guard (matches PUSDManager's pattern; OZ 5.x's
     //    ReentrancyGuardUpgradeable variant has been removed) -----------
     uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED     = 2;
+    uint256 private constant _ENTERED = 2;
     uint256 private _reentrancyStatus;
 
     modifier nonReentrant() {
@@ -70,33 +70,33 @@ contract PUSDPlusVault is
     // =========================================================================
 
     /// @notice Allowed to call mintPlus / burnPlus. Held by PUSDManager only.
-    bytes32 public constant MANAGER_ROLE     = keccak256("PUSDPLUS_MANAGER_ROLE");
+    bytes32 public constant MANAGER_ROLE = keccak256("PUSDPLUS_MANAGER_ROLE");
     /// @notice Operational keeper bot — harvest, top-up, queue fulfilment.
-    bytes32 public constant KEEPER_ROLE      = keccak256("PUSDPLUS_KEEPER_ROLE");
+    bytes32 public constant KEEPER_ROLE = keccak256("PUSDPLUS_KEEPER_ROLE");
     /// @notice Multisig — opens / closes pools, sets tick ranges, manages basket.
-    bytes32 public constant POOL_ADMIN_ROLE  = keccak256("PUSDPLUS_POOL_ADMIN_ROLE");
+    bytes32 public constant POOL_ADMIN_ROLE = keccak256("PUSDPLUS_POOL_ADMIN_ROLE");
     /// @notice Multisig — vault knobs (haircut, unwind cap, defaults, IF address).
     bytes32 public constant VAULT_ADMIN_ROLE = keccak256("PUSDPLUS_VAULT_ADMIN_ROLE");
     /// @notice Pause-only multisig. Cannot unpause; that requires DEFAULT_ADMIN.
-    bytes32 public constant GUARDIAN_ROLE    = keccak256("PUSDPLUS_GUARDIAN_ROLE");
+    bytes32 public constant GUARDIAN_ROLE = keccak256("PUSDPLUS_GUARDIAN_ROLE");
 
     // =========================================================================
     // Hard caps (enforced in setter bodies — do NOT relax)
     // =========================================================================
 
-    uint16 public constant MAX_HAIRCUT_BPS         = 500;   // 5%
-    uint16 public constant MIN_UNWIND_CAP_BPS      = 100;   // 1%
-    uint16 public constant MAX_UNWIND_CAP_BPS      = 5000;  // 50%
-    uint16 public constant MAX_DEPLOYMENT_CAP_BPS  = 8500;  // 85%
-    uint256 public constant BPS_DENOMINATOR        = 10_000;
-    uint256 public constant NAV_PRECISION          = 1e18;
+    uint16 public constant MAX_HAIRCUT_BPS = 500; // 5%
+    uint16 public constant MIN_UNWIND_CAP_BPS = 100; // 1%
+    uint16 public constant MAX_UNWIND_CAP_BPS = 5000; // 50%
+    uint16 public constant MAX_DEPLOYMENT_CAP_BPS = 8500; // 85%
+    uint256 public constant BPS_DENOMINATOR = 10_000;
+    uint256 public constant NAV_PRECISION = 1e18;
 
     // =========================================================================
     // External dependencies (set once in initializer; immutable in spirit)
     // =========================================================================
 
-    IPUSD             public pusd;
-    IPUSDManager      public manager;
+    IPUSD public pusd;
+    IPUSDManager public manager;
     INonfungiblePositionManager public positionManager;
     IUniswapV3Factory public v3Factory;
 
@@ -104,16 +104,16 @@ contract PUSDPlusVault is
     // Configuration (VAULT_ADMIN-managed, hard-capped)
     // =========================================================================
 
-    uint16  public haircutBps;          // applied to LP fee accrual on harvest
-    uint16  public unwindCapBps;        // share of deployed value redeemable per tx
-    uint16  public maxDeploymentBps;    // soft cap — keeper holds idle past this
-    uint256 public minBootstrapSize;    // min idle per side to auto-open a pool (6-dec)
-    uint256 public topUpThreshold;      // idle threshold per token to trigger top-up
-    uint256 public instantFloorPusd;    // small redeems never throttled (6-dec PUSD)
+    uint16 public haircutBps; // applied to LP fee accrual on harvest
+    uint16 public unwindCapBps; // share of deployed value redeemable per tx
+    uint16 public maxDeploymentBps; // soft cap — keeper holds idle past this
+    uint256 public minBootstrapSize; // min idle per side to auto-open a pool (6-dec)
+    uint256 public topUpThreshold; // idle threshold per token to trigger top-up
+    uint256 public instantFloorPusd; // small redeems never throttled (6-dec PUSD)
 
-    uint24 public defaultFeeTier;       // 500 = 0.05% (phase 1) | 100 = 0.01% (phase 2)
-    int24  public defaultTickLower;     // signed; e.g. -20 ≈ 0.998
-    int24  public defaultTickUpper;     // signed; e.g. +20 ≈ 1.002
+    uint24 public defaultFeeTier; // 500 = 0.05% (phase 1) | 100 = 0.01% (phase 2)
+    int24 public defaultTickLower; // signed; e.g. -20 ≈ 0.998
+    int24 public defaultTickUpper; // signed; e.g. +20 ≈ 1.002
 
     address public insuranceFund;
 
@@ -143,14 +143,14 @@ contract PUSDPlusVault is
     ///       rebalances.
     struct QueueEntry {
         address recipient;
-        address preferredAsset;     // address(pusd) for PUSD payout
-        bool    allowBasket;
-        uint128 pusdOwed;           // 6-dec PUSD remaining
-        uint64  queuedAt;           // block.timestamp
+        address preferredAsset; // address(pusd) for PUSD payout
+        bool allowBasket;
+        uint128 pusdOwed; // 6-dec PUSD remaining
+        uint64 queuedAt; // block.timestamp
     }
 
     mapping(uint256 => QueueEntry) public queue;
-    uint256 public nextQueueId;     // monotonic id, 1-indexed (0 = none)
+    uint256 public nextQueueId; // monotonic id, 1-indexed (0 = none)
     uint256 public totalQueuedPusd; // sum over open entries
 
     // =========================================================================
@@ -162,7 +162,15 @@ contract PUSDPlusVault is
     event QueueClaimFilled(uint256 indexed queueId, address indexed recipient, uint256 pusdAmount, address asset);
     event Harvested(uint256 indexed positionId, uint256 amount0, uint256 amount1);
     event HaircutApplied(address indexed token, uint256 amount, address indexed insuranceFund);
-    event PositionOpened(uint256 indexed positionId, address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint128 liquidity);
+    event PositionOpened(
+        uint256 indexed positionId,
+        address token0,
+        address token1,
+        uint24 fee,
+        int24 tickLower,
+        int24 tickUpper,
+        uint128 liquidity
+    );
     event PositionClosed(uint256 indexed positionId);
     event PositionToppedUp(uint256 indexed positionId, uint128 addedLiquidity);
     event PusdRedeemedForToken(address indexed token, uint256 pusdIn, uint256 tokenOut);
@@ -201,20 +209,21 @@ contract PUSDPlusVault is
     // =========================================================================
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() { _disableInitializers(); }
+    constructor() {
+        _disableInitializers();
+    }
 
     /// @notice One-time initialiser. Called inside the proxy via timelock.
     /// @dev    Hard-capped defaults are NOT set here — the atomic deploy
     ///         proposal (DeployPUSDPlus.s.sol) sets them post-construction.
-    function initialize(
-        address admin,
-        address _pusd,
-        address _manager,
-        address _positionManager,
-        address _v3Factory
-    ) external initializer {
-        if (admin == address(0) || _pusd == address(0) || _manager == address(0) ||
-            _positionManager == address(0) || _v3Factory == address(0)) revert Vault_ZeroAddress();
+    function initialize(address admin, address _pusd, address _manager, address _positionManager, address _v3Factory)
+        external
+        initializer
+    {
+        if (
+            admin == address(0) || _pusd == address(0) || _manager == address(0) || _positionManager == address(0)
+                || _v3Factory == address(0)
+        ) revert Vault_ZeroAddress();
 
         __ERC20_init("PUSD Plus", "PUSD+");
         __AccessControl_init();
@@ -223,23 +232,25 @@ contract PUSDPlusVault is
         _reentrancyStatus = _NOT_ENTERED;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
 
-        pusd            = IPUSD(_pusd);
-        manager         = IPUSDManager(_manager);
+        pusd = IPUSD(_pusd);
+        manager = IPUSDManager(_manager);
         positionManager = INonfungiblePositionManager(_positionManager);
-        v3Factory       = IUniswapV3Factory(_v3Factory);
+        v3Factory = IUniswapV3Factory(_v3Factory);
 
         // Conservative pre-launch defaults; atomic timelock proposal overrides.
-        haircutBps        = 200;   // 2%
-        unwindCapBps      = 500;   // 5%
-        maxDeploymentBps  = 7000;  // 70%
-        defaultFeeTier    = 500;   // 0.05%
+        haircutBps = 200; // 2%
+        unwindCapBps = 500; // 5%
+        maxDeploymentBps = 7000; // 70%
+        defaultFeeTier = 500; // 0.05%
         feeTierAllowed[500] = true;
-        defaultTickLower  = -20;
-        defaultTickUpper  =  20;
+        defaultTickLower = -20;
+        defaultTickUpper = 20;
     }
 
     /// @inheritdoc ERC20Upgradeable
-    function decimals() public pure override returns (uint8) { return 6; }
+    function decimals() public pure override returns (uint8) {
+        return 6;
+    }
 
     function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
 
@@ -273,7 +284,9 @@ contract PUSDPlusVault is
     /// @notice Sum of (position underlying + uncollected fees) over all owned positions.
     function totalPositionsValuePusd() public view returns (uint256 sum) {
         uint256 n = positionIds.length;
-        for (uint256 i; i < n; ++i) sum += getPositionValuePusd(positionIds[i]);
+        for (uint256 i; i < n; ++i) {
+            sum += getPositionValuePusd(positionIds[i]);
+        }
     }
 
     /// @notice One position's value in PUSD-equivalent units.
@@ -281,11 +294,14 @@ contract PUSDPlusVault is
     function getPositionValuePusd(uint256 tokenId) public view returns (uint256) {
         (
             ,,
-            address token0, address token1, uint24 fee,
-            int24 tickLower, int24 tickUpper,
-            uint128 liquidity,
-            ,,
-            uint128 tokensOwed0, uint128 tokensOwed1
+            address token0,
+            address token1,
+            uint24 fee,
+            int24 tickLower,
+            int24 tickUpper,
+            uint128 liquidity,,,
+            uint128 tokensOwed0,
+            uint128 tokensOwed1
         ) = positionManager.positions(tokenId);
 
         uint256 amount0;
@@ -295,10 +311,7 @@ contract PUSDPlusVault is
             if (pool != address(0)) {
                 (uint160 sqrtPriceX96,,,,,,) = IUniswapV3Pool(pool).slot0();
                 (amount0, amount1) = V3Math.getAmountsForLiquidity(
-                    sqrtPriceX96,
-                    V3Math.getSqrtRatioAtTick(tickLower),
-                    V3Math.getSqrtRatioAtTick(tickUpper),
-                    liquidity
+                    sqrtPriceX96, V3Math.getSqrtRatioAtTick(tickLower), V3Math.getSqrtRatioAtTick(tickUpper), liquidity
                 );
             }
         }
@@ -308,7 +321,7 @@ contract PUSDPlusVault is
     /// @notice Quote PUSD+ minted for `pusdIn`.
     function previewMintPlus(uint256 pusdIn) public view returns (uint256) {
         uint256 supply = totalSupply();
-        if (supply == 0) return pusdIn;             // bootstrap: 1:1
+        if (supply == 0) return pusdIn; // bootstrap: 1:1
         uint256 ta = totalAssets();
         if (ta == 0) revert Vault_NavZero();
         return (pusdIn * supply) / ta;
@@ -343,7 +356,7 @@ contract PUSDPlusVault is
 
         uint256 supply = totalSupply();
         if (supply == 0) {
-            plusOut = pusdIn;                          // bootstrap mint at NAV = 1
+            plusOut = pusdIn; // bootstrap mint at NAV = 1
         } else {
             uint256 ta = totalAssets();
             require(ta >= pusdIn, "Vault: pusdIn exceeds totalAssets");
@@ -366,13 +379,7 @@ contract PUSDPlusVault is
     ///                              rebalance.
     ///         LP unwind during user redeem is intentionally NOT done in v0 —
     ///         keeper drains LP into idle on rebalance, then queue gets filled.
-    function burnPlus(
-        uint256 plusIn,
-        address from,
-        address pusdRecipient,
-        address preferredAsset,
-        bool    allowBasket
-    )
+    function burnPlus(uint256 plusIn, address from, address pusdRecipient, address preferredAsset, bool allowBasket)
         external
         nonReentrant
         whenNotPaused
@@ -383,7 +390,7 @@ contract PUSDPlusVault is
         if (from == address(0) || pusdRecipient == address(0)) revert Vault_ZeroAddress();
 
         uint256 pusdOwed = previewBurnPlus(plusIn);
-        _burn(from, plusIn);                          // commit user to entry-NAV
+        _burn(from, plusIn); // commit user to entry-NAV
 
         // Tier 1 + tier 2 — try to source PUSD up to pusdOwed.
         uint256 idlePusd = pusd.balanceOf(address(this));
@@ -408,11 +415,11 @@ contract PUSDPlusVault is
             // directly (in their preferredAsset), not loop back through
             // the manager.
             queue[queueId] = QueueEntry({
-                recipient:      from,
+                recipient: from,
                 preferredAsset: preferredAsset,
-                allowBasket:    allowBasket,
-                pusdOwed:       uint128(residual),
-                queuedAt:       uint64(block.timestamp)
+                allowBasket: allowBasket,
+                pusdOwed: uint128(residual),
+                queuedAt: uint64(block.timestamp)
             });
             totalQueuedPusd += residual;
         }
@@ -447,11 +454,7 @@ contract PUSDPlusVault is
     // Keeper will normally call this immediately after rebalance.
     // =========================================================================
 
-    function fulfillQueueClaim(uint256 queueId)
-        external
-        nonReentrant
-        whenNotPaused
-    {
+    function fulfillQueueClaim(uint256 queueId) external nonReentrant whenNotPaused {
         QueueEntry memory q = queue[queueId];
         if (q.pusdOwed == 0) revert Vault_QueueAlreadyFilled(queueId);
 
@@ -493,17 +496,40 @@ contract PUSDPlusVault is
             uint256 tokenId = positionIds[i];
             (uint256 a0, uint256 a1) = positionManager.collect(
                 INonfungiblePositionManager.CollectParams({
-                    tokenId:    tokenId,
-                    recipient:  address(this),
+                    tokenId: tokenId,
+                    recipient: address(this),
                     amount0Max: type(uint128).max,
                     amount1Max: type(uint128).max
                 })
             );
             emit Harvested(tokenId, a0, a1);
-            (
-                ,, address token0, address token1,
-                ,,,,,,,
-            ) = positionManager.positions(tokenId);
+            (,, address token0, address token1,,,,,,,,) = positionManager.positions(tokenId);
+            if (a0 > 0) _haircut(token0, a0);
+            if (a1 > 0) _haircut(token1, a1);
+        }
+        emit Rebalanced(block.timestamp, nav());
+    }
+
+    /// @notice Bounded variant of rebalance — harvests positionIds[startIdx .. startIdx+count).
+    /// @dev    Same per-position semantics as `rebalance`. Issued by the keeper in pages
+    ///         once positionIds grows past gas-budget for a single pass.
+    function rebalanceBatch(uint256 startIdx, uint256 count) external nonReentrant whenNotPaused onlyRole(KEEPER_ROLE) {
+        uint256 n = positionIds.length;
+        require(startIdx < n, "Vault: startIdx out of range");
+        uint256 end = startIdx + count;
+        if (end > n) end = n;
+        for (uint256 i = startIdx; i < end; ++i) {
+            uint256 tokenId = positionIds[i];
+            (uint256 a0, uint256 a1) = positionManager.collect(
+                INonfungiblePositionManager.CollectParams({
+                    tokenId: tokenId,
+                    recipient: address(this),
+                    amount0Max: type(uint128).max,
+                    amount1Max: type(uint128).max
+                })
+            );
+            emit Harvested(tokenId, a0, a1);
+            (,, address token0, address token1,,,,,,,,) = positionManager.positions(tokenId);
             if (a0 > 0) _haircut(token0, a0);
             if (a1 > 0) _haircut(token1, a1);
         }
@@ -544,7 +570,7 @@ contract PUSDPlusVault is
         IERC20(p.token0).forceApprove(address(positionManager), p.amount0Desired);
         IERC20(p.token1).forceApprove(address(positionManager), p.amount1Desired);
 
-        (tokenId, liquidity, , ) = positionManager.mint(p);
+        (tokenId, liquidity,,) = positionManager.mint(p);
         positionIds.push(tokenId);
         positionIndexPlus1[tokenId] = positionIds.length;
 
@@ -562,24 +588,21 @@ contract PUSDPlusVault is
         uint256 idxPlus1 = positionIndexPlus1[tokenId];
         if (idxPlus1 == 0) revert Vault_PositionNotOwned(tokenId);
 
-        ( ,,,,,,,uint128 liquidity,,,, ) = positionManager.positions(tokenId);
+        (,,,,,,, uint128 liquidity,,,,) = positionManager.positions(tokenId);
         if (liquidity > 0) {
             positionManager.decreaseLiquidity(
                 INonfungiblePositionManager.DecreaseLiquidityParams({
-                    tokenId:    tokenId,
-                    liquidity:  liquidity,
+                    tokenId: tokenId,
+                    liquidity: liquidity,
                     amount0Min: amount0Min,
                     amount1Min: amount1Min,
-                    deadline:   deadline
+                    deadline: deadline
                 })
             );
         }
         positionManager.collect(
             INonfungiblePositionManager.CollectParams({
-                tokenId:    tokenId,
-                recipient:  address(this),
-                amount0Max: type(uint128).max,
-                amount1Max: type(uint128).max
+                tokenId: tokenId, recipient: address(this), amount0Max: type(uint128).max, amount1Max: type(uint128).max
             })
         );
         positionManager.burn(tokenId);
@@ -608,15 +631,9 @@ contract PUSDPlusVault is
         uint256 amount0Min,
         uint256 amount1Min,
         uint256 deadline
-    )
-        external
-        nonReentrant
-        whenNotPaused
-        onlyRole(KEEPER_ROLE)
-        returns (uint128 added)
-    {
+    ) external nonReentrant whenNotPaused onlyRole(KEEPER_ROLE) returns (uint128 added) {
         if (positionIndexPlus1[tokenId] == 0) revert Vault_PositionNotOwned(tokenId);
-        ( ,, address token0, address token1, ,,,,,,, ) = positionManager.positions(tokenId);
+        (,, address token0, address token1,,,,,,,,) = positionManager.positions(tokenId);
 
         // Enforce deployment cap before adding more LP exposure.
         uint256 ta = totalAssets();
@@ -628,14 +645,14 @@ contract PUSDPlusVault is
         IERC20(token0).forceApprove(address(positionManager), amount0Desired);
         IERC20(token1).forceApprove(address(positionManager), amount1Desired);
 
-        (added, , ) = positionManager.increaseLiquidity(
+        (added,,) = positionManager.increaseLiquidity(
             INonfungiblePositionManager.IncreaseLiquidityParams({
-                tokenId:        tokenId,
+                tokenId: tokenId,
                 amount0Desired: amount0Desired,
                 amount1Desired: amount1Desired,
-                amount0Min:     amount0Min,
-                amount1Min:     amount1Min,
-                deadline:       deadline
+                amount0Min: amount0Min,
+                amount1Min: amount1Min,
+                deadline: deadline
             })
         );
         emit PositionToppedUp(tokenId, added);
@@ -689,8 +706,13 @@ contract PUSDPlusVault is
         emit BasketTokenSet(token, false);
     }
 
-    function basketLength() external view returns (uint256) { return basket.length; }
-    function positionsLength() external view returns (uint256) { return positionIds.length; }
+    function basketLength() external view returns (uint256) {
+        return basket.length;
+    }
+
+    function positionsLength() external view returns (uint256) {
+        return positionIds.length;
+    }
 
     // =========================================================================
     // VAULT_ADMIN — knobs (HARD CAPS enforced in body)
@@ -758,6 +780,11 @@ contract PUSDPlusVault is
     // GUARDIAN — pause-only
     // =========================================================================
 
-    function pause() external onlyRole(GUARDIAN_ROLE) { _pause(); }
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) { _unpause(); }
+    function pause() external onlyRole(GUARDIAN_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _unpause();
+    }
 }

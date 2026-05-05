@@ -34,11 +34,12 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
   }
 
   return (
-    <table className="table">
+    <div className="table-wrap">
+    <table className="table table--responsive">
       <thead>
         <tr>
           <th>TYPE</th>
-          <th>TIME</th>
+          <th className="cell-sm-up">TIME</th>
           <th className="num">AMOUNT</th>
           <th>ASSET</th>
           <th>TX</th>
@@ -46,21 +47,29 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
       </thead>
       <tbody>
         {rows.map((r) => {
-          const pusdSign = r.type === 'MINT' ? '+' : '−';
-          const typeColor = r.type === 'MINT' ? 'var(--c-jade)' : 'var(--c-oxblood)';
+          const isMint = r.type === 'MINT' || r.type === 'MINT_PLUS';
+          const isPlus = r.type === 'MINT_PLUS' || r.type === 'REDEEM_PLUS';
+          const pusdSign = isMint ? '+' : '−';
+          const typeColor = isPlus
+            ? 'var(--c-magenta)'
+            : isMint
+              ? 'var(--c-jade)'
+              : 'var(--c-oxblood)';
+          const tokenLabel = isPlus ? 'PUSD+' : 'PUSD';
+          const typeLabel = r.type.replace('_', ' ');
 
           return (
             <tr key={`${r.txHash}:${r.logIndex}`}>
               <td>
                 <span className="display" style={{ color: typeColor, fontWeight: 500, fontSize: 14 }}>
-                  {r.type}
+                  {typeLabel}
                 </span>
               </td>
-              <td className="mono">{formatTimestamp(r.timestamp)}</td>
+              <td className="mono cell-sm-up">{formatTimestamp(r.timestamp)}</td>
               <td className="num">
                 <div>
                   {pusdSign}
-                  {formatAmount(r.pusdAmount, 6)} PUSD
+                  {formatAmount(r.pusdAmount, 6)} {tokenLabel}
                 </div>
                 {r.type === 'REDEEM' && (
                   <div className="meta-sm" style={{ marginTop: 2 }}>
@@ -70,6 +79,16 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
                 {r.type === 'MINT' && (
                   <div className="meta-sm" style={{ marginTop: 2 }}>
                     from {formatAmount(r.tokenAmount, r.asset.decimals)} {r.asset.symbol}
+                  </div>
+                )}
+                {r.type === 'MINT_PLUS' && (
+                  <div className="meta-sm" style={{ marginTop: 2 }}>
+                    from {formatAmount(r.tokenAmount, r.asset.decimals)} {r.asset.symbol}
+                  </div>
+                )}
+                {r.type === 'REDEEM_PLUS' && (
+                  <div className="meta-sm" style={{ marginTop: 2 }}>
+                    → preferred {r.asset.symbol}
                   </div>
                 )}
               </td>
@@ -86,5 +105,6 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
         })}
       </tbody>
     </table>
+    </div>
   );
 }

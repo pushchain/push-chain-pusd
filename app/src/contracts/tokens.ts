@@ -21,11 +21,12 @@ export type ReserveTokenStatus = 'ENABLED' | 'REDEEM_ONLY' | 'EMERGENCY_REDEEM' 
 
 export type ReserveToken = {
   address: `0x${string}`;
-  symbol: 'USDC' | 'USDT';
+  symbol: 'USDC' | 'USDT' | 'PUSD';
   chain: string;
   chainLabel: string;
   chainShort: string;
   decimals: number;
+  /** ['', ''] for tokens not bridgeable through PushChain (e.g. native PUSD wrap). */
   moveableKey: [string, string];
 };
 
@@ -114,6 +115,26 @@ export const TOKENS: readonly ReserveToken[] = [
 ] as const;
 
 /** Lookup by Donut address (case-insensitive). */
+/**
+ * Pseudo-entry for the PUSD ↔ PUSD+ wrap path. Not a reserve token — PUSD
+ * itself is the source/destination on `depositToPlus(PUSD, ...)` and
+ * `redeemFromPlus(amount, PUSD, ...)`. Cannot bridge cross-chain (no MOVEABLE
+ * entry); always renders on the Push route.
+ *
+ * Address lookup is deferred to runtime so the bundle reads the same
+ * `VITE_PUSD_ADDRESS` the rest of the app does.
+ */
+import { PUSD_ADDRESS } from './config';
+export const PUSD_WRAP_TOKEN: ReserveToken = {
+  address: PUSD_ADDRESS,
+  symbol: 'PUSD',
+  chain: 'PUSH_TESTNET_DONUT',
+  chainLabel: 'PUSH CHAIN',
+  chainShort: 'PUSH',
+  decimals: 6,
+  moveableKey: ['', ''],
+};
+
 export function tokenByAddress(address: string): ReserveToken | undefined {
   const a = address.toLowerCase();
   return TOKENS.find((t) => t.address.toLowerCase() === a);

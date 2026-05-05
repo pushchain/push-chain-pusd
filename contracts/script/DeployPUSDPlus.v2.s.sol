@@ -31,7 +31,7 @@ contract DeployPUSDPlusV2 is DeployBase {
     function run() external returns (V2Result memory r) {
         Wiring memory w = _readWiringForV2();
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer    = vm.addr(deployerKey);
+        address deployer = vm.addr(deployerKey);
 
         console.log("=== PUSD+ V2 upgrade-and-deploy ===");
         console.log("Deployer:               ", deployer);
@@ -42,8 +42,8 @@ contract DeployPUSDPlusV2 is DeployBase {
         // Pre-broadcast role check — avoids wasting gas on impl deploys if the
         // signing key isn't the admin.
         _assertHasRole(w.managerProxy, keccak256("UPGRADER_ROLE"), deployer, "PUSDManager UPGRADER_ROLE");
-        _assertHasRole(w.managerProxy, bytes32(0),                 deployer, "PUSDManager DEFAULT_ADMIN_ROLE");
-        _assertHasRole(w.managerProxy, keccak256("ADMIN_ROLE"),    deployer, "PUSDManager ADMIN_ROLE");
+        _assertHasRole(w.managerProxy, bytes32(0), deployer, "PUSDManager DEFAULT_ADMIN_ROLE");
+        _assertHasRole(w.managerProxy, keccak256("ADMIN_ROLE"), deployer, "PUSDManager ADMIN_ROLE");
         if (w.upgradePusd) {
             _assertHasRole(w.pusdProxy, keccak256("UPGRADER_ROLE"), deployer, "PUSD UPGRADER_ROLE");
         }

@@ -29,22 +29,22 @@ import "./DeployBase.s.sol";
  */
 contract DeployFull is DeployBase {
     function run() external returns (V1Result memory v1, V2Result memory v2) {
-        address finalAdmin  = vm.envAddress("ADMIN_ADDRESS");
+        address finalAdmin = vm.envAddress("ADMIN_ADDRESS");
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");
-        address deployer    = vm.addr(deployerKey);
+        address deployer = vm.addr(deployerKey);
 
         // V2 wiring — admin/keepers/multisigs from env, but proxy addresses
         // are filled from the V1 deploy below (env values for PUSD_PROXY /
         // PUSD_MANAGER_PROXY are intentionally ignored on the fresh path).
         Wiring memory w;
-        w.admin       = finalAdmin;
-        w.npm         = vm.envAddress("UNI_V3_NPM");
-        w.factory     = vm.envAddress("UNI_V3_FACTORY");
-        w.keeper      = vm.envAddress("KEEPER_BOT");
-        w.poolAdmin   = vm.envAddress("POOL_ADMIN_MULTISIG");
-        w.vaultAdmin  = vm.envAddress("VAULT_ADMIN_MULTISIG");
-        w.guardian    = vm.envAddress("GUARDIAN_MULTISIG");
-        w.upgradePusd = false;   // never relevant on a fresh chain
+        w.admin = finalAdmin;
+        w.npm = vm.envAddress("UNI_V3_NPM");
+        w.factory = vm.envAddress("UNI_V3_FACTORY");
+        w.keeper = vm.envAddress("KEEPER_BOT");
+        w.poolAdmin = vm.envAddress("POOL_ADMIN_MULTISIG");
+        w.vaultAdmin = vm.envAddress("VAULT_ADMIN_MULTISIG");
+        w.guardian = vm.envAddress("GUARDIAN_MULTISIG");
+        w.upgradePusd = false; // never relevant on a fresh chain
 
         console.log("=== PUSD + PUSD+ FULL deploy (fresh chain) ===");
         console.log("Deployer:               ", deployer);
@@ -56,7 +56,7 @@ contract DeployFull is DeployBase {
         // configuration can run inside the same broadcast without a role
         // transfer round-trip.
         v1 = _deployV1(deployer, deployer);
-        w.pusdProxy    = v1.pusdProxy;
+        w.pusdProxy = v1.pusdProxy;
         w.managerProxy = v1.managerProxy;
 
         // Phase 2 — V2 stack on top. PUSDManager from phase 1 already has the
@@ -68,12 +68,7 @@ contract DeployFull is DeployBase {
         // Vault + IF were initialised with finalAdmin already; only V1 needs
         // the role transfer.
         if (finalAdmin != deployer) {
-            _transferAdmin(
-                PUSD(v1.pusdProxy),
-                PUSDManager(v1.managerProxy),
-                deployer,
-                finalAdmin
-            );
+            _transferAdmin(PUSD(v1.pusdProxy), PUSDManager(v1.managerProxy), deployer, finalAdmin);
         }
 
         vm.stopBroadcast();

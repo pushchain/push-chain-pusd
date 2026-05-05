@@ -37,7 +37,7 @@ contract InsuranceFund is
     // -- inline reentrancy guard (matches PUSDManager's pattern; OZ 5.x's
     //    ReentrancyGuardUpgradeable variant has been removed) -----------
     uint256 private constant _NOT_ENTERED = 1;
-    uint256 private constant _ENTERED     = 2;
+    uint256 private constant _ENTERED = 2;
     uint256 private _reentrancyStatus;
 
     modifier nonReentrant() {
@@ -48,7 +48,7 @@ contract InsuranceFund is
     }
 
     bytes32 public constant VAULT_ADMIN_ROLE = keccak256("INSURANCE_FUND_VAULT_ADMIN_ROLE");
-    bytes32 public constant GUARDIAN_ROLE    = keccak256("INSURANCE_FUND_GUARDIAN_ROLE");
+    bytes32 public constant GUARDIAN_ROLE = keccak256("INSURANCE_FUND_GUARDIAN_ROLE");
 
     /// @notice Vault contract permitted to call notifyDeposit. Set once.
     address public vault;
@@ -66,19 +66,22 @@ contract InsuranceFund is
     uint256[40] private __gap;
 
     /// @custom:oz-upgrades-unsafe-allow constructor
-    constructor() { _disableInitializers(); }
+    constructor() {
+        _disableInitializers();
+    }
 
     function initialize(address admin, address vaultAdmin, address guardian) external initializer {
-        if (admin == address(0) || vaultAdmin == address(0) || guardian == address(0))
+        if (admin == address(0) || vaultAdmin == address(0) || guardian == address(0)) {
             revert InsuranceFund_ZeroAddress();
+        }
 
         __AccessControl_init();
         __Pausable_init();
 
         _reentrancyStatus = _NOT_ENTERED;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
-        _grantRole(VAULT_ADMIN_ROLE,   vaultAdmin);
-        _grantRole(GUARDIAN_ROLE,      guardian);
+        _grantRole(VAULT_ADMIN_ROLE, vaultAdmin);
+        _grantRole(GUARDIAN_ROLE, guardian);
     }
 
     function _authorizeUpgrade(address) internal override onlyRole(DEFAULT_ADMIN_ROLE) {}
@@ -115,6 +118,11 @@ contract InsuranceFund is
         emit Withdrawn(token, to, amount);
     }
 
-    function pause() external onlyRole(GUARDIAN_ROLE) { _pause(); }
-    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) { _unpause(); }
+    function pause() external onlyRole(GUARDIAN_ROLE) {
+        _pause();
+    }
+
+    function unpause() external onlyRole(DEFAULT_ADMIN_ROLE) {
+        _unpause();
+    }
 }

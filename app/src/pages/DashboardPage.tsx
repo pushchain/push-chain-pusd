@@ -1,15 +1,18 @@
 /**
- * HistoryPage — /history route. Connected account's MINT / REDEEM activity.
+ * DashboardPage — /dashboard route. The connected user's home base.
  *
- * Scans the last 10,000 blocks on every load + every 30s (see
- * `useUserHistory`). Matches both `user == account` and `recipient == account`
- * so self-directed and to-recipient flows both surface.
+ *   1. Balance strip — PUSD + PUSD+ balances with quick actions, plus
+ *      open queue-claim CTAs.
+ *   2. History table — combined MINT / REDEEM / MINT_PLUS / REDEEM_PLUS
+ *      activity from PUSDManager events.
  *
- * Now owns its own container since App.tsx no longer wraps routes.
+ * Pre-V2 the URL was /history; the route still resolves there via a
+ * redirect in App.tsx.
  */
 
 import { usePushChain, usePushChainClient } from '@pushchain/ui-kit';
 import { useEffect, useState } from 'react';
+import { BalanceStrip } from '../components/BalanceStrip';
 import { ConnectedGate } from '../components/ConnectedGate';
 import { HistoryTable } from '../components/HistoryTable';
 import { useIsConnected } from '../hooks/useIsConnected';
@@ -18,7 +21,7 @@ import { explorerAddressForChain } from '../lib/externalRpc';
 import { explorerAddress, formatRelative, truncAddr } from '../lib/format';
 import { chainLabelFromKey, isPushChainKey, resolveOriginChainKey } from '../lib/wallet';
 
-export default function HistoryPage() {
+export default function DashboardPage() {
   const isConnected = useIsConnected();
   const { pushChainClient } = usePushChainClient();
   const { PushChain } = usePushChain();
@@ -42,15 +45,15 @@ export default function HistoryPage() {
       <div className="container">
         <section className="section">
           <div className="section__head">
-            <h2>History</h2>
-            <p>Your MINT / REDEEM activity across every origin chain.</p>
+            <h2>Dashboard</h2>
+            <p>Your PUSD + PUSD+ balances and activity, in one place.</p>
           </div>
           <ConnectedGate
-            title="CONNECT TO VIEW HISTORY"
-            subtitle="Your Deposited + Redeemed events will appear here once authorized. Nothing is stored off-chain — this page reads PUSDManager events directly."
+            title="CONNECT TO VIEW DASHBOARD"
+            subtitle="Your balances, mint/redeem activity, and any open PUSD+ queue claims will appear here once authorized. Nothing is stored off-chain — this page reads contract state directly."
             links={[
-              { to: '/mint', label: 'MINT →' },
-              { to: '/redeem', label: 'REDEEM →' },
+              { to: '/convert/mint', label: 'MINT →' },
+              { to: '/convert/redeem', label: 'REDEEM →' },
             ]}
           />
         </section>
@@ -62,7 +65,7 @@ export default function HistoryPage() {
     <div className="container">
       <section className="section">
         <div className="section__head">
-          <h2>History</h2>
+          <h2>Dashboard</h2>
           <p>
             Account{' '}
             {account && origin?.address && !originIsPush ? (
@@ -89,8 +92,15 @@ export default function HistoryPage() {
                 {originChainLabel ? ` on ${originChainLabel}` : ''}
               </>
             ) : null}
-            {' '}· full history · updated {history.updatedAt ? formatRelative(history.updatedAt, now) : '—'}
+            {' '}· updated {history.updatedAt ? formatRelative(history.updatedAt, now) : '—'}
           </p>
+        </div>
+
+        <BalanceStrip />
+
+        <div className="section__head" style={{ marginTop: 24 }}>
+          <h3>Activity</h3>
+          <p>Mint, redeem, and PUSD+ events from this account, newest first.</p>
         </div>
 
         <HistoryTable rows={history.rows} loading={history.loading} />

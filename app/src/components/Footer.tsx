@@ -9,7 +9,12 @@
  * Addresses come exclusively from env via contracts/config.
  */
 
-import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
+import {
+  INSURANCE_FUND_ADDRESS,
+  PUSD_ADDRESS,
+  PUSD_MANAGER_ADDRESS,
+  PUSD_PLUS_ADDRESS,
+} from '../contracts/config';
 import { explorerAddress, truncAddr } from '../lib/format';
 import { AsciiWave } from './AsciiWave';
 
@@ -68,7 +73,7 @@ export function Footer() {
           <span>
             &copy; MMXX{yearRoman(year - 2020)} · Push USD · <em>All serifs intentional.</em>
           </span>
-          <span>
+          <span className="footer__addrs">
             PUSD{' '}
             <a
               className="link-mono"
@@ -88,6 +93,34 @@ export function Footer() {
             >
               {truncAddr(PUSD_MANAGER_ADDRESS)}
             </a>
+            {PUSD_PLUS_ADDRESS && (
+              <>
+                {'   ·   '}
+                PUSDPlusVault{' '}
+                <a
+                  className="link-mono"
+                  href={explorerAddress(PUSD_PLUS_ADDRESS)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {truncAddr(PUSD_PLUS_ADDRESS)}
+                </a>
+              </>
+            )}
+            {INSURANCE_FUND_ADDRESS && (
+              <>
+                {'   ·   '}
+                InsuranceFund{' '}
+                <a
+                  className="link-mono"
+                  href={explorerAddress(INSURANCE_FUND_ADDRESS)}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {truncAddr(INSURANCE_FUND_ADDRESS)}
+                </a>
+              </>
+            )}
           </span>
         </div>
       </div>

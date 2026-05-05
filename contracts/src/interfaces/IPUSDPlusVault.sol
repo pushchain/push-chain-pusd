@@ -13,11 +13,7 @@ interface IPUSDPlusVault {
     /// @notice Burn PUSD+ from `from`, hand pusdOwed PUSD to `pusdRecipient` if
     ///         the vault can fulfil instantly, else enqueue. Caller is responsible
     ///         for routing the returned PUSD to the user (or noticing the queueId).
-    function burnPlus(
-        uint256 plusIn,
-        address from,
-        address pusdRecipient,
-        address preferredAsset,
-        bool    allowBasket
-    ) external returns (uint256 pusdReturned, uint256 queueId);
+    function burnPlus(uint256 plusIn, address from, address pusdRecipient, address preferredAsset, bool allowBasket)
+        external
+        returns (uint256 pusdReturned, uint256 queueId);
 }

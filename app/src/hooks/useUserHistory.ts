@@ -16,10 +16,10 @@ import { fetchManagerLogs } from '../lib/blockscout';
 const POLL_MS = 30_000;
 
 export type HistoryRow = {
-  type: 'MINT' | 'REDEEM';
+  type: 'MINT' | 'REDEEM' | 'MINT_PLUS' | 'REDEEM_PLUS';
   timestamp: number;              // epoch seconds
-  pusdAmount: bigint;             // positive on MINT, negative on REDEEM (for display)
-  tokenAmount: bigint;            // native token amount (positive on both)
+  pusdAmount: bigint;             // PUSD/PUSD+ amount minted or burned
+  tokenAmount: bigint;            // reserve-token amount (0 for PUSD+ wrap path)
   asset: Pick<ReserveToken, 'symbol' | 'chain' | 'chainLabel' | 'chainShort' | 'address' | 'decimals'> | {
     symbol: string;
     chain: string;
@@ -28,7 +28,7 @@ export type HistoryRow = {
     address: `0x${string}`;
     decimals: number;
   };
-  counterparty: `0x${string}`;   // recipient on MINT, user on REDEEM
+  counterparty: `0x${string}`;   // recipient on MINT-side, user on REDEEM-side
   txHash: `0x${string}`;
   blockNumber: bigint;
   logIndex: number;
@@ -77,31 +77,58 @@ export function useUserHistory(): UserHistoryState {
         const items = await fetchManagerLogs({ account, maxPages: 5 });
         if (cancelled) return;
 
-        const rows: HistoryRow[] = items.map(({ event, timestamp }) => {
-          const asset =
-            (TOKENS.find((t) => t.address.toLowerCase() === event.token.toLowerCase())
-              ?? tokenByAddress(event.token))
-              ?? unknownAssetFromAddress(event.token);
+        const resolveAsset = (addr: `0x${string}`) =>
+          (TOKENS.find((t) => t.address.toLowerCase() === addr.toLowerCase())
+            ?? tokenByAddress(addr))
+            ?? unknownAssetFromAddress(addr);
 
+        const rows: HistoryRow[] = items.map(({ event, timestamp }) => {
           if (event.type === 'MINT') {
             return {
               type: 'MINT' as const,
               timestamp,
               pusdAmount: event.pusdMinted,
               tokenAmount: event.tokenAmount,
-              asset,
+              asset: resolveAsset(event.token),
               counterparty: event.recipient,
               txHash: event.txHash,
               blockNumber: event.blockNumber,
               logIndex: event.logIndex,
             };
           }
+          if (event.type === 'REDEEM') {
+            return {
+              type: 'REDEEM' as const,
+              timestamp,
+              pusdAmount: event.pusdBurned,
+              tokenAmount: event.tokenAmount,
+              asset: resolveAsset(event.token),
+              counterparty: event.user,
+              txHash: event.txHash,
+              blockNumber: event.blockNumber,
+              logIndex: event.logIndex,
+            };
+          }
+          if (event.type === 'MINT_PLUS') {
+            return {
+              type: 'MINT_PLUS' as const,
+              timestamp,
+              pusdAmount: event.plusOut,
+              tokenAmount: event.amountIn,
+              asset: resolveAsset(event.tokenIn),
+              counterparty: event.recipient,
+              txHash: event.txHash,
+              blockNumber: event.blockNumber,
+              logIndex: event.logIndex,
+            };
+          }
+          // REDEEM_PLUS
           return {
-            type: 'REDEEM' as const,
+            type: 'REDEEM_PLUS' as const,
             timestamp,
-            pusdAmount: event.pusdBurned,
-            tokenAmount: event.tokenAmount,
-            asset,
+            pusdAmount: event.plusIn,
+            tokenAmount: 0n,
+            asset: resolveAsset(event.preferredAsset),
             counterparty: event.user,
             txHash: event.txHash,
             blockNumber: event.blockNumber,

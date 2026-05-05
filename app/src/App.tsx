@@ -27,8 +27,8 @@ import { EditorialBand } from './components/EditorialBand';
 import { Footer } from './components/Footer';
 import { Masthead } from './components/Masthead';
 import ConvertPage from './pages/ConvertPage';
+import DashboardPage from './pages/DashboardPage';
 import DocsPage from './pages/DocsPage';
-import HistoryPage from './pages/HistoryPage';
 import HomePage from './pages/HomePage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
 
@@ -46,7 +46,8 @@ function App() {
             <Route path="/mint" element={<Navigate to="/convert/mint" replace />} />
             <Route path="/redeem" element={<Navigate to="/convert/redeem" replace />} />
             <Route path="/reserves" element={<ReservesDetailPage />} />
-            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/history" element={<Navigate to="/dashboard" replace />} />
             <Route path="/docs" element={<DocsPage />} />
             {/* <Route path="/style-demo" element={<StyleDemoPage />} /> */}
             <Route path="*" element={<Navigate to="/" replace />} />

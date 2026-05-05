@@ -23,18 +23,22 @@
 
 import { usePushChain, usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
-import { TOKENS, type ReserveToken } from '../contracts/tokens';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS, PUSD_PLUS_ADDRESS } from '../contracts/config';
+import { PUSD_WRAP_TOKEN, TOKENS, type ReserveToken } from '../contracts/tokens';
 import { useExternalTokenBalance } from '../hooks/useExternalTokenBalance';
 import { useInvariants } from '../hooks/useInvariants';
+import { useNAV } from '../hooks/useNAV';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
+import { usePUSDPlusBalance } from '../hooks/usePUSDPlusBalance';
 import { useRedeemRecipient } from '../hooks/useRedeemRecipient';
 import { useTokenBalance } from '../hooks/useTokenBalance';
 import {
   buildApproveLeg,
   buildDepositLeg,
+  buildDepositToPlusLeg,
+  buildRedeemFromPlusLeg,
   buildRedeemLeg,
   type CascadeLeg,
   type HelpersLike,
@@ -54,6 +58,8 @@ import { TokenPill } from './TokenPill';
 
 type Mode = 'mint' | 'redeem';
 type Route = 'external' | 'push';
+/** Which token does this transaction mint or burn? PUSD+ is the default. */
+type Product = 'pusd-plus' | 'pusd';
 
 type Stage =
   | { kind: 'idle' }
@@ -74,6 +80,11 @@ type Props = {
 
 export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  // ?wrap=1 — opens the panel with PUSD as the source/destination asset, for
+  // the PUSD ↔ PUSD+ wrap path. Surfaced from the Dashboard cards. The user
+  // can dismiss the wrap mode in-panel; the param is cleared when they do.
+  const wrapMode = searchParams.get('wrap') === '1';
   const { pushChainClient } = usePushChainClient();
   const { PushChain } = usePushChain();
   const { handleConnectToPushWallet, handleUserLogOutEvent } = usePushWalletContext();
@@ -95,9 +106,18 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const originIsPush = isPushChainKey(originChainKey);
   const originChainDisplay = chainLabelFromKey(originChainKey);
 
-  // --- mode + route ------------------------------------------------------
+  // --- mode + route + product -------------------------------------------
   const [mode, setMode] = useState<Mode>(initialMode);
   useEffect(() => setMode(initialMode), [initialMode]);
+
+  // PUSD+ is the default product when configured; the panel falls back to
+  // plain PUSD when VITE_PUSD_PLUS_ADDRESS is unset (so the panel still
+  // works in pre-v2 environments).
+  const plusEnabled = !!PUSD_PLUS_ADDRESS;
+  const [product, setProduct] = useState<Product>(plusEnabled ? 'pusd-plus' : 'pusd');
+  const isPlus = product === 'pusd-plus';
+  const productLabel = isPlus ? 'PUSD+' : 'PUSD';
+  const nav = useNAV();
 
   // For mint, external route is default whenever the wallet is on an external
   // chain. For redeem, external = "deliver on the selected token's chain".
@@ -110,23 +130,34 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   }, [originIsPush, routeTouched]);
 
   // Route toggle is meaningful only after connect. Pre-connect we render the
-  // "push" route (shows all tokens, no cross-chain wiring yet).
-  const effectiveRoute: Route = account ? route : 'push';
+  // "push" route (shows all tokens, no cross-chain wiring yet). Wrap mode
+  // also forces push: PUSD lives only on Push Chain, so any wrap/unwrap
+  // payout is delivered there regardless of wallet origin.
+  const effectiveRoute: Route = !account || wrapMode ? 'push' : route;
   const isExternalRoute = effectiveRoute === 'external';
 
   // --- tokens ------------------------------------------------------------
   // Mint + external route: lock the dropdown to the wallet's origin chain.
   // Mint + push route OR redeem: all reserve tokens.
+  // The PUSD wrap pseudo-entry only appears when ?wrap=1 is set — the
+  // PUSD ↔ PUSD+ wrap path is a niche flow surfaced from the Dashboard,
+  // not a regular dropdown option.
   const eligibleTokens = useMemo<readonly ReserveToken[]>(() => {
+    if (wrapMode && isPlus) return [PUSD_WRAP_TOKEN];
     if (mode === 'mint' && isExternalRoute && originChainKey) {
       const filtered = filterTokensByChainKey(TOKENS, originChainKey);
       return filtered.length ? filtered : TOKENS;
     }
     return TOKENS;
-  }, [mode, isExternalRoute, originChainKey]);
+  }, [mode, isExternalRoute, originChainKey, wrapMode, isPlus]);
 
   const [selected, setSelected] = useState<ReserveToken>(eligibleTokens[0] ?? TOKENS[0]);
   const [showSelector, setShowSelector] = useState(false);
+
+  // Selected asset is the PUSD wrap pseudo-token? Forces push route, uses
+  // PUSD balance, and routes through the wrap/unwrap leg of depositToPlus /
+  // redeemFromPlus.
+  const isPusdAsset = selected.address.toLowerCase() === PUSD_ADDRESS.toLowerCase();
 
   useEffect(() => {
     if (!eligibleTokens.some((t) => t.address === selected.address) && eligibleTokens.length) {
@@ -137,6 +168,9 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   // --- amount + balances -------------------------------------------------
   const [amount, setAmount] = useState('');
   const { balance: pusdBalance, loading: pusdLoading } = usePUSDBalance();
+  const { balance: pusdPlusBalance, loading: pusdPlusLoading } = usePUSDPlusBalance();
+  const burnBalance = isPlus ? pusdPlusBalance : pusdBalance;
+  const burnBalanceLoading = isPlus ? pusdPlusLoading : pusdLoading;
   const { balance: donutTokenBal, loading: donutTokenLoading } = useTokenBalance(
     selected.address,
     PUSD_MANAGER_ADDRESS as `0x${string}`,
@@ -151,16 +185,19 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const balanceKnown = mode === 'redeem' || mintBalanceKnown;
 
   const balance = useMemo(() => {
-    if (mode === 'redeem') return pusdBalance;
+    if (mode === 'redeem') return burnBalance;
+    // Wrap path (mint PUSD+ from PUSD): the user pays from their PUSD holdings.
+    if (isPusdAsset) return pusdBalance;
     if (!isExternalRoute) return donutTokenBal;
     return externalBal.balance;
-  }, [mode, isExternalRoute, pusdBalance, donutTokenBal, externalBal.balance]);
+  }, [mode, isExternalRoute, isPusdAsset, burnBalance, pusdBalance, donutTokenBal, externalBal.balance]);
 
   const balanceLoading = useMemo(() => {
-    if (mode === 'redeem') return pusdLoading;
+    if (mode === 'redeem') return burnBalanceLoading;
+    if (isPusdAsset) return pusdLoading;
     if (!isExternalRoute) return donutTokenLoading;
     return externalBal.loading;
-  }, [mode, isExternalRoute, pusdLoading, donutTokenLoading, externalBal.loading]);
+  }, [mode, isExternalRoute, isPusdAsset, burnBalanceLoading, pusdLoading, donutTokenLoading, externalBal.loading]);
 
   const decimals = mode === 'mint' ? selected.decimals : 6;
   const parsedAmount = useMemo(() => {
@@ -303,9 +340,24 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
     try {
       if (mode === 'mint') {
+        const mintLeg = isPlus
+          ? buildDepositToPlusLeg(
+              helpers,
+              PUSD_MANAGER_ADDRESS as `0x${string}`,
+              selected.address,
+              parsedAmount,
+              target,
+            )
+          : buildDepositLeg(
+              helpers,
+              PUSD_MANAGER_ADDRESS as `0x${string}`,
+              selected.address,
+              parsedAmount,
+              target,
+            );
         const legs: CascadeLeg[] = [
           buildApproveLeg(helpers, selected.address, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
-          buildDepositLeg(helpers, PUSD_MANAGER_ADDRESS as `0x${string}`, selected.address, parsedAmount, target),
+          mintLeg,
         ];
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const txOptions: any = {
@@ -329,17 +381,34 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       }
 
       // --- REDEEM -------------------------------------------------------
-      // Shared cascade legs for step 1 (approve + burn PUSD → reserve at target).
+      // Shared cascade legs for step 1.
+      // PUSD redeem  → approve PUSD + manager.redeem.
+      // PUSD+ redeem → manager.redeemFromPlus pulls PUSD+ via vault.burnPlus
+      //                (MANAGER_ROLE-gated _burn). No allowance needed; we
+      //                still approve defensively in case future paths need it.
+      const burnTokenAddress = (isPlus
+        ? (PUSD_PLUS_ADDRESS as `0x${string}`)
+        : (PUSD_ADDRESS as `0x${string}`));
+      const redeemLeg = isPlus
+        ? buildRedeemFromPlusLeg(
+            helpers,
+            PUSD_MANAGER_ADDRESS as `0x${string}`,
+            parsedAmount,
+            selected.address,
+            allowBasket,
+            target,
+          )
+        : buildRedeemLeg(
+            helpers,
+            PUSD_MANAGER_ADDRESS as `0x${string}`,
+            parsedAmount,
+            selected.address,
+            allowBasket,
+            target,
+          );
       const legs: CascadeLeg[] = [
-        buildApproveLeg(helpers, PUSD_ADDRESS as `0x${string}`, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
-        buildRedeemLeg(
-          helpers,
-          PUSD_MANAGER_ADDRESS as `0x${string}`,
-          parsedAmount,
-          selected.address,
-          allowBasket,
-          target,
-        ),
+        buildApproveLeg(helpers, burnTokenAddress, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
+        redeemLeg,
       ];
 
       // Resolve the outbound leg token & destination up front so both paths below can share them.
@@ -473,7 +542,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   };
 
   // --- derived labels ----------------------------------------------------
-  const feeBpsLabel = `${(baseFeeBps / 100).toFixed(2)}%`;
+  const feeBpsLabel = isPlus ? `NAV ${nav.pusdPerPlus.toFixed(6)}` : `${(baseFeeBps / 100).toFixed(2)}%`;
 
   // Source / destination strings for the header + summary.
   const sourceLabel = mode === 'mint'
@@ -495,13 +564,13 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     if (!account) return 'CONNECT TO CONVERT';
     if (stage.kind === 'preparing') return 'PREPARING…';
     if (stage.kind === 'signing') return 'SIGNING…';
-    if (stage.kind === 'broadcasting') return mode === 'mint' ? 'MINTING…' : 'REDEEMING…';
+    if (stage.kind === 'broadcasting') return mode === 'mint' ? `MINTING ${productLabel}…` : `REDEEMING ${productLabel}…`;
     if (stage.kind === 'step2-signing') return 'SIGNING PAYOUT…';
     if (stage.kind === 'step2-broadcasting') return 'PAYING OUT…';
     if (solventHalt) return 'HALTED · SOLVENCY CHECK FAILED';
     if (externalBlocked) return `${selected.chainShort} BRIDGE NOT AVAILABLE`;
     if (reserveShortfall) return `INSUFFICIENT ${selected.symbol} RESERVE`;
-    if (!amountValid) return mode === 'mint' ? 'MINT PUSD' : 'REDEEM PUSD';
+    if (!amountValid) return mode === 'mint' ? `MINT ${productLabel}` : `REDEEM ${productLabel}`;
     if (exceedsBalance) return 'INSUFFICIENT BALANCE';
     if (mode === 'redeem' && account && !externalRecipientValid) {
       return `INVALID ${isExternalRoute ? selected.chainShort : 'PUSH CHAIN'} RECIPIENT`;
@@ -510,10 +579,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       return 'INVALID PUSH CHAIN RECIPIENT';
     }
     const amt = formatAmount(parsedAmount, decimals, { maxFractionDigits: 2 });
-    if (mode === 'mint') return `MINT ${amt} PUSD →`;
+    if (mode === 'mint') return `MINT ${amt} ${productLabel} →`;
     return needsExternalRecipient
       ? `REDEEM → SEND TO ${selected.chainShort} →`
-      : `REDEEM ${amt} PUSD →`;
+      : `REDEEM ${amt} ${productLabel} →`;
   })();
 
   const ctaDisabled =
@@ -528,22 +597,24 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     (mode === 'mint' && !!account && !mintRecipientValid);
 
   // --- render helpers ----------------------------------------------------
-  const title = advanced ? (mode === 'mint' ? 'Mint PUSD' : 'Redeem PUSD') : 'Convert.';
+  const title = advanced
+    ? (mode === 'mint' ? `Mint ${productLabel}` : `Redeem ${productLabel}`)
+    : 'Convert.';
   const kicker = advanced
     ? mode === 'mint'
-      ? '1:1 · NO HAIRCUT'
-      : '1:1 · BASE FEE'
+      ? (isPlus ? `NAV ${nav.pusdPerPlus.toFixed(6)} · YIELD-BEARING` : '1:1 · NO HAIRCUT')
+      : (isPlus ? `NAV ${nav.pusdPerPlus.toFixed(6)} · YIELD-BEARING` : '1:1 · BASE FEE')
     : 'NO. 01 · ONE ACTION';
 
   const plainBlurb = (() => {
     if (mode === 'mint') {
       return isExternalRoute
-        ? `Pay with ${selected.symbol} on ${selected.chainLabel}. Receive PUSD on Push Chain in one signature.`
-        : `Pay with ${selected.symbol}·${selected.chainShort} held on Push Chain. Receive PUSD.`;
+        ? `Pay with ${selected.symbol} on ${selected.chainLabel}. Receive ${productLabel} on Push Chain in one signature.`
+        : `Pay with ${selected.symbol}·${selected.chainShort} held on Push Chain. Receive ${productLabel}.`;
     }
     return isExternalRoute
-      ? `Burn PUSD on Push Chain. Receive ${selected.symbol} on ${selected.chainLabel}.`
-      : `Burn PUSD on Push Chain. Receive ${selected.symbol}·${selected.chainShort} on Push Chain.`;
+      ? `Burn ${productLabel} on Push Chain. Receive ${selected.symbol} on ${selected.chainLabel}.`
+      : `Burn ${productLabel} on Push Chain. Receive ${selected.symbol}·${selected.chainShort} on Push Chain.`;
   })();
 
   // --- tab switcher navigates the URL -----------------------------------
@@ -561,6 +632,45 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         <div className="convert__title">{title}</div>
         <div className="convert__kicker">{kicker}</div>
       </div>
+
+      {plusEnabled && (
+        <div className="convert__product" role="tablist" aria-label="Product">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={isPlus}
+            className={`convert__product-btn ${isPlus ? 'convert__product-btn--active' : ''}`}
+            onClick={() => {
+              if (!isPlus) {
+                setProduct('pusd-plus');
+                setAmount('');
+                setStage({ kind: 'idle' });
+              }
+            }}
+            disabled={submitting}
+          >
+            PUSD+
+            <span className="convert__product-tag">YIELD</span>
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={!isPlus}
+            className={`convert__product-btn ${!isPlus ? 'convert__product-btn--active' : ''}`}
+            onClick={() => {
+              if (isPlus) {
+                setProduct('pusd');
+                setAmount('');
+                setStage({ kind: 'idle' });
+              }
+            }}
+            disabled={submitting}
+          >
+            PUSD
+            <span className="convert__product-tag">PAR</span>
+          </button>
+        </div>
+      )}
 
       <div className="convert__tabs" role="tablist">
         <button
@@ -584,6 +694,31 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       </div>
 
       <div className="convert__body">
+        {/* Wrap-mode banner — shown when arriving via /convert/...?wrap=1 from
+            the Dashboard. The PUSD asset is locked; clicking × clears the
+            param and returns the panel to the regular reserve flow. */}
+        {wrapMode && isPlus && (
+          <div className="convert__wrap-banner" role="status">
+            <span>
+              {mode === 'mint'
+                ? 'WRAP MODE — converting PUSD into PUSD+'
+                : 'UNWRAP MODE — converting PUSD+ back into PUSD'}
+            </span>
+            <button
+              type="button"
+              className="convert__wrap-banner-x"
+              aria-label="Exit wrap mode"
+              onClick={() => {
+                const next = new URLSearchParams(searchParams);
+                next.delete('wrap');
+                setSearchParams(next, { replace: true });
+              }}
+            >
+              ×
+            </button>
+          </div>
+        )}
+
         {/* SOURCE header — mint only, shown before the inputs */}
         {mode === 'mint' && (
           <div className="src-header">
@@ -605,8 +740,9 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           </div>
         )}
 
-        {/* Secondary: switch mint route. Only shown when external is available. */}
-        {mode === 'mint' && account && !originIsPush && (
+        {/* Secondary: switch mint route. Only shown when external is available
+            and the selected asset can actually bridge (PUSD wrap can't). */}
+        {mode === 'mint' && account && !originIsPush && !isPusdAsset && (
           <button
             type="button"
             className="src-header__aside"
@@ -662,7 +798,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                 <span className="selector-btn__caret">▾</span>
               </button>
             ) : (
-              <TokenPill symbol="PUSD" chainShort="PUSH" size="md" />
+              <TokenPill symbol={productLabel} chainShort="PUSH" size="md" />
             )}
           </div>
           {mode === 'mint' && showSelector && (
@@ -737,7 +873,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               {amountValid ? formatAmount(receiveAmount, 6, { maxFractionDigits: 2 }) : '0.00'}
             </div>
             {mode === 'mint' ? (
-              <TokenPill symbol="PUSD" chainShort="PUSH CHAIN" size="md" />
+              <TokenPill symbol={productLabel} chainShort="PUSH CHAIN" size="md" />
             ) : (
               <button
                 type="button"
@@ -1024,21 +1160,21 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           </div>
           <div>
             <div className="convert__grid-label">RATE</div>
-            <div className="convert__grid-value">1.000000</div>
+            <div className="convert__grid-value">{isPlus ? nav.pusdPerPlus.toFixed(6) : '1.000000'}</div>
           </div>
           <div>
             <div className="convert__grid-label">SOURCE</div>
             <div className="convert__grid-value">
               {mode === 'mint'
                 ? `${selected.symbol} · ${isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}`
-                : 'PUSD · PUSH CHAIN'}
+                : `${productLabel} · PUSH CHAIN`}
             </div>
           </div>
           <div>
             <div className="convert__grid-label">DESTINATION</div>
             <div className="convert__grid-value">
               {mode === 'mint'
-                ? 'PUSD · PUSH CHAIN'
+                ? `${productLabel} · PUSH CHAIN`
                 : `${selected.symbol} · ${isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}`}
             </div>
           </div>
