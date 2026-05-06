@@ -9,7 +9,12 @@
  * Addresses come exclusively from env via contracts/config.
  */
 
-import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS } from '../contracts/config';
+import {
+  INSURANCE_FUND_ADDRESS,
+  PUSD_ADDRESS,
+  PUSD_MANAGER_ADDRESS,
+  PUSD_PLUS_ADDRESS,
+} from '../contracts/config';
 import { explorerAddress, truncAddr } from '../lib/format';
 import { AsciiWave } from './AsciiWave';
 
@@ -36,7 +41,7 @@ export function Footer() {
               <div className="footer__col-label">Protocol</div>
               <ul className="footer__links">
                 <li><a href="/reserves">Reserves</a></li>
-                <li><a href="/history">Activity</a></li>
+                <li><a href="/activity">Activity</a></li>
                 <li><a href="/docs">Docs</a></li>
               </ul>
             </div>
@@ -68,26 +73,59 @@ export function Footer() {
           <span>
             &copy; MMXX{yearRoman(year - 2020)} · Push USD · <em>All serifs intentional.</em>
           </span>
-          <span>
-            PUSD{' '}
-            <a
-              className="link-mono"
-              href={explorerAddress(PUSD_ADDRESS)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {truncAddr(PUSD_ADDRESS)}
-            </a>
-            {'   ·   '}
-            PUSDManager{' '}
-            <a
-              className="link-mono"
-              href={explorerAddress(PUSD_MANAGER_ADDRESS)}
-              target="_blank"
-              rel="noreferrer"
-            >
-              {truncAddr(PUSD_MANAGER_ADDRESS)}
-            </a>
+          <span className="footer__addrs">
+            <span className="footer__addrs-row">
+              PUSD{' '}
+              <a
+                className="link-mono"
+                href={explorerAddress(PUSD_ADDRESS)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {truncAddr(PUSD_ADDRESS)}
+              </a>
+              {'   ·   '}
+              PUSDManager{' '}
+              <a
+                className="link-mono"
+                href={explorerAddress(PUSD_MANAGER_ADDRESS)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {truncAddr(PUSD_MANAGER_ADDRESS)}
+              </a>
+            </span>
+            {(PUSD_PLUS_ADDRESS || INSURANCE_FUND_ADDRESS) && (
+              <span className="footer__addrs-row">
+                {PUSD_PLUS_ADDRESS && (
+                  <>
+                    PUSDPlusVault{' '}
+                    <a
+                      className="link-mono"
+                      href={explorerAddress(PUSD_PLUS_ADDRESS)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {truncAddr(PUSD_PLUS_ADDRESS)}
+                    </a>
+                  </>
+                )}
+                {INSURANCE_FUND_ADDRESS && (
+                  <>
+                    {'   ·   '}
+                    InsuranceFund{' '}
+                    <a
+                      className="link-mono"
+                      href={explorerAddress(INSURANCE_FUND_ADDRESS)}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {truncAddr(INSURANCE_FUND_ADDRESS)}
+                    </a>
+                  </>
+                )}
+              </span>
+            )}
           </span>
         </div>
       </div>

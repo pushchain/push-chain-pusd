@@ -1,8 +1,13 @@
 # ADR 0003 — Product Architecture (Two-Tier)
 
-**Status:** Accepted
+**Status:** Superseded by [ADR 0004](0004-shipped-v2-architecture.md) (2026-05-04)
 **Date:** 2026-04-22
 **Supersedes:** the single-contract sketch described in the v1 research notes in `docs/research/`.
+
+> **Superseded.** This ADR proposed a four-contract design with sliced
+> reserves (`parReserve` / `yieldShareReserve`) and an ERC-4626 PUSD+. What
+> shipped on 2026-05-04 is three contracts plus a passive sidecar — see
+> ADR 0004 for the rationale and the diff. Kept here for audit trail.
 
 ---
 

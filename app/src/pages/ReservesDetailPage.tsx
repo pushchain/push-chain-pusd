@@ -14,8 +14,12 @@
  * segment → chip in the table, so your eye hops between them naturally.
  */
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { TokenPill } from '../components/TokenPill';
+import { VaultBook } from '../components/VaultBook';
+import { PUSD_PLUS_ADDRESS } from '../contracts/config';
+import { useCountUp } from '../hooks/useCountUp';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useReserves, type ReserveRow } from '../hooks/useReserves';
@@ -26,6 +30,8 @@ import {
   formatRelative,
   truncAddr,
 } from '../lib/format';
+
+type View = 'pusd' | 'plus';
 
 const STATUS_LABEL: Record<string, string> = {
   ENABLED: 'ENABLED',
@@ -63,6 +69,25 @@ export default function ReservesDetailPage() {
   const { totalSupply, loading: supplyLoading } = usePUSDBalance();
   const stats = useProtocolStats();
 
+  // Toggle between the PUSD+ vault balance sheet (default) and the par-
+  // backed PUSD reserves view. Persists to ?view= so the URL captures intent
+  // and bookmark-friendly deep-links work. Defaults to 'plus' when V2 is
+  // configured; falls back to 'pusd' when it isn't (vault section can't
+  // render without an address).
+  const plusEnabled = !!PUSD_PLUS_ADDRESS;
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialView: View = plusEnabled
+    ? (searchParams.get('view') === 'pusd' ? 'pusd' : 'plus')
+    : 'pusd';
+  const [view, setViewState] = useState<View>(initialView);
+  const setView = (next: View) => {
+    setViewState(next);
+    const sp = new URLSearchParams(searchParams);
+    if (next === 'pusd') sp.set('view', 'pusd');
+    else sp.delete('view');
+    setSearchParams(sp, { replace: true });
+  };
+
   const chainsCount = useMemo(() => {
     const set = new Set<string>();
     for (const r of reserves.rows) set.add(r.chain);
@@ -71,6 +96,13 @@ export default function ReservesDetailPage() {
 
   const surplus =
     reserves.totalReserves > totalSupply ? reserves.totalReserves - totalSupply : 0n;
+
+  // Count-up wake-ups — same idiom as the home page hero stats. Fires once
+  // per stat on first reveal, then snaps to the live value on subsequent
+  // polls. Reduced-motion users see the final number immediately.
+  const reservesCounted = useCountUp(reserves.totalReserves);
+  const surplusCounted  = useCountUp(surplus);
+  const accruedCounted  = useCountUp(stats.accruedFeesTotal);
 
   const collateralRatio = formatPct(reserves.totalReserves, totalSupply, 2);
   const ratioClass = (() => {
@@ -105,17 +137,59 @@ export default function ReservesDetailPage() {
             </span>
           </div>
           <h1 className="hero__title" style={{ fontSize: 'clamp(44px, 5.5vw, 72px)' }}>
-            Every dollar <em>on-chain</em>, every second.
+            {view === 'pusd' ? (
+              <>Every dollar <em>on-chain</em>, every second.</>
+            ) : (
+              <>Asset that <em>grows</em> with every <em>rebalance</em>.</>
+            )}
           </h1>
           <p className="hero__lead" style={{ maxWidth: '72ch' }}>
-            This page lists every token PUSDManager currently holds. Balances and statuses are
-            contract reads, not a snapshot. Refresh the page and the numbers refresh with it.
+            {view === 'pusd'
+              ? 'This page lists every token PUSDManager currently holds. Balances and statuses are contract reads, not a snapshot. Refresh the page and the numbers refresh with it.'
+              : 'The PUSD+ balance sheet including total assets, idle vs deployed, NAV history, queue lifecycle, and the insurance fund. All numbers are live contract reads + on-chain events.'}
           </p>
         </div>
       </section>
 
-      <section>
+      {plusEnabled && (
+        <div className="container" style={{ marginTop: 24 }}>
+          <div className="reserves-toggle" role="tablist" aria-label="Reserves view">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'plus'}
+              className={`reserves-toggle__btn reserves-toggle__btn--plus ${view === 'plus' ? 'reserves-toggle__btn--active' : ''}`}
+              onClick={() => setView('plus')}
+            >
+              PUSD+ VAULT
+              <span className="reserves-toggle__tag">YIELD · NAV</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'pusd'}
+              className={`reserves-toggle__btn ${view === 'pusd' ? 'reserves-toggle__btn--active' : ''}`}
+              onClick={() => setView('pusd')}
+            >
+              PUSD RESERVES
+              <span className="reserves-toggle__tag">PAR · 1:1</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {view === 'plus' ? (
         <div className="container">
+          <VaultBook />
+        </div>
+      ) : (
+      <>
+      <div className="container">
+        <section className="section">
+          <div className="section__header">
+            <span>§ PUSD RESERVES</span>
+            <span>PAR-BACKED · 1:1 · MULTI-CHAIN</span>
+          </div>
           <div className="stat-strip">
             <div className="stat">
               <div className="stat__label">COLLATERAL RATIO</div>
@@ -131,7 +205,7 @@ export default function ReservesDetailPage() {
               <div className="stat__value">
                 {reserves.loading
                   ? '…'
-                  : formatAmount(reserves.totalReserves, 6, { maxFractionDigits: 0 })}
+                  : formatAmount(reservesCounted, 6, { maxFractionDigits: 0 })}
                 <em> USD</em>
               </div>
               <div className="stat__sub">NORMALIZED TO 6DP</div>
@@ -139,7 +213,7 @@ export default function ReservesDetailPage() {
             <div className="stat">
               <div className="stat__label">SURPLUS</div>
               <div className="stat__value">
-                {formatAmount(surplus, 6, { maxFractionDigits: 2 })}
+                {formatAmount(surplusCounted, 6, { maxFractionDigits: 2 })}
                 <em> USD</em>
               </div>
               <div className="stat__sub">OVER TOTAL SUPPLY</div>
@@ -153,15 +227,13 @@ export default function ReservesDetailPage() {
                 ACCRUED FEES{' '}
                 {stats.loading
                   ? '…'
-                  : formatAmount(stats.accruedFeesTotal, 6, { maxFractionDigits: 0 })}{' '}
+                  : formatAmount(accruedCounted, 6, { maxFractionDigits: 0 })}{' '}
                 USD
               </div>
             </div>
           </div>
-        </div>
-      </section>
+        </section>
 
-      <div className="container">
         <section className="section">
           <div className="section__header">
             <span>§ DISTRIBUTION</span>
@@ -236,69 +308,72 @@ export default function ReservesDetailPage() {
             <span>EVERY TRACKED ASSET · {reserves.rows.length} ROWS</span>
           </div>
 
-          <table className="table">
-            <thead>
-              <tr>
-                <th>ASSET</th>
-                <th>CHAIN</th>
-                <th>ADDRESS</th>
-                <th className="num">BALANCE</th>
-                <th className="num">SHARE</th>
-                <th>STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reserves.loading && reserves.rows.length === 0 ? (
+          <div className="table-wrap">
+            <table className="table table--responsive">
+              <thead>
                 <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--c-ink-mute)' }}>
-                    Reading token balances from PUSDManager…
-                  </td>
+                  <th>ASSET</th>
+                  <th className="cell-md-up">CHAIN</th>
+                  <th className="cell-md-up">ADDRESS</th>
+                  <th className="num">BALANCE</th>
+                  <th className="num">SHARE</th>
+                  <th className="cell-sm-up">STATUS</th>
                 </tr>
-              ) : reserves.rows.length === 0 ? (
-                <tr>
-                  <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--c-ink-mute)' }}>
-                    No tokens currently registered.
-                  </td>
-                </tr>
-              ) : (
-                reserves.rows.map((r, i) => (
-                  <tr key={r.address}>
-                    <td>
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
-                        <span
-                          aria-hidden="true"
-                          style={{
-                            display: 'inline-block',
-                            width: 10,
-                            height: 10,
-                            background: sliceColor(i),
-                            border: '1px solid var(--c-ink)',
-                          }}
-                        />
-                        <TokenPill symbol={r.symbol} chainShort={r.chainShort} size="sm" />
-                      </span>
-                    </td>
-                    <td className="mono">{r.chainLabel}</td>
-                    <td className="addr">
-                      <a
-                        className="link-mono"
-                        href={explorerAddress(r.address)}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        {truncAddr(r.address)}
-                      </a>
-                    </td>
-                    <td className="num">{formatAmount(r.balance, r.decimals)}</td>
-                    <td className="num">{r.pctOfReserves.toFixed(2)}%</td>
-                    <td className={`status ${STATUS_CLASS[r.status] ?? ''}`}>
-                      {STATUS_LABEL[r.status] ?? r.status}
+              </thead>
+              <tbody>
+                {reserves.loading && reserves.rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--c-ink-mute)' }}>
+                      Reading token balances from PUSDManager…
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : reserves.rows.length === 0 ? (
+                  <tr>
+                    <td colSpan={6} style={{ textAlign: 'center', padding: 40, color: 'var(--c-ink-mute)' }}>
+                      No tokens currently registered.
+                    </td>
+                  </tr>
+                ) : (
+                  reserves.rows.map((r, i) => (
+                    <tr key={r.address}>
+                      <td>
+                        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                          <span
+                            aria-hidden="true"
+                            style={{
+                              display: 'inline-block',
+                              width: 10,
+                              height: 10,
+                              background: sliceColor(i),
+                              border: '1px solid var(--c-ink)',
+                              flexShrink: 0,
+                            }}
+                          />
+                          <TokenPill symbol={r.symbol} chainShort={r.chainShort} size="sm" />
+                        </span>
+                      </td>
+                      <td className="mono cell-md-up">{r.chainLabel}</td>
+                      <td className="addr cell-md-up">
+                        <a
+                          className="link-mono"
+                          href={explorerAddress(r.address)}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          {truncAddr(r.address)}
+                        </a>
+                      </td>
+                      <td className="num">{formatAmount(r.balance, r.decimals)}</td>
+                      <td className="num">{r.pctOfReserves.toFixed(2)}%</td>
+                      <td className={`status cell-sm-up ${STATUS_CLASS[r.status] ?? ''}`}>
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
 
           {reserves.error && (
             <div className="feedback feedback--error" style={{ marginTop: 16 }}>
@@ -308,6 +383,8 @@ export default function ReservesDetailPage() {
           )}
         </section>
       </div>
+      </>
+      )}
     </>
   );
 }

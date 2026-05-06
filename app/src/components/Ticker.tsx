@@ -16,14 +16,16 @@ import { useMemo } from 'react';
 import { useReserves } from '../hooks/useReserves';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
+import { useVaultBook } from '../hooks/useVaultBook';
 import { useBlockMeta } from '../hooks/useBlockMeta';
-import { formatAmount, formatBlockNumber, formatPct } from '../lib/format';
-import { deriveInvariantState, normalizeToPUSD } from '../lib/invariants';
+import { formatBlockNumber, formatPct, formatShortAmount } from '../lib/format';
+import { deriveInvariantState } from '../lib/invariants';
 
 export function Ticker() {
   const reserves = useReserves();
   const { totalSupply } = usePUSDBalance();
-  const { baseFeeBps, accruedFeesTotal } = useProtocolStats();
+  const { baseFeeBps } = useProtocolStats();
+  const vault = useVaultBook();
   const { block, latencyMs } = useBlockMeta();
 
   const invariantState = useMemo(
@@ -36,14 +38,15 @@ export function Ticker() {
     return formatPct(reserves.totalReserves, totalSupply, 1);
   })();
 
-  const topShares = useMemo(
-    () => reserves.rows.slice(0, 4),
-    [reserves.rows],
-  );
+  const supplyFormatted = formatShortAmount(totalSupply, 6);
+  const plusSupplyFormatted = formatShortAmount(vault.plusTotalSupply, 6);
 
-  const supplyFormatted = formatAmount(normalizeToPUSD(totalSupply, 6), 6, {
-    maxFractionDigits: 0,
-  });
+  const NAV_E18 = 10n ** 18n;
+  const yieldPusd =
+    vault.navE18 > NAV_E18
+      ? ((vault.navE18 - NAV_E18) * vault.plusTotalSupply) / NAV_E18
+      : 0n;
+  const yieldFormatted = formatShortAmount(yieldPusd, 6);
 
   const blockLabel = block === null ? '—' : formatBlockNumber(block);
   const latencyLabel = latencyMs === null ? '—' : (latencyMs / 1000).toFixed(2);
@@ -51,6 +54,7 @@ export function Ticker() {
   return (
     <div className="ticker" aria-label="Live protocol ticker">
       <div className="container ticker__inner">
+        {/* — PUSD — */}
         <span className="ticker__item">
           <span>PUSD</span>
           <strong>1.0000</strong>
@@ -60,37 +64,39 @@ export function Ticker() {
         </span>
 
         <span className="ticker__item">
-          <span>SUPPLY</span>
+          <span>PUSD SUPPLY</span>
           <strong>{supplyFormatted}</strong>
         </span>
 
         <span className="ticker__item">
-          <span>RATIO</span>
+          <span>PUSD RATIO</span>
           <strong>{ratioPct}</strong>
         </span>
 
         <span className="ticker__item">
-          <span>FEE</span>
+          <span>PUSD FEE</span>
           <strong>{(baseFeeBps / 100).toFixed(2)}%</strong>
         </span>
 
+        {/* — PUSD+ — */}
         <span className="ticker__item">
-          <span>ACCRUED</span>
-          <strong>{formatAmount(accruedFeesTotal, 6, { maxFractionDigits: 0 })}</strong>
+          <span>PUSD+</span>
+          <strong>{vault.pusdPerPlus.toFixed(4)}</strong>
+          <em>nav</em>
         </span>
 
-        {topShares.map((r) => (
-          <span className="ticker__item" key={r.address}>
-            <span>{r.symbol}·{r.chainShort}</span>
-            <strong>{r.pctOfReserves.toFixed(1)}%</strong>
-          </span>
-        ))}
-
         <span className="ticker__item">
-          <span>ASSETS</span>
-          <strong>{reserves.rows.length}</strong>
+          <span>PUSD+ SUPPLY</span>
+          <strong>{plusSupplyFormatted}</strong>
         </span>
 
+        <span className="ticker__item">
+          <span>PUSD+ YIELD</span>
+          <strong>{yieldFormatted}</strong>
+          <em>pusd</em>
+        </span>
+
+        {/* — Chain meta — */}
         <span className="ticker__item">
           <span>BLOCK</span>
           <strong>{blockLabel}</strong>

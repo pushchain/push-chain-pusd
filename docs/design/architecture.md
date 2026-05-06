@@ -1,377 +1,192 @@
-# Architecture
+# Architecture — Shipped V2.1 (2026-05-06)
 
-The PUSD protocol is four upgradeable contracts. This page documents each: its role, its storage, its external interface, and how it wires to the others.
+This is the current architecture reference (deposit-side amended by
+[ADR 0006](decisions/0006-direct-vault-deposit.md) on 2026-05-06; redemption-side
+fee-exempt-flag isolation from [ADR 0004](decisions/0004-shipped-v2-architecture.md)
+preserved). For the scrapped 4-contract plan, see ADR 0004 for the narrative
+diff against ADR 0003 — the original prose is in git history only.
 
-The authoritative design intent is in [ADR 0003](decisions/0003-product-architecture.md). This page is the spec.
-
----
-
-## Contract map
+## Components
 
 ```
-                              ┌────────────────────────┐
-                              │      PUSD (ERC-20)     │
-                              │   mint/burn by role    │
-                              └───────────┬────────────┘
-                                          │ MINTER_ROLE, BURNER_ROLE
-                                          │ (held only by PUSDManager)
+                  ┌──────────────────────┐
+   user           │   PUSDManager (UUPS) │   role-gated reserve orchestrator
+  ─ deposit ─────►│   v2 in-place upgrade│
+  ─ redeem  ─────►│                      │   storage append-only (__gap_v2[48])
+  ─ depositToPlus►│                      │
+  ─ redeemFromPlus│                      │
+                  └──┬─────────────┬─────┘
+                     │             │
+              MINTER │             │ MANAGER_ROLE
+              BURNER │             │
+                     ▼             ▼
+              ┌──────────┐   ┌──────────────────────────┐
+              │  PUSD    │   │  PUSDPlusVault (UUPS)    │   custom 6-dec ERC-20
+              │  (UUPS)  │   │  ─ mintPlus / burnPlus   │   NAV-per-share
+              │  ERC-20  │   │  ─ rebalance (keeper)    │
+              └──────────┘   │  ─ openPool/closePool    │
+                             │  ─ fulfillQueueClaim     │
+                             └────────────┬─────────────┘
+                                          │ haircut on harvest
                                           ▼
-        VAULT_ROLE      ┌─────────────────────────────────┐
-       ┌────────────────▶           PUSDManager           │
-       │                │  parReserve, yieldShareReserve  │
-       │                │  deposit, redeem                │
-       │                │  mintForVault, redeemForVault   │
-       │                └──────────────────┬──────────────┘
-       │                                   │ holds PUSD
-       │                                   │ credits
-       │                                   ▼
-  ┌────┴──────────────────┐   ┌──────────────────────────────┐
-  │   PUSDPlus (ERC-4626) │   │                              │
-  │  underlying = PUSD    │   │   PUSDPlus holds PUSD in its │
-  │  totalAssets =        │   │   own balance, plus the      │
-  │   PUSD.bal(vault) +   │   │   claim reported by          │
-  │   liquidity.nav()     │   │   PUSDLiquidity              │
-  └─────────┬─────────────┘   └──────────────────────────────┘
-            │ LIQUIDITY_ROLE (PUSDPlus grants to PUSDLiquidity)
-            │ VAULT_ROLE     (PUSDLiquidity grants to PUSDPlus)
-            ▼
-  ┌────────────────────────────────────┐
-  │          PUSDLiquidity             │
-  │  holds USDC/USDT and UniV3 NFT     │
-  │  positions; never holds PUSD       │
-  │  deploys via INonfungiblePosition- │
-  │  Manager + UniV3Router             │
-  │                                    │
-  │  netAssetsInPUSD() → uint256       │
-  └────────────────────────────────────┘
+                                  ┌──────────────────┐
+                                  │  InsuranceFund   │   passive sidecar
+                                  │  (UUPS)          │   balanceOf is truth
+                                  └──────────────────┘
 ```
 
-Key wiring rules:
-- **Only `PUSDManager`** ever calls `PUSD.mint`/`PUSD.burn`. Nothing else has `MINTER_ROLE`/`BURNER_ROLE`.
-- **Only `PUSDPlus`** can call `PUSDManager.mintForVault` / `redeemForVault` (`VAULT_ROLE` on PUSDManager).
-- **Only `PUSDPlus`** can pull/push capital from `PUSDLiquidity` for user withdraws (`VAULT_ROLE` on PUSDLiquidity).
-- **Only `PUSDLiquidity`** reports NAV to PUSDPlus (`LIQUIDITY_ROLE` on PUSDPlus).
+## Two products, one entrypoint
 
----
+| Product | Mint                                | Redeem                              | Token shape                   |
+| ------- | ----------------------------------- | ----------------------------------- | ----------------------------- |
+| PUSD    | `PUSDManager.deposit`               | `PUSDManager.redeem`                | Plain ERC-20, 6 dec, 1:1 backed |
+| PUSD+   | `PUSDManager.depositToPlus`         | `PUSDManager.redeemFromPlus`        | Custom ERC-20, 6 dec, NAV-per-share |
 
-## PUSD.sol — the token
+Users interact with `PUSDManager` for both products. The vault is exposed
+publicly only for reads (`nav`, `previewMintPlus`, etc.) and for the
+keeper-callable `fulfillQueueClaim` when a queued redeem is settled.
 
-Unchanged from v1. Minimal ERC-20.
+## Contract responsibilities
 
-| Field | Value |
-|---|---|
-| Standard | ERC-20 |
-| Decimals | 6 |
-| Name / Symbol | "Push USD" / "PUSD" |
-| Upgradeable | Yes (UUPS) |
-| Roles | `DEFAULT_ADMIN_ROLE`, `UPGRADER_ROLE`, `MINTER_ROLE`, `BURNER_ROLE` |
+### PUSD.sol
+Plain UUPS ERC-20, 6 decimals. Holds `MINTER_ROLE` / `BURNER_ROLE` granted
+to PUSDManager only. Does not know about reserves, fees, or the yield layer.
+Unchanged from v1.
 
-External surface:
-```solidity
-function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE);
-function burn(address from, uint256 amount) external onlyRole(BURNER_ROLE);
+### PUSDManager.sol (v2.1)
+- Reserve token registry (`supportedTokens`, `tokenList`, status lifecycle)
+- Fee config (baseFee ≤ 100, preferredFeeMin/Max ≤ 200, surplusHaircutBps ≤ 1000)
+- v1 entrypoints: `deposit`, `redeem`
+- v2 entrypoints: `depositToPlus`, `redeemFromPlus`, `setPlusVault`, `setFeeExempt`, `depositForVault`
+- **v2.1 (ADR 0006): `depositToPlus` rewrite — direct path forwards reserves to vault (no PUSD minted); wrap path basket-redeems through manager**
+- Defensive `inBasket` check on direct path to prevent silent stranding of forwarded reserves
+- Two-key gate on `depositForVault` — `msg.sender == plusVault && feeExempt[plusVault]`. Bypasses `nonReentrant` and surplus haircut by design (necessary for vault to convert idle reserves without manager-lock deadlock)
+- Surplus accounting (`accruedFees`, `accruedHaircut`) and treasury sweeps
+- Storage append-only — `__gap_v2[48]` reserves runway; v2.1 is function-body-only
+
+### PUSDPlusVault.sol (v2.1)
+- Custom 6-decimal ERC-20 (PUSD+); NAV math via `nav() / totalAssets() / previewMintPlus / previewBurnPlus`
+- 5 roles: `MANAGER_ROLE` (manager only), `KEEPER_ROLE`, `POOL_ADMIN_ROLE`, `VAULT_ADMIN_ROLE`, `GUARDIAN_ROLE`
+- Hard caps revert in setter bodies — `MAX_HAIRCUT_BPS=500`, `MAX_DEPLOYMENT_CAP_BPS=8500`, `MIN_UNWIND_CAP_BPS=100`, `MAX_UNWIND_CAP_BPS=5000`, `MAX_REBALANCE_COOLDOWN=24h`
+- Three-tier redemption fulfilment: idle PUSD → convert basket → enqueue
+- **v2.1: `_convertIdleReservesToPusd(target, preferred)` drains the user's preferred asset first; `burnPlus` and `fulfillQueueClaim` thread `preferredAsset` through**
+- **v2.1: `rebalance()` and `rebalanceBatch()` are permissionless-with-cooldown — KEEPER bypasses, public callers must wait `publicRebalanceCooldown` (default 1h, max 24h)**
+- Burn-and-fill queue: PUSD+ burned at queue time, NAV fixed at burn block, residual paid later by `fulfillQueueClaim`
+- Inlines Uniswap V3 LP engine (open / top-up / close / harvest); vendors `libraries/V3Math.sol` (mulDiv, sqrtRatio, getAmounts) as public lib functions to fit under EIP-170
+- Pause asymmetry: `GUARDIAN_ROLE` pauses; only `DEFAULT_ADMIN_ROLE` (timelock) unpauses
+- Storage append-only — v2.1 consumes 1 slot from `__gap[40] → __gap[39]` for `(lastRebalanceAt, publicRebalanceCooldown)` packed
+- `via_ir = true` + `evm_version = "shanghai"` in foundry.toml are required for deploy
+
+### InsuranceFund.sol
+- Passive — receives haircut transferred by `PUSDPlusVault._haircut`
+- `balanceOf(token)` is source-of-truth; `cumulativeDeposited` is informational
+- `notifyDeposit` is wrapped in `try/catch` at the vault — paused IF cannot brick rebalance
+- `withdraw` is `VAULT_ADMIN_ROLE` only; design-doc review marks (1% TVL → fee tier 2; 5% TVL → haircut review) gate when governance pulls
+
+## Key flows
+
+### Mint PUSD
+```
+user → manager.deposit(token, amount, recipient)
+       ├─ pull token from msg.sender
+       ├─ apply surplusHaircutBps (cap 1000 bps)
+       ├─ accruedHaircut[token] += haircutAmount
+       ├─ pusd.mint(recipient, normalize(netAmount))
+       └─ event Deposited
 ```
 
-PUSD has no idea about the reserve, the wrapper, or strategies. It exists purely to track "who holds how much of the settlement token". All complexity lives upstream.
-
----
-
-## PUSDManager.sol — the reserve
-
-Holds every deposited stablecoin, splits them into two slices, and serves both `deposit/redeem` (for plain PUSD) and `mintForVault/redeemForVault` (for PUSD+).
-
-### New state (vs. v1)
-
-```solidity
-// Replaces the single implicit "reserve = balance - surplus" model.
-mapping(address => uint256) public parReserve;          // backs PUSD 1:1
-mapping(address => uint256) public yieldShareReserve;   // owned by PUSD+
-
-address public pusdPlus;                                 // VAULT_ROLE holder
+### Redeem PUSD
+```
+user → manager.redeem(pusdAmount, preferredAsset, allowBasket, recipient)
+       ├─ try preferred branch     (baseFee + preferredFee)
+       ├─ try basket branch        (baseFee only)
+       └─ try emergency branch     (proportional drain on EMERGENCY_REDEEM tokens)
+       PUSD.burn(msg.sender, pusdAmount) happens first or in same call frame.
 ```
 
-Invariant (I-01):
+### Mint PUSD+ (v2.1)
 ```
-IERC20(t).balanceOf(PUSDManager)
-  == parReserve[t]
-   + yieldShareReserve[t]
-   + accruedFees[t]
-   + accruedHaircut[t]
-```
-
-### Storage (declaration order — upgrade-safe)
-
-```
-// existing v1 slots retained at the front for upgrade safety
-pusd                  : address
-_status               : uint256 (reentrancy guard)
-supportedTokens       : mapping(address => TokenInfo)
-tokenList             : mapping(uint256 => address)
-tokenIndex            : mapping(address => uint256)
-tokenCount            : uint256
-treasuryReserve       : address
-baseFee               : uint256
-preferredFeeMin       : uint256
-preferredFeeMax       : uint256
-accruedFees           : mapping(address => uint256)
-accruedHaircut        : mapping(address => uint256)
-sweptFees             : mapping(address => uint256)
-sweptHaircut          : mapping(address => uint256)
-
-// NEW v2 slots appended
-parReserve            : mapping(address => uint256)
-yieldShareReserve     : mapping(address => uint256)
-pusdPlus              : address
+user → manager.depositToPlus(tokenIn, amount, recipient)
+       ├─ direct path (tokenIn != PUSD):
+       │     pull token to manager → apply haircut → forward NET to vault
+       │     vault.mintPlus(pusdValueOfNet, recipient)
+       │     [no PUSD minted; pusd.totalSupply unchanged]
+       └─ wrap path (tokenIn == PUSD):
+             _executeBasketRedeemFrom(amount, plusVault, msg.sender, fee=0)
+             [burns PUSD from caller, pays proportional basket reserves to vault]
+             vault.mintPlus(amount, recipient)
+       Both paths require tokenIn ∈ vault.basket (defensive check on direct).
+       PUSD+ minted at pre-deposit NAV — `(pusdIn × supply) / (totalAssets − pusdIn)`.
 ```
 
-### TokenInfo (extended)
+### Redeem PUSD+ (three-tier, v2.1 preferred-first)
+```
+user → manager.redeemFromPlus(plusAmount, preferredAsset, allowBasket, recipient)
+       └─ vault.burnPlus(plusAmount, msg.sender, manager, preferredAsset, allowBasket)
+              ├─ vault burns PUSD+ from msg.sender at current NAV
+              ├─ tier 1: idle PUSD ≥ pusdOwed → transfer PUSD to manager (rare under v2.1)
+              ├─ tier 2: idle short → _convertIdleReservesToPusd(target, preferredAsset)
+              │           drains preferredAsset first, then basket order, via manager.depositForVault
+              └─ tier 3: residual queued (`from = msg.sender`, NAV fixed at burn block)
+       └─ if pusdReturned > 0:
+              ├─ preferredAsset == pusd: forward PUSD to recipient
+              └─ else: _payoutToUser (preferred → basket → emergency, fees=0)
 
-```solidity
-struct TokenInfo {
-    bool exists;
-    TokenStatus status;
-    uint8 decimals;
-    uint16 surplusHaircutBps;
-    string name;
-    string chainNamespace;
-
-    // v2 slots — reserved. Rate-bearing wrappers are out of scope for v2 launch
-    // (no sDAI/sUSDS/USDY available on Push Chain). Must be address(0) at launch.
-    address rateBearingWrapper;   // reserved (0) at v2 launch
-    address unwrapAdapter;         // reserved (0) at v2 launch
-}
+Later: anyone calls vault.fulfillQueueClaim(queueId) once vault has PUSD on hand.
+       Queue uses the entry's preferredAsset for tier-2 conversion.
 ```
 
-At v2 launch both reserved slots must be `address(0)`. When a rate-bearing wrapper is bridged to Push Chain, a follow-up ADR can wire `setRateBearingWrapper` back on — the Solidity slots stay where they are to preserve upgrade safety.
-
-### Roles (per ADR 0002)
-
-| Role | Holder | |
-|---|---|---|
-| `DEFAULT_ADMIN_ROLE` | Multisig | |
-| `ADMIN_ROLE` | Multisig | token config, fees, sweep, wrapper config |
-| `VAULT_ROLE` | PUSDPlus | gates `mintForVault`, `redeemForVault` |
-| `UPGRADER_ROLE` | 48h Timelock | |
-
-### External surface
-
-**User-facing (plain PUSD)**
-```solidity
-function deposit(address token, uint256 amount) external nonReentrant;
-function redeem(uint256 pusdAmount, address preferredAsset, bool allowBasket) external nonReentrant;
+### Daily rebalance (v2.1 permissionless-with-cooldown)
+```
+KEEPER (no cooldown) OR anyone (after publicRebalanceCooldown elapsed)
+  → vault.rebalance() / vault.rebalanceBatch(start, count)
+         For each owned positionId:
+           ├─ npm.collect(...) into vault
+           ├─ emit Harvested
+           └─ for each leg: _haircut(token, amount) → IF
+                            (try/catch on notifyDeposit; balances move regardless)
+         lastRebalanceAt = block.timestamp
+         emit Rebalanced
 ```
 
-Touch `parReserve` only. No change in semantics from v1 except the reserve slice accounting.
+## Trust boundaries
 
-**Vault-facing (PUSD+ internal)**
-```solidity
-function mintForVault(address token, uint256 amount, address recipient)
-    external onlyRole(VAULT_ROLE) nonReentrant returns (uint256 pusdMinted);
+| Boundary                                  | Trust level                                                |
+| ----------------------------------------- | ---------------------------------------------------------- |
+| User → PUSDManager                        | Untrusted; nonReentrant + zero-address + role-gated config |
+| PUSDManager → PUSDPlusVault               | Trusted via `MANAGER_ROLE`; `mintPlus / burnPlus` only     |
+| PUSDPlusVault → PUSDManager (`depositForVault`) | Trusted via two-key gate; bypasses nonReentrant deliberately |
+| PUSDPlusVault → InsuranceFund             | Trusted-but-fail-soft; notifyDeposit wrapped in try/catch  |
+| Keeper bot → PUSDPlusVault                | Operational role (`KEEPER_ROLE`); no economic admin powers |
+| POOL_ADMIN multisig → PUSDPlusVault       | Pool ops only — open/close, basket add/remove, fee tiers   |
+| VAULT_ADMIN multisig → PUSDPlusVault      | Knob setters; bounded by hard caps                         |
+| GUARDIAN multisig → vault/IF              | Pause-only; cannot unpause                                 |
+| DEFAULT_ADMIN timelock (mainnet target; testnet today: admin EOA) | Upgrade authority + role rotation + unpause                |
 
-function redeemForVault(uint256 pusdAmount, address preferredAsset, address recipient)
-    external onlyRole(VAULT_ROLE) nonReentrant returns (uint256 tokenOut);
-```
+> **Governance posture today (Deployment 4 testnet)**: DEFAULT_ADMIN, UPGRADER, and the multisig roles are all currently held by the admin EOA `0xA1c1AF949C5752E9714cFE54f444cE80f078069A`. No `TimelockController` is deployed. Upgrades execute on a single signature. The multisig/timelock language above describes the **mainnet target** per [ADR 0002](decisions/0002-access-control-model.md) — bringup happens before mainnet launch.
 
-- `mintForVault` is called by `PUSDPlus.deposit`. PUSDManager moves the stablecoin from the sender (PUSDPlus, or the original user via `permit`) into its balance, credits `yieldShareReserve`, and mints PUSD **to `recipient`** (which will be PUSDPlus).
-- `redeemForVault` is the inverse: PUSDPlus hands back PUSD, PUSDManager burns it, decrements `yieldShareReserve`, pulls from `PUSDLiquidity` if the Manager's held balance is insufficient, and sends the base stablecoin to `recipient` (the end user).
+## Storage discipline
 
-**Admin**
-```solidity
-function setPUSDPlus(address newVault) external onlyRole(ADMIN_ROLE);
-function setRateBearingWrapper(address base, address wrapper, address adapter) external onlyRole(ADMIN_ROLE);
-function rebalanceReserveToRateBearing(address token, uint256 amount) external onlyRole(ADMIN_ROLE);
-function rebalanceRateBearingToReserve(address token, uint256 amount) external onlyRole(ADMIN_ROLE);
-```
+- All four contracts use UUPS proxies with explicit `__gap` arrays.
+- PUSDManager v2 added `plusVault` + `feeExempt` and reserves `__gap_v2[48]`. New v3+ state must come after that gap.
+- PUSDPlusVault originally had `__gap[40]`; v2.1 consumed 1 slot for `(lastRebalanceAt, publicRebalanceCooldown)` packed → `__gap[39]`. InsuranceFund has `__gap[40]` unchanged.
+- v2.1 was **function-body-only on PUSDManager** — storage layout below `__gap_v2` byte-identical to v2.
+- Verification: `forge inspect <Contract> storage-layout` before and after every upgrade.
 
----
+## Deployed addresses (Donut Testnet, chain 42101)
 
-## PUSDPlus.sol — the yield wrapper
+| Contract       | Proxy                                        |
+| -------------- | -------------------------------------------- |
+| PUSD           | `0x488d080e16386379561a47A4955D22001d8A9D89` |
+| PUSDManager    | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
+| PUSDPlusVault  | `0xb55a5B36d82D3B7f18Afe42F390De565080A49a1` |
+| InsuranceFund  | `0xFF7E741621ad5d39015759E3d606A631Fa319a62` |
 
-Standard ERC-4626, underlying asset = PUSD. This contract does **not** mint PUSD; PUSDManager does. PUSDPlus just receives PUSD, wraps shares, and tracks NAV.
+Source of truth: [`contracts/deployed.txt`](../../contracts/deployed.txt).
 
-### Storage
+## Related docs
 
-```
-asset                  : address   (= PUSD)
-pusdManager            : address
-pusdLiquidity          : address
-
-performanceFeeBps      : uint256   (default 1000 = 10%, max 2000)
-performanceFeeRecipient: address
-highWaterMarkPUSD      : uint256   (for performance-fee crystallisation)
-
-paused                 : bool
-// standard ERC-4626 / ERC-20 state from OZ base
-```
-
-### Roles
-
-| Role | Holder | |
-|---|---|---|
-| `DEFAULT_ADMIN_ROLE` | Multisig | |
-| `ADMIN_ROLE` | Multisig | fee params, pause |
-| `LIQUIDITY_ROLE` | PUSDLiquidity | (future use — explicit NAV push) |
-| `UPGRADER_ROLE` | 48h Timelock | |
-
-### NAV (`totalAssets`)
-
-```solidity
-function totalAssets() public view override returns (uint256) {
-    // PUSD held directly by this vault (idle + any buffered)
-    uint256 idlePUSD = IERC20(asset).balanceOf(address(this));
-    // PUSD-equivalent claim on yieldShareReserve + strategies
-    uint256 liquidityNav = IPUSDLiquidity(pusdLiquidity).netAssetsInPUSD();
-    return idlePUSD + liquidityNav;
-}
-```
-
-Crucially: `netAssetsInPUSD()` returns the PUSD-equivalent net value of the yield tier — that is, `yieldShareReserve` aggregated + deployed strategy NAVs — all normalised to 6-decimal PUSD units. This is why `pps` is monotonic and meaningful.
-
-### User entrypoints (convenience over vanilla ERC-4626)
-
-```solidity
-// Single-call flow: user sends stablecoin, receives PUSD+ shares.
-// Handles the Manager.mintForVault atomically.
-function depositStable(address token, uint256 amount, address receiver)
-    external returns (uint256 shares);
-
-// Inverse.
-function redeemToStable(uint256 shares, address token, address receiver)
-    external returns (uint256 tokenOut);
-
-// Pure ERC-4626 paths (user already holds PUSD, wants PUSD+)
-function deposit(uint256 pusdAmount, address receiver) external returns (uint256 shares);
-function withdraw(uint256 pusdAmount, address receiver, address owner) external returns (uint256 shares);
-function mint(uint256 shares, address receiver) external returns (uint256 pusdAmount);
-function redeem(uint256 shares, address receiver, address owner) external returns (uint256 pusdAmount);
-```
-
-### Performance fee
-
-On every `totalAssets()` evaluation, if it exceeds the prior `highWaterMarkPUSD`, the delta is the realised gain. A fraction (`performanceFeeBps`, 10% default) is skimmed into the fee recipient and mints the equivalent PUSD+ shares to them; the rest accrues to existing PUSD+ holders.
-
-This is the standard Yearn-style HWM model. It means existing holders are never diluted on pps drawdowns and the fee only hits realised upside.
-
-### Pause
-
-`ADMIN_ROLE` can pause deposits and withdrawals. Pause is a crisis tool (e.g. a strategy exploit discovered) and does not go through the timelock.
-
----
-
-## PUSDLiquidity.sol — the Uniswap V3 LP engine
-
-Owned by PUSDPlus. Holds USDC/USDT pulled from `yieldShareReserve` and opens concentrated-liquidity positions on a single Uniswap V3 USDC/USDT pool on Push Chain. The contract wraps `INonfungiblePositionManager` for position lifecycle and an internal `UniV3Router` for slippage-bounded swaps during unwind.
-
-### Storage
-
-```
-pusdPlus                : address
-pusdManager             : address
-npm                     : INonfungiblePositionManager
-router                  : UniV3Router
-usdc                    : address
-usdt                    : address
-poolUsdcUsdt            : address
-
-maxDeployableBps        : uint16     (≤ HARD_CAP_BPS = 5000; launch 3000)
-emergencyLiquidityBps   : uint16     (default 3000 — min idle % of yieldShareReserve)
-lpSwapSlippageBps       : uint16     (default 50 — max swap slippage per rebalance)
-
-positions               : Position[] (length ≤ MAX_POSITIONS = 10)
-positionByTokenId       : mapping(uint256 => uint256)   // tokenId → index + 1
-```
-
-Position record:
-```solidity
-struct Position { uint256 tokenId; address pool; int24 tickLower; int24 tickUpper; bool active; }
-```
-
-### Roles
-
-| Role | Holder | |
-|---|---|---|
-| `DEFAULT_ADMIN_ROLE` | Multisig | |
-| `ADMIN_ROLE` | Multisig | set caps, pool, router |
-| `REBALANCER_ROLE` | Operator / keeper | open/adjust/close positions |
-| `VAULT_ROLE` | PUSDPlus | pull capital on user withdraws |
-| `PAUSER_ROLE` | Multisig + incident responder | pause new deployment only |
-| `UPGRADER_ROLE` | 48h Timelock | |
-
-### External surface
-
-**Reporting (called by PUSDPlus)**
-```solidity
-function netAssetsInPUSD() external view returns (uint256);
-```
-
-Sums `idleInPUSD + Σ positionValue(positions[i].tokenId).valueInPUSD + uncollectedFeesInPUSD`. `positionValue` derives from `npm.positions(tokenId)` + `pool.slot0.sqrtPriceX96` via `LiquidityAmounts`. All numbers normalise to PUSD 6-decimal units using the same helpers as PUSDManager.
-
-**Operations (`REBALANCER_ROLE`)**
-```solidity
-function mintPosition(address pool, int24 tickLower, int24 tickUpper,
-    uint256 amount0, uint256 amount1, uint256 minAmount0, uint256 minAmount1)
-    external whenNotPaused returns (uint256 tokenId);
-
-function increaseLiquidity(uint256 tokenId, uint256 amount0, uint256 amount1,
-    uint256 minAmount0, uint256 minAmount1) external whenNotPaused;
-
-function decreaseLiquidity(uint256 tokenId, uint128 liquidity,
-    uint256 minAmount0, uint256 minAmount1)
-    external returns (uint256 amount0, uint256 amount1);
-
-function collectFees(uint256 tokenId)
-    external returns (uint256 amount0, uint256 amount1);
-
-function closePosition(uint256 tokenId, uint256 minAmount0, uint256 minAmount1) external;
-```
-
-All mints/increases are bounded by both `maxDeployableBps` (global) and `emergencyLiquidityBps` (idle floor).
-
-**Vault-facing**
-```solidity
-function pullForWithdraw(address token, uint256 amount, address recipient)
-    external onlyRole(VAULT_ROLE) returns (uint256 delivered);
-
-function pushForDeploy(address token, uint256 amount) external onlyRole(VAULT_ROLE);
-```
-
-`pullForWithdraw` algorithm: (1) if idle suffices, transfer. (2) else `decreaseLiquidity` from `positions[]` in insertion order + `collectFees`, using legs directly when possible. (3) if the legs don't match `token`, route the surplus leg through `router.swapExactInput` capped at `lpSwapSlippageBps`. (4) if `delivered < amount`, revert `InsufficientLiquidity`; a future ADR introduces an async queue.
-
-**Admin**
-```solidity
-function setMaxDeployableBps(uint16 bps) external;          // <= HARD_CAP_BPS (5000)
-function setEmergencyLiquidityBps(uint16 bps) external;     // <= 5000
-function setLpSwapSlippageBps(uint16 bps) external;         // <= 100
-function setPool(address pool) external;                    // only while positions.length == 0
-function setRouter(UniV3Router newRouter) external;
-function recoverDust(address token, address to, uint256 amount) external;
-```
-
----
-
-## Decimal normalisation
-
-Unchanged from v1 in semantics. PUSD is 6 decimals. Each supported stablecoin may be 6 or 18 decimals. The helpers `_normalizeDecimalsToPUSD` and `_convertFromPUSD` in PUSDManager are used by both the plain and vault entrypoints.
-
-PUSDLiquidity uses the same convention when computing `netAssetsInPUSD`.
-
----
-
-## What does not change from v1
-
-- The TokenStatus lifecycle (`REMOVED`, `ENABLED`, `REDEEM_ONLY`, `EMERGENCY_REDEEM`).
-- The basket redemption semantics (now scoped to `parReserve` only for plain-PUSD redeem).
-- The surplus haircut / preferred-fee / base-fee model.
-- The reentrancy guard in PUSDManager.
-- ADR 0001 (separation of token and reserve) and ADR 0002 (role-based access).
-
----
-
-## Upgrade safety
-
-- All four contracts use UUPS proxies.
-- `UPGRADER_ROLE` on each held by a 48h `TimelockController`.
-- New storage variables are always appended; existing slots are never reordered.
-- `forge inspect <Contract> storageLayout` is diffed before and after every upgrade.
-
-See [invariants.md](invariants.md) and [risks.md](risks.md) for the safety properties the architecture must preserve.
+- [`docs/research/pusdplusvault.md`](../research/pusdplusvault.md) — full PUSD+ mechanics + design rationale (encrypted at rest)
+- [`docs/design/decisions/0004-shipped-v2-architecture.md`](decisions/0004-shipped-v2-architecture.md) — ADR superseding 0003
+- [`docs/research/`](../research/) — internal contributor context (encrypted at rest). Cross-cutting in [`agents.md`](../research/agents.md); per-contract files (`pusd.md` / `pusdmanager.md` / `pusdplusvault.md` / `insurancefund.md`); also `frontend.md` (React app) and `backend.md` (keeper / indexer design)
+- [`app/public/agents/skill/push-pusd/SKILL.md`](../../app/public/agents/skill/push-pusd/SKILL.md) — integrator-facing guide

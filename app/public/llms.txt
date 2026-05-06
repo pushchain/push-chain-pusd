@@ -1,15 +1,17 @@
 # PUSD — Push USD
 
-> Par-backed USD stablecoin on Push Chain. 6-decimal ERC-20, minted by
-> depositing USDC/USDT from any supported chain (Ethereum, Base,
-> Arbitrum, Solana, BNB), redeemed back to any reserve token. Live on
-> Push Chain Donut Testnet (chain ID 42101).
+> Par-backed USD stablecoin on Push Chain, plus PUSD+ — its yield-bearing
+> companion. PUSD is a 6-decimal ERC-20 minted by depositing USDC/USDT
+> from any supported chain (Ethereum, Base, Arbitrum, Solana, BNB) and
+> redeemed back to any reserve token. PUSD+ is a 6-decimal NAV-bearing
+> ERC-20 backed by PUSD plus LP fees from Uniswap V3 stable pools on
+> Push Chain. Live on Push Chain Donut Testnet (chain ID 42101).
 >
 > This file is served at https://pusd.push.org/llms.txt and is the
 > agent entry point for everything PUSD: integration, contracts,
 > design.
 
-## I want to integrate PUSD
+## I want to integrate PUSD or PUSD+
 
 Read the Skill — it's the single, self-contained integration guide.
 Mint and redeem code for both off-chain SDK paths and on-chain
@@ -20,16 +22,38 @@ Solidity, plus addresses, fees, ABI fragments, and gotchas:
 
 ## Live deployment (Donut Testnet)
 
-| Field      | Value                                        |
-| ---------- | -------------------------------------------- |
-| Chain      | Push Chain Donut Testnet (chain ID 42101)    |
-| RPC        | `https://evm.donut.rpc.push.org/`            |
-| Explorer   | `https://donut.push.network`                 |
-| PUSD       | `0x488d080e16386379561a47A4955D22001d8A9D89` |
-| PUSDManager | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
+| Field          | Value                                        |
+| -------------- | -------------------------------------------- |
+| Chain          | Push Chain Donut Testnet (chain ID 42101)    |
+| RPC            | `https://evm.donut.rpc.push.org/`            |
+| Explorer       | `https://donut.push.network`                 |
+| PUSD           | `0x488d080e16386379561a47A4955D22001d8A9D89` |
+| PUSDManager    | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
+| PUSDPlusVault  | `0xb55a5B36d82D3B7f18Afe42F390De565080A49a1` |
+| InsuranceFund  | `0xFF7E741621ad5d39015759E3d606A631Fa319a62` |
 
 Always interact with the **proxy** addresses. Implementations change
 on upgrade; the proxies do not.
+
+## Two products, one entry point
+
+- **PUSD** — par-backed stablecoin. `PUSDManager.deposit(...)` to mint,
+  `PUSDManager.redeem(...)` to burn back to any reserve token.
+- **PUSD+** — yield-bearing companion. `PUSDManager.depositToPlus(...)`
+  to mint (accepts PUSD or any reserve), `PUSDManager.redeemFromPlus(...)`
+  to burn. PUSD+ is a custom 6-decimal ERC-20 with NAV-per-share — quote
+  via `PUSDPlusVault.previewMintPlus / previewBurnPlus`. Not ERC-4626.
+
+Both products go through the same `PUSDManager` entrypoint contract.
+PUSDPlusVault is the NAV-bearing token; InsuranceFund is a passive
+sidecar that receives a haircut on harvested LP fees.
+
+> **v2.1 (2026-05-06)** — `depositToPlus` direct path now sends reserves
+> directly to the vault (no PUSD round-trip). Wrap path basket-redeems
+> caller's PUSD into vault inventory. User-facing API unchanged. The
+> vault accumulates diverse reserve inventory organically, unblocking
+> stable/stable LP. `PUSDPlusVault.rebalance()` is now permissionless
+> after a 1h cooldown (KEEPER bypasses), decentralizing liveness.
 
 ## The two integration paths (the architectural fact every integrator needs)
 

@@ -26,9 +26,12 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { EditorialBand } from './components/EditorialBand';
 import { Footer } from './components/Footer';
 import { Masthead } from './components/Masthead';
+import ActivityPage from './pages/ActivityPage';
+import AdminPage from './pages/AdminPage';
+import AnimationPreviewPage from './pages/AnimationPreviewPage';
 import ConvertPage from './pages/ConvertPage';
+import DashboardPage from './pages/DashboardPage';
 import DocsPage from './pages/DocsPage';
-import HistoryPage from './pages/HistoryPage';
 import HomePage from './pages/HomePage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
 
@@ -46,8 +49,12 @@ function App() {
             <Route path="/mint" element={<Navigate to="/convert/mint" replace />} />
             <Route path="/redeem" element={<Navigate to="/convert/redeem" replace />} />
             <Route path="/reserves" element={<ReservesDetailPage />} />
-            <Route path="/history" element={<HistoryPage />} />
+            <Route path="/dashboard" element={<DashboardPage />} />
+            <Route path="/activity" element={<ActivityPage />} />
+            <Route path="/history" element={<ActivityPage />} />
             <Route path="/docs" element={<DocsPage />} />
+            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/preview/animations" element={<AnimationPreviewPage />} />
             {/* <Route path="/style-demo" element={<StyleDemoPage />} /> */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>

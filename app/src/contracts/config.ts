@@ -1,5 +1,7 @@
 export const PUSD_ADDRESS = import.meta.env.VITE_PUSD_ADDRESS as `0x${string}`;
 export const PUSD_MANAGER_ADDRESS = import.meta.env.VITE_PUSD_MANAGER_ADDRESS as `0x${string}`;
+export const PUSD_PLUS_ADDRESS = import.meta.env.VITE_PUSD_PLUS_ADDRESS as `0x${string}` | undefined;
+export const INSURANCE_FUND_ADDRESS = import.meta.env.VITE_INSURANCE_FUND_ADDRESS as `0x${string}` | undefined;
 export const CHAIN_ID = Number(import.meta.env.VITE_CHAIN_ID);
 export const RPC_URL = import.meta.env.VITE_RPC_URL;
 

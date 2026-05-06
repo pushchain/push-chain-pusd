@@ -39,7 +39,7 @@ contract PUSD is Initializable, ERC20Upgradeable, AccessControlUpgradeable, UUPS
     function mint(address to, uint256 amount) external onlyRole(MINTER_ROLE) {
         require(to != address(0), "PUSD: mint to zero address");
         require(amount > 0, "PUSD: mint amount must be greater than 0");
-        
+
         _mint(to, amount);
         emit Minted(to, amount, msg.sender);
     }
@@ -48,7 +48,7 @@ contract PUSD is Initializable, ERC20Upgradeable, AccessControlUpgradeable, UUPS
         require(from != address(0), "PUSD: burn from zero address");
         require(amount > 0, "PUSD: burn amount must be greater than 0");
         require(balanceOf(from) >= amount, "PUSD: burn amount exceeds balance");
-        
+
         _burn(from, amount);
         emit Burned(from, amount, msg.sender);
     }

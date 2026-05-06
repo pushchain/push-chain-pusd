@@ -10,12 +10,13 @@
 
 import { useEffect, useState } from 'react';
 import { TOKENS, tokenByAddress, type ReserveToken } from '../contracts/tokens';
+import { PUSD_ADDRESS } from '../contracts/config';
 import { fetchManagerLogs } from '../lib/blockscout';
 
 const POLL_MS = 30_000;
 
 export type DispatchRow = {
-  type: 'MINT' | 'REDEEM';
+  type: 'MINT' | 'REDEEM' | 'MINT_PLUS' | 'REDEEM_PLUS';
   timestamp: number;
   pusdAmount: bigint;
   tokenAmount: bigint;
@@ -42,6 +43,17 @@ export type DispatchState = {
 };
 
 function unknownAsset(address: `0x${string}`): DispatchRow['asset'] {
+  // Wrap-path PUSD+ deposits use PUSD itself as tokenIn — surface it as PUSD.
+  if (address.toLowerCase() === PUSD_ADDRESS.toLowerCase()) {
+    return {
+      symbol: 'PUSD',
+      chain: 'PUSH_DONUT',
+      chainLabel: 'Push Chain Donut Testnet',
+      chainShort: 'PUSH DONUT',
+      address,
+      decimals: 6,
+    };
+  }
   return {
     symbol: 'UNK',
     chain: 'UNKNOWN',
@@ -68,18 +80,19 @@ export function useProtocolDispatch(limit = 8): DispatchState {
         const items = await fetchManagerLogs({ limit });
         if (cancelled) return;
 
+        const resolveAsset = (addr: `0x${string}`) =>
+          (TOKENS.find((t) => t.address.toLowerCase() === addr.toLowerCase())
+            ?? tokenByAddress(addr))
+            ?? unknownAsset(addr);
+
         const rows: DispatchRow[] = items.map(({ event, timestamp }) => {
-          const asset =
-            (TOKENS.find((t) => t.address.toLowerCase() === event.token.toLowerCase())
-              ?? tokenByAddress(event.token))
-              ?? unknownAsset(event.token);
           if (event.type === 'MINT') {
             return {
               type: 'MINT' as const,
               timestamp,
               pusdAmount: event.pusdMinted,
               tokenAmount: event.tokenAmount,
-              asset,
+              asset: resolveAsset(event.token),
               user: event.user,
               recipient: event.recipient,
               txHash: event.txHash,
@@ -87,14 +100,43 @@ export function useProtocolDispatch(limit = 8): DispatchState {
               logIndex: event.logIndex,
             };
           }
+          if (event.type === 'REDEEM') {
+            return {
+              type: 'REDEEM' as const,
+              timestamp,
+              pusdAmount: event.pusdBurned,
+              tokenAmount: event.tokenAmount,
+              asset: resolveAsset(event.token),
+              user: event.user,
+              recipient: event.recipient,
+              txHash: event.txHash,
+              blockNumber: event.blockNumber,
+              logIndex: event.logIndex,
+            };
+          }
+          if (event.type === 'MINT_PLUS') {
+            return {
+              type: 'MINT_PLUS' as const,
+              timestamp,
+              pusdAmount: event.plusOut,
+              tokenAmount: event.amountIn,
+              asset: resolveAsset(event.tokenIn),
+              user: event.user,
+              recipient: event.recipient,
+              txHash: event.txHash,
+              blockNumber: event.blockNumber,
+              logIndex: event.logIndex,
+            };
+          }
+          // REDEEM_PLUS
           return {
-            type: 'REDEEM' as const,
+            type: 'REDEEM_PLUS' as const,
             timestamp,
-            pusdAmount: event.pusdBurned,
-            tokenAmount: event.tokenAmount,
-            asset,
+            pusdAmount: event.plusIn,
+            tokenAmount: 0n,
+            asset: resolveAsset(event.preferredAsset),
             user: event.user,
-            recipient: event.recipient,
+            recipient: event.user,
             txHash: event.txHash,
             blockNumber: event.blockNumber,
             logIndex: event.logIndex,

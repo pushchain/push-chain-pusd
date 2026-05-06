@@ -1,9 +1,16 @@
 # ADR 0001 — Why PUSDManager Exists as a Separate Contract
 
-**Status:** Accepted
-**Date:** 2024
+**Status:** Accepted (principle still holds)
+**Date:** 2026-01-02
 
-> **Still valid under ADR 0003.** The two-tier architecture extends this design rather than replacing it. See [ADR 0003 §2](0003-product-architecture.md).
+> **Principle preserved through ADR 0004.** The PUSD/PUSDManager separation
+> is unchanged in shipped V2. References below to `PUSDPlus`, `PUSDLiquidity`,
+> `mintForVault`, and "four contracts" describe the **scrapped** ADR-0003
+> plan, not what shipped. For current role tables and function names, see
+> [ADR 0004](0004-shipped-v2-architecture.md) and the per-contract files
+> in [`docs/research/`](../../research/) (`pusd.md`, `pusdmanager.md`,
+> `pusdplusvault.md`, `insurancefund.md`). Per ADR convention, the body
+> is preserved as-is for historical record.
 
 ---
 
