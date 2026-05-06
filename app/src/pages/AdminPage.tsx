@@ -47,6 +47,12 @@ const VAULT_ABI = new ethers.Interface([
   'function setPublicRebalanceCooldown(uint32)',
   'function addBasketToken(address)',
   'function removeBasketToken(address)',
+  'function setFeeTierAllowed(uint24 fee, bool allowed)',
+  'function setDefaultFeeTier(uint24 fee)',
+  'function setDefaultTickRange(int24 lower, int24 upper)',
+  // Mint params come from Uniswap V3 NPM. Encoded as a tuple.
+  'function openPool((address token0, address token1, uint24 fee, int24 tickLower, int24 tickUpper, uint256 amount0Desired, uint256 amount1Desired, uint256 amount0Min, uint256 amount1Min, address recipient, uint256 deadline) p)',
+  'function closePool(uint256 tokenId, uint256 amount0Min, uint256 amount1Min, uint256 deadline)',
   'function pause()',
   'function unpause()',
   'function redeemPusdForToken(uint256, address)',
@@ -272,6 +278,26 @@ export default function AdminPage() {
             )
           }
         />
+        <FeeTierAllowedCard
+          enabled={roles.vaultVaultAdmin}
+          onSend={(fee, allowed) =>
+            send(
+              `vault.setFeeTierAllowed(${fee}, ${allowed})`,
+              PUSD_PLUS_ADDRESS!,
+              VAULT_ABI.encodeFunctionData('setFeeTierAllowed', [fee, allowed]),
+            )
+          }
+        />
+        <DefaultTickRangeCard
+          enabled={roles.vaultVaultAdmin}
+          onSend={(lower, upper) =>
+            send(
+              `vault.setDefaultTickRange(${lower}, ${upper})`,
+              PUSD_PLUS_ADDRESS!,
+              VAULT_ABI.encodeFunctionData('setDefaultTickRange', [lower, upper]),
+            )
+          }
+        />
       </Section>
 
       {/* ============= POOL_ADMIN ============= */}
@@ -279,7 +305,7 @@ export default function AdminPage() {
         id="pool-admin"
         num="iii."
         title="Pool Admin"
-        subtitle="Manage the vault basket and (later) Uniswap V3 positions."
+        subtitle="Manage the vault basket, allowed fee tiers, and Uniswap V3 positions."
         roleHeld={roles.vaultPoolAdmin}
         roleLabel="PUSDPLUS_POOL_ADMIN_ROLE on vault"
       >
@@ -297,6 +323,46 @@ export default function AdminPage() {
               `vault.removeBasketToken(${addr})`,
               PUSD_PLUS_ADDRESS!,
               VAULT_ABI.encodeFunctionData('removeBasketToken', [addr]),
+            )
+          }
+        />
+        <OpenPoolCard
+          enabled={roles.vaultPoolAdmin}
+          recipient={PUSD_PLUS_ADDRESS!}
+          onSend={(params) =>
+            send(
+              `vault.openPool(${params.token0.slice(0, 8)}…/${params.token1.slice(0, 8)}…)`,
+              PUSD_PLUS_ADDRESS!,
+              VAULT_ABI.encodeFunctionData('openPool', [
+                [
+                  params.token0,
+                  params.token1,
+                  params.fee,
+                  params.tickLower,
+                  params.tickUpper,
+                  params.amount0Desired,
+                  params.amount1Desired,
+                  params.amount0Min,
+                  params.amount1Min,
+                  params.recipient,
+                  params.deadline,
+                ],
+              ]),
+            )
+          }
+        />
+        <ClosePoolCard
+          enabled={roles.vaultPoolAdmin}
+          onSend={(tokenId, min0, min1, deadline) =>
+            send(
+              `vault.closePool(${tokenId})`,
+              PUSD_PLUS_ADDRESS!,
+              VAULT_ABI.encodeFunctionData('closePool', [
+                tokenId,
+                min0,
+                min1,
+                deadline,
+              ]),
             )
           }
         />
@@ -859,6 +925,375 @@ function RedeemPusdForTokenCard({
         onClick={() => onSend(pusdIn, token as `0x${string}`)}
       >
         Convert
+      </button>
+    </div>
+  );
+}
+
+// ============================================================================
+// FeeTierAllowedCard — toggle which Uniswap V3 fee tiers the vault may use.
+// ============================================================================
+
+function FeeTierAllowedCard({
+  enabled,
+  onSend,
+}: {
+  enabled: boolean;
+  onSend: (fee: number, allowed: boolean) => void;
+}) {
+  const [fee, setFee] = useState('500');
+  const [allow, setAllow] = useState<'true' | 'false'>('true');
+  const n = Number(fee);
+  const valid = Number.isInteger(n) && n > 0 && n <= 1_000_000;
+  return (
+    <div className="admin-card" data-disabled={!enabled}>
+      <div className="admin-card__title mono">setFeeTierAllowed</div>
+      <div className="admin-card__body">
+        Whitelist a Uniswap V3 fee tier so <code>openPool</code> can use it.
+        Common stable-stable values: <code>100</code> = 0.01%, <code>500</code>{' '}
+        = 0.05%.
+      </div>
+      <div className="admin-card__row">
+        <input
+          className="admin-card__input"
+          inputMode="numeric"
+          placeholder="fee (e.g. 500)"
+          value={fee}
+          onChange={(e) => setFee(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <select
+          className="admin-card__input"
+          value={allow}
+          onChange={(e) => setAllow(e.target.value as 'true' | 'false')}
+          style={{ flex: 1 }}
+        >
+          <option value="true">allow</option>
+          <option value="false">disallow</option>
+        </select>
+      </div>
+      <button
+        className="admin-card__btn"
+        disabled={!enabled || !valid}
+        onClick={() => onSend(n, allow === 'true')}
+      >
+        Set
+      </button>
+    </div>
+  );
+}
+
+// ============================================================================
+// DefaultTickRangeCard — vault's default V3 tick range used for new pools.
+// ============================================================================
+
+function DefaultTickRangeCard({
+  enabled,
+  onSend,
+}: {
+  enabled: boolean;
+  onSend: (lower: number, upper: number) => void;
+}) {
+  const [lower, setLower] = useState('-20');
+  const [upper, setUpper] = useState('20');
+  const lo = Number(lower);
+  const up = Number(upper);
+  const valid =
+    Number.isInteger(lo) &&
+    Number.isInteger(up) &&
+    lo < up &&
+    lo >= -887272 &&
+    up <= 887272;
+  return (
+    <div className="admin-card" data-disabled={!enabled}>
+      <div className="admin-card__title mono">setDefaultTickRange</div>
+      <div className="admin-card__body">
+        Default tick range for auto-opened pools (lower &lt; upper). For
+        stable pairs, ±20 is roughly ±0.2% around price.
+      </div>
+      <div className="admin-card__row">
+        <input
+          className="admin-card__input"
+          inputMode="numeric"
+          placeholder="tickLower"
+          value={lower}
+          onChange={(e) => setLower(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <input
+          className="admin-card__input"
+          inputMode="numeric"
+          placeholder="tickUpper"
+          value={upper}
+          onChange={(e) => setUpper(e.target.value)}
+          style={{ flex: 1 }}
+        />
+      </div>
+      <button
+        className="admin-card__btn"
+        disabled={!enabled || !valid}
+        onClick={() => onSend(lo, up)}
+      >
+        Set range
+      </button>
+    </div>
+  );
+}
+
+// ============================================================================
+// OpenPoolCard — POOL_ADMIN opens a new V3 LP position. The recipient is
+// pre-set to the vault address; deadline defaults to now + 30 minutes.
+// ============================================================================
+
+type OpenPoolParams = {
+  token0: `0x${string}`;
+  token1: `0x${string}`;
+  fee: number;
+  tickLower: number;
+  tickUpper: number;
+  amount0Desired: bigint;
+  amount1Desired: bigint;
+  amount0Min: bigint;
+  amount1Min: bigint;
+  recipient: `0x${string}`;
+  deadline: bigint;
+};
+
+function OpenPoolCard({
+  enabled,
+  recipient,
+  onSend,
+}: {
+  enabled: boolean;
+  recipient: `0x${string}`;
+  onSend: (p: OpenPoolParams) => void;
+}) {
+  const [token0, setToken0] = useState<string>(TOKENS[0]?.address ?? '');
+  const [token1, setToken1] = useState<string>(TOKENS[1]?.address ?? '');
+  const [fee, setFee] = useState('500');
+  const [tickLower, setTickLower] = useState('-20');
+  const [tickUpper, setTickUpper] = useState('20');
+  const [amount0, setAmount0] = useState('100');
+  const [amount1, setAmount1] = useState('100');
+  const [slippageBps, setSlippageBps] = useState('50'); // 0.5%
+
+  const t0 = TOKENS.find((t) => t.address === token0);
+  const t1 = TOKENS.find((t) => t.address === token1);
+  const dec0 = t0?.decimals ?? 6;
+  const dec1 = t1?.decimals ?? 6;
+
+  function parseTokenAmount(s: string, decimals: number): bigint | null {
+    const n = Number(s);
+    if (!Number.isFinite(n) || n < 0) return null;
+    return BigInt(Math.round(n * 10 ** decimals));
+  }
+
+  const a0 = parseTokenAmount(amount0, dec0);
+  const a1 = parseTokenAmount(amount1, dec1);
+  const fn = Number(fee);
+  const lo = Number(tickLower);
+  const up = Number(tickUpper);
+  const slip = Number(slippageBps);
+
+  const valid =
+    a0 !== null &&
+    a1 !== null &&
+    a0 > 0n &&
+    a1 > 0n &&
+    Number.isInteger(fn) &&
+    Number.isInteger(lo) &&
+    Number.isInteger(up) &&
+    lo < up &&
+    Number.isInteger(slip) &&
+    slip >= 0 &&
+    slip <= 10000 &&
+    token0 !== token1;
+
+  function send() {
+    if (!valid || a0 === null || a1 === null) return;
+    const slipFloor = (amt: bigint) => (amt * BigInt(10000 - slip)) / 10000n;
+    onSend({
+      token0: token0 as `0x${string}`,
+      token1: token1 as `0x${string}`,
+      fee: fn,
+      tickLower: lo,
+      tickUpper: up,
+      amount0Desired: a0,
+      amount1Desired: a1,
+      amount0Min: slipFloor(a0),
+      amount1Min: slipFloor(a1),
+      recipient,
+      deadline: BigInt(Math.floor(Date.now() / 1000) + 30 * 60),
+    });
+  }
+
+  return (
+    <div className="admin-card" data-disabled={!enabled}>
+      <div className="admin-card__title mono">openPool</div>
+      <div className="admin-card__body">
+        Open a new Uniswap V3 LP position. Both tokens must be in the vault
+        basket, the fee tier must be allowed, and the pool must already exist
+        on Donut. Vault is set as the position recipient automatically.
+      </div>
+      <div className="admin-card__row">
+        <select
+          className="admin-card__input"
+          value={token0}
+          onChange={(e) => setToken0(e.target.value)}
+          style={{ flex: 1 }}
+        >
+          {TOKENS.map((t) => (
+            <option key={t.address} value={t.address}>
+              {t.symbol} · {t.chainShort}
+            </option>
+          ))}
+        </select>
+        <select
+          className="admin-card__input"
+          value={token1}
+          onChange={(e) => setToken1(e.target.value)}
+          style={{ flex: 1 }}
+        >
+          {TOKENS.map((t) => (
+            <option key={t.address} value={t.address}>
+              {t.symbol} · {t.chainShort}
+            </option>
+          ))}
+        </select>
+      </div>
+      <input
+        className="admin-card__input"
+        inputMode="numeric"
+        placeholder="fee tier (e.g. 500)"
+        value={fee}
+        onChange={(e) => setFee(e.target.value)}
+      />
+      <div className="admin-card__row">
+        <input
+          className="admin-card__input"
+          inputMode="numeric"
+          placeholder="tickLower"
+          value={tickLower}
+          onChange={(e) => setTickLower(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <input
+          className="admin-card__input"
+          inputMode="numeric"
+          placeholder="tickUpper"
+          value={tickUpper}
+          onChange={(e) => setTickUpper(e.target.value)}
+          style={{ flex: 1 }}
+        />
+      </div>
+      <div className="admin-card__row">
+        <input
+          className="admin-card__input"
+          inputMode="decimal"
+          placeholder={`amount0 (${t0?.symbol ?? '?'})`}
+          value={amount0}
+          onChange={(e) => setAmount0(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <input
+          className="admin-card__input"
+          inputMode="decimal"
+          placeholder={`amount1 (${t1?.symbol ?? '?'})`}
+          value={amount1}
+          onChange={(e) => setAmount1(e.target.value)}
+          style={{ flex: 1 }}
+        />
+      </div>
+      <input
+        className="admin-card__input"
+        inputMode="numeric"
+        placeholder="slippage (bps; 50 = 0.5%)"
+        value={slippageBps}
+        onChange={(e) => setSlippageBps(e.target.value)}
+      />
+      <button className="admin-card__btn" disabled={!enabled || !valid} onClick={send}>
+        Open pool
+      </button>
+    </div>
+  );
+}
+
+// ============================================================================
+// ClosePoolCard — drain liquidity, collect fees, NPM-burn, and drop the
+// position from the vault registry. POOL_ADMIN-only.
+// ============================================================================
+
+function ClosePoolCard({
+  enabled,
+  onSend,
+}: {
+  enabled: boolean;
+  onSend: (tokenId: bigint, min0: bigint, min1: bigint, deadline: bigint) => void;
+}) {
+  const [tokenId, setTokenId] = useState('');
+  const [min0, setMin0] = useState('0');
+  const [min1, setMin1] = useState('0');
+
+  const id = Number(tokenId);
+  const valid = Number.isInteger(id) && id > 0;
+
+  function send() {
+    if (!valid) return;
+    const m0 = (() => {
+      const n = Number(min0);
+      return Number.isFinite(n) && n >= 0 ? BigInt(Math.round(n)) : 0n;
+    })();
+    const m1 = (() => {
+      const n = Number(min1);
+      return Number.isFinite(n) && n >= 0 ? BigInt(Math.round(n)) : 0n;
+    })();
+    onSend(
+      BigInt(id),
+      m0,
+      m1,
+      BigInt(Math.floor(Date.now() / 1000) + 30 * 60),
+    );
+  }
+
+  return (
+    <div className="admin-card" data-disabled={!enabled}>
+      <div className="admin-card__title mono">closePool</div>
+      <div className="admin-card__body">
+        Close a position by NPM tokenId. Drains liquidity, collects fees,
+        burns the NPM, and removes the position from the vault registry.
+        Slippage minimums default to 0 (set per-token if the position is large).
+      </div>
+      <input
+        className="admin-card__input"
+        inputMode="numeric"
+        placeholder="NPM tokenId"
+        value={tokenId}
+        onChange={(e) => setTokenId(e.target.value)}
+      />
+      <div className="admin-card__row">
+        <input
+          className="admin-card__input"
+          inputMode="numeric"
+          placeholder="amount0Min (raw)"
+          value={min0}
+          onChange={(e) => setMin0(e.target.value)}
+          style={{ flex: 1 }}
+        />
+        <input
+          className="admin-card__input"
+          inputMode="numeric"
+          placeholder="amount1Min (raw)"
+          value={min1}
+          onChange={(e) => setMin1(e.target.value)}
+          style={{ flex: 1 }}
+        />
+      </div>
+      <button
+        className="admin-card__btn admin-card__btn--danger"
+        disabled={!enabled || !valid}
+        onClick={send}
+      >
+        Close pool
       </button>
     </div>
   );

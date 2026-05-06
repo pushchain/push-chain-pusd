@@ -3216,7 +3216,10 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .home-stat-band__inner > .stat:first-child { padding-left: 0; }
 .home-stat-band__inner > .stat:last-child { padding-right: 0; }
 
-@media (max-width: 920px) {
+/* 4-col only activates at ≥1100px so the 11px sub text never wraps in a
+ * cramped cell. Below that, switch to a 2-col grid where each cell has
+ * room for "CIRCULATING · YIELD-BEARING" on a single line. */
+@media (max-width: 1099px) {
   .home-stat-band__inner {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     row-gap: 24px;

@@ -104,11 +104,8 @@ export default function HomePage() {
       : 0n;
   const collateralRatio = formatPct(reserves.totalReserves, totalSupply, 2);
 
-  // Count-up on mount for the two top-of-page big numbers. Only the raw
-  // bigint is animated; the "RESERVES {…} ≥ SUPPLY {…}" subline stays static
-  // because we want the comparison to be instantly legible.
+  // Count-up on mount for the supply big number.
   const supplyCounted = useCountUp(totalSupply);
-  const reservesCounted = useCountUp(reserves.totalReserves);
 
   const ratioClass = (() => {
     if (totalSupply === 0n) return "stat__sub--delta-up";
@@ -237,8 +234,7 @@ export default function HomePage() {
               {reserves.loading || supplyLoading ? "…" : collateralRatio}
             </div>
             <div className={`stat__sub ${ratioClass}`}>
-              RESERVES {formatShortAmount(reservesCounted, 6)} ≥ SUPPLY{" "}
-              {formatShortAmount(totalSupply, 6)}
+              RESERVES ≥ SUPPLY
             </div>
           </div>
           <div className="stat">
