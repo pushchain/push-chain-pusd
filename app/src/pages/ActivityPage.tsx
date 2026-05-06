@@ -210,6 +210,12 @@ function Row({ row }: { row: DispatchRow }) {
     loading || !controller?.isUEA ? counterparty : controller.address;
   const chainLabel = !loading && controller?.isUEA ? ` (${controller.chainLabel})` : '';
 
+  // formatAmount returns "< 0.01" for non-zero amounts that round to 0 at 2dp.
+  // The sentinel already conveys direction, so suppress the manual ± prefix.
+  const pusdStr = formatAmount(row.pusdAmount, 6);
+  const pusdHasEpsilon = pusdStr.startsWith('<') || pusdStr.startsWith('>');
+  const tokenStr = formatAmount(row.tokenAmount, row.asset.decimals);
+
   return (
     <tr>
       <td>
@@ -229,12 +235,11 @@ function Row({ row }: { row: DispatchRow }) {
       </td>
       <td className="num">
         <div>
-          {sign}
-          {formatAmount(row.pusdAmount, 6)} {tokenLabel}
+          {pusdHasEpsilon ? pusdStr : `${sign}${pusdStr}`} {tokenLabel}
         </div>
         {row.tokenAmount > 0n && (
           <div className="meta-sm" style={{ marginTop: 2 }}>
-            {isMint ? 'from' : '→'} {formatAmount(row.tokenAmount, row.asset.decimals)}{' '}
+            {isMint ? 'from' : '→'} {tokenStr}{' '}
             {row.asset.symbol}
           </div>
         )}

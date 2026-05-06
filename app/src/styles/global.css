@@ -572,21 +572,33 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   margin-top: 6px;
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
   font-family: var(--f-mono);
-  font-size: clamp(15px, 1.4vw, 18px);
+  /* Lower clamp floor (13px) so the longest phrases still fit on phones. */
+  font-size: clamp(13px, 1.4vw, 18px);
   letter-spacing: 0.005em;
   color: var(--c-ink);
   min-height: 1.4em; /* keeps the row from collapsing during the gap phase */
+  /* min-width: 0 on the flex container lets its own flex parent shrink. */
+  min-width: 0;
 }
 
 .proof-tw__caret {
   color: var(--c-magenta);
   font-weight: 700;
+  flex: 0 0 auto;
 }
 
 .proof-tw__text {
-  white-space: pre;
+  /* pre-wrap preserves typewriter whitespace and lets long phrases wrap on
+   * narrow viewports. flex-grow: 0 keeps the text element no wider than
+   * its content, so the cursor stays glued to the last character. flex-
+   * shrink: 1 + min-width: 0 still allow it to shrink and wrap when the
+   * row gets too narrow. */
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  min-width: 0;
+  flex: 0 1 auto;
 }
 
 .proof-tw__cursor {

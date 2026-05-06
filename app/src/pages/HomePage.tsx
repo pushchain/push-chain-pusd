@@ -18,18 +18,20 @@
  * container; editorial prose sections sit inside `.container`.
  */
 
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { ChestTrigger } from "../components/ChestTrigger";
 import { ConvertPanel } from "../components/ConvertPanel";
 import { DispatchFeed } from "../components/DispatchFeed";
+import { PiggyTrigger } from "../components/PiggyTrigger";
 import { ProofTypewriter } from "../components/ProofTypewriter";
 import { PromiseCurtain } from "../components/PromiseCurtain";
 import { SloganBand } from "../components/SloganBand";
+import { SplashOverlay } from "../components/SplashOverlay";
 import { Ticker } from "../components/Ticker";
 import { TokenPill } from "../components/TokenPill";
-import { VaultBook } from "../components/VaultBook";
+import { YieldSection } from "../components/YieldSection";
 import { useCountUp } from "../hooks/useCountUp";
-import { useNAVHistory } from "../hooks/useNAVHistory";
 import { usePUSDBalance } from "../hooks/usePUSDBalance";
 import { useProtocolStats } from "../hooks/useProtocolStats";
 import { useReserves } from "../hooks/useReserves";
@@ -64,7 +66,6 @@ export default function HomePage() {
   const { totalSupply, loading: supplyLoading } = usePUSDBalance();
   const stats = useProtocolStats();
   const vaultBook = useVaultBook();
-  const navHistory = useNAVHistory();
 
   const [searchParams, setSearchParams] = useSearchParams();
   // PUSD+ is the headline product on the home page — it's what we lead with.
@@ -83,6 +84,43 @@ export default function HomePage() {
   // opacity of the §01 header tagline so it fades in lock-step with the
   // sliding curtain content.
   const [promiseOpen, setPromiseOpen] = useState(0);
+
+  // §02 swap state. The Book (proof of reserves) and The Yield (PUSD+ peek)
+  // share the same slot — clicking the piggy bank or the chest fires the
+  // splash overlay and toggles which view is mounted.
+  const [proofView, setProofView] = useState<'book' | 'yield'>('book');
+  const [splash, setSplash] = useState<{
+    origin: { x: number; y: number };
+    direction: 'out' | 'in';
+  } | null>(null);
+
+  // Section visibility while a splash is in flight. Goes 1 → 0 as the
+  // coins burst (matched to the splash's first half), the view swaps at
+  // peak while the section is invisible, then 0 → 1 as coins fade. The
+  // crossfade rides on top of the coin shower so the swap is masked.
+  const [proofFaded, setProofFaded] = useState(false);
+
+  // Memoize the splash callbacks so SplashOverlay's useEffect doesn't see
+  // them as new every render — otherwise the timers restart and the peak
+  // fires repeatedly, ping-ponging the view back to its original state.
+  // Piggy → 'out' (coins burst from broken piggy). Chest → 'in' (coins
+  // collected back into the open chest).
+  const triggerToYield = useCallback((origin: { x: number; y: number }) => {
+    setSplash({ origin, direction: 'out' });
+    setProofFaded(true);
+  }, []);
+  const triggerToBook = useCallback((origin: { x: number; y: number }) => {
+    setSplash({ origin, direction: 'in' });
+    setProofFaded(true);
+  }, []);
+  const onSplashPeak = useCallback(() => {
+    setProofView((v) => (v === 'book' ? 'yield' : 'book'));
+    setProofFaded(false);
+  }, []);
+  const onSplashDone = useCallback(() => {
+    setSplash(null);
+    setProofFaded(false);
+  }, []);
 
   // Top distribution share — used to scale the per-row bar width so it reads
   // as a proportion of the leading position, not of the whole.
@@ -390,9 +428,20 @@ export default function HomePage() {
           />
         </section>
 
-        {/* ============================================ §02 · PROOF OF RESERVES
-         * View-independent: always the par-backed reserve table here. The
-         * vault book gets a different treatment (animation TBD). */}
+        {/* ============================================ §02 · PROOF / YIELD
+         * Same slot, two views — clicking the piggy on the book swaps to
+         * the yield peek; clicking the chest on the yield swaps back. The
+         * splash overlay covers the swap so React can rebuild the subtree
+         * without the user seeing a flash of unstyled state. */}
+        <div
+          style={{
+            opacity: proofFaded ? 0 : 1,
+            transition: 'opacity 620ms cubic-bezier(0.4, 0, 0.2, 1)',
+          }}
+        >
+        {proofView === 'yield' ? (
+          <YieldSection trigger={<ChestTrigger onTrigger={triggerToBook} />} />
+        ) : (
         <section className="section">
           <div className="section__header">
             <span>§ 02 · PROOF OF RESERVES</span>
@@ -426,98 +475,116 @@ export default function HomePage() {
                 GROSS RESERVES · USD · 6DP
               </div>
             </div>
+            {/* Trigger spans both columns in its own grid row, right-aligned
+             * so it sits below the gross-reserves total without crowding the
+             * left column. Stacks naturally on narrow viewports. */}
+            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
+              <PiggyTrigger onTrigger={triggerToYield} />
+            </div>
           </div>
 
-          <table className="table">
-            <thead>
-              <tr>
-                <th>ASSET</th>
-                <th>CHAIN</th>
-                <th>ADDRESS</th>
-                <th className="num">BALANCE</th>
-                <th className="num">SHARE</th>
-                <th style={{ width: "22%" }}>DISTRIBUTION</th>
-                <th>STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reserves.loading && reserves.rows.length === 0 ? (
+          {/* Responsive book table.
+           *
+           * Visible columns by viewport:
+           *   ≥721px : ASSET · CHAIN · ADDRESS · BALANCE · SHARE · DISTRIBUTION · STATUS
+           *   ≤720px : ASSET · BALANCE · SHARE · STATUS         (CHAIN, ADDRESS, DISTRIBUTION dropped — `cell-md-up`)
+           *   ≤380px : ASSET · BALANCE · STATUS                 (SHARE also dropped — `cell-sm-up`)
+           *
+           * Wrapped in `.table-wrap` so the very rare row whose token pill
+           * still overflows can scroll horizontally rather than break the
+           * page layout. */}
+          <div className="table-wrap">
+            <table className="table table--responsive">
+              <thead>
                 <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      textAlign: "center",
-                      padding: 40,
-                      color: "var(--c-ink-mute)",
-                    }}
-                  >
-                    Reading token balances from PUSDManager…
-                  </td>
+                  <th>ASSET</th>
+                  <th className="cell-md-up">CHAIN</th>
+                  <th className="cell-md-up">ADDRESS</th>
+                  <th className="num">BALANCE</th>
+                  <th className="num cell-sm-up">SHARE</th>
+                  <th className="cell-md-up" style={{ width: "22%" }}>DISTRIBUTION</th>
+                  <th>STATUS</th>
                 </tr>
-              ) : reserves.rows.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={7}
-                    style={{
-                      textAlign: "center",
-                      padding: 40,
-                      color: "var(--c-ink-mute)",
-                    }}
-                  >
-                    No tokens currently registered. When an operator adds
-                    reserve assets, they will show up here.
-                  </td>
-                </tr>
-              ) : (
-                reserves.rows.map((r, i) => {
-                  const widthPct =
-                    topPct > 0
-                      ? Math.max(3, (r.pctOfReserves / topPct) * 100)
-                      : 0;
-                  return (
-                    <tr key={r.address}>
-                      <td>
-                        <TokenPill
-                          symbol={r.symbol}
-                          chainShort={r.chainShort}
-                          size="sm"
-                        />
-                      </td>
-                      <td className="mono">{r.chainLabel}</td>
-                      <td className="addr">
-                        <a
-                          className="link-mono"
-                          href={explorerAddress(r.address)}
-                          target="_blank"
-                          rel="noreferrer"
-                        >
-                          {truncAddr(r.address)}
-                        </a>
-                      </td>
-                      <td className="num">
-                        {formatAmount(r.balance, r.decimals)}
-                      </td>
-                      <td className="num">{r.pctOfReserves.toFixed(2)}%</td>
-                      <td>
-                        <div
-                          className="dist"
-                          aria-label={`Share ${r.pctOfReserves.toFixed(2)}%`}
-                        >
-                          <div
-                            className={`dist__fill ${i === 0 ? "dist__fill--accent" : ""}`}
-                            style={{ width: `${widthPct}%` }}
+              </thead>
+              <tbody>
+                {reserves.loading && reserves.rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      style={{
+                        textAlign: "center",
+                        padding: 40,
+                        color: "var(--c-ink-mute)",
+                      }}
+                    >
+                      Reading token balances from PUSDManager…
+                    </td>
+                  </tr>
+                ) : reserves.rows.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      style={{
+                        textAlign: "center",
+                        padding: 40,
+                        color: "var(--c-ink-mute)",
+                      }}
+                    >
+                      No tokens currently registered. When an operator adds
+                      reserve assets, they will show up here.
+                    </td>
+                  </tr>
+                ) : (
+                  reserves.rows.map((r, i) => {
+                    const widthPct =
+                      topPct > 0
+                        ? Math.max(3, (r.pctOfReserves / topPct) * 100)
+                        : 0;
+                    return (
+                      <tr key={r.address}>
+                        <td>
+                          <TokenPill
+                            symbol={r.symbol}
+                            chainShort={r.chainShort}
+                            size="sm"
                           />
-                        </div>
-                      </td>
-                      <td className={`status ${STATUS_CLASS[r.status] ?? ""}`}>
-                        {STATUS_LABEL[r.status] ?? r.status}
-                      </td>
-                    </tr>
-                  );
-                })
-              )}
-            </tbody>
-          </table>
+                        </td>
+                        <td className="mono cell-md-up">{r.chainLabel}</td>
+                        <td className="addr cell-md-up">
+                          <a
+                            className="link-mono"
+                            href={explorerAddress(r.address)}
+                            target="_blank"
+                            rel="noreferrer"
+                          >
+                            {truncAddr(r.address)}
+                          </a>
+                        </td>
+                        <td className="num">
+                          {formatAmount(r.balance, r.decimals)}
+                        </td>
+                        <td className="num cell-sm-up">{r.pctOfReserves.toFixed(2)}%</td>
+                        <td className="cell-md-up">
+                          <div
+                            className="dist"
+                            aria-label={`Share ${r.pctOfReserves.toFixed(2)}%`}
+                          >
+                            <div
+                              className={`dist__fill ${i === 0 ? "dist__fill--accent" : ""}`}
+                              style={{ width: `${widthPct}%` }}
+                            />
+                          </div>
+                        </td>
+                        <td className={`status ${STATUS_CLASS[r.status] ?? ""}`}>
+                          {STATUS_LABEL[r.status] ?? r.status}
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
 
           <div className="book-footer">
             <div>
@@ -554,6 +621,8 @@ export default function HomePage() {
             </div>
           )}
         </section>
+        )}
+        </div>
 
         {/* ============================================ §03 · MANIFESTO ====== */}
         <section className="section">
@@ -601,6 +670,16 @@ export default function HomePage() {
           <DispatchFeed />
         </section>
       </div>
+
+      {/* Splash overlay rides above everything during a §02 view swap. */}
+      {splash && (
+        <SplashOverlay
+          origin={splash.origin}
+          direction={splash.direction}
+          onPeak={onSplashPeak}
+          onDone={onSplashDone}
+        />
+      )}
     </>
   );
 }

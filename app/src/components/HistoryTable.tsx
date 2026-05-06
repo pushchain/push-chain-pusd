@@ -57,6 +57,8 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
               : 'var(--c-oxblood)';
           const tokenLabel = isPlus ? 'PUSD+' : 'PUSD';
           const typeLabel = r.type.replace('_', ' ');
+          const pusdStr = formatAmount(r.pusdAmount, 6);
+          const pusdHasEpsilon = pusdStr.startsWith('<') || pusdStr.startsWith('>');
 
           return (
             <tr key={`${r.txHash}:${r.logIndex}`}>
@@ -68,8 +70,7 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
               <td className="mono cell-sm-up">{formatTimestamp(r.timestamp)}</td>
               <td className="num">
                 <div>
-                  {pusdSign}
-                  {formatAmount(r.pusdAmount, 6)} {tokenLabel}
+                  {pusdHasEpsilon ? pusdStr : `${pusdSign}${pusdStr}`} {tokenLabel}
                 </div>
                 {r.type === 'REDEEM' && (
                   <div className="meta-sm" style={{ marginTop: 2 }}>

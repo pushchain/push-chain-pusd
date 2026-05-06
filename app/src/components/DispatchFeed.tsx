@@ -20,6 +20,13 @@ function dotClass(type: DispatchRow['type']): string {
   return 'dispatch__dot--redeem';
 }
 
+/** When the formatter returned an epsilon hint (`< 0.01` / `> -0.01`),
+ * suppress the manual ± prefix — the sentinel already implies direction. */
+function signed(amount: string, sign: '+' | '−'): string {
+  if (amount.startsWith('<') || amount.startsWith('>')) return amount;
+  return sign + amount;
+}
+
 function describe(row: DispatchRow): {
   head: string;
   body: ReactNode;
@@ -33,7 +40,7 @@ function describe(row: DispatchRow): {
   if (row.type === 'MINT') {
     return {
       head: 'MINT',
-      body: <><strong>+{pusd} PUSD</strong> issued against {token} {sym} from {chain}.</>,
+      body: <><strong>{signed(pusd, '+')} PUSD</strong> issued against {token} {sym} from {chain}.</>,
       footAddr: row.user,
       footPrefix: 'from',
     };
@@ -41,7 +48,7 @@ function describe(row: DispatchRow): {
   if (row.type === 'REDEEM') {
     return {
       head: 'REDEEM',
-      body: <><strong>−{pusd} PUSD</strong> burned; {token} {sym} paid on {chain}.</>,
+      body: <><strong>{signed(pusd, '−')} PUSD</strong> burned; {token} {sym} paid on {chain}.</>,
       footAddr: row.recipient,
       footPrefix: 'to',
     };
@@ -49,7 +56,7 @@ function describe(row: DispatchRow): {
   if (row.type === 'MINT_PLUS') {
     return {
       head: 'MINT PUSD+',
-      body: <><strong>+{pusd} PUSD+</strong> minted against {token} {sym} from {chain}.</>,
+      body: <><strong>{signed(pusd, '+')} PUSD+</strong> minted against {token} {sym} from {chain}.</>,
       footAddr: row.user,
       footPrefix: 'from',
     };
@@ -57,7 +64,7 @@ function describe(row: DispatchRow): {
   // REDEEM_PLUS
   return {
     head: 'REDEEM PUSD+',
-    body: <><strong>−{pusd} PUSD+</strong> burned; preferred {sym} on {chain}.</>,
+    body: <><strong>{signed(pusd, '−')} PUSD+</strong> burned; preferred {sym} on {chain}.</>,
     footAddr: row.recipient,
     footPrefix: 'to',
   };
