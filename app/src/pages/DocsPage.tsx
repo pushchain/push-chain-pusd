@@ -34,6 +34,7 @@ function Ic({ children }: { children: string }) {
         background: "var(--c-paper-warm)",
         padding: "1px 5px",
         borderRadius: 2,
+        overflowWrap: "anywhere"
       }}
     >
       {children}
