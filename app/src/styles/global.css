@@ -506,8 +506,13 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
 .hero__lead em { font-style: italic; color: var(--c-ink); }
 
+/* The 2-col hero only works when the container is at its full 1200px max
+ * width — that's the only viewport where the Convert panel's right column
+ * gets ~490px and stops wrapping its source header. Below 1200px viewport,
+ * stack the layout so the panel can use the full container width and read
+ * cleanly. */
 @media (max-width: 960px) {
-  .hero__inner       { grid-template-columns: 1fr; }
+  .hero__inner       { display: flex; flex-direction: column; }
   .hero__left,
   .hero__right       { padding: 28px 0; }
   .hero__right       { border-left: none; border-top: var(--rule-thin); }
@@ -2135,6 +2140,27 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   text-decoration: underline;
 }
 
+/* Narrow viewports — the dropdown row's pill + chain label + address combo
+ * runs out of room and starts wrapping or pushing the address off the right
+ * edge. The TokenPill already shows the chain abbreviation (e.g. "ETH SEP"),
+ * so we drop the redundant ".meta" chainLabel below 520px and tighten the
+ * row paddings. The address stays — it's the only on-row identifier of
+ * which contract a row points at. */
+@media (max-width: 520px) {
+  .selector-panel button {
+    padding: 10px 12px 10px 22px;
+    gap: 8px;
+    font-size: 13px;
+  }
+  .selector-panel button.active::before {
+    left: 8px;
+    font-size: 11px;
+  }
+  .selector-panel__lead { gap: 8px; }
+  .selector-panel__lead .meta { display: none; }
+  .selector-panel .addr { font-size: 10px; }
+}
+
 /* --- Arrow divider inside a card (mint amount -> receive amount) --- */
 .arrow-divider {
   display: flex;
@@ -3237,7 +3263,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
     row-gap: 24px;
   }
   .home-stat-band__inner > .stat { padding: 0 18px; }
-  .home-stat-band__inner > .stat:nth-child(odd)  { padding-left: 0; border-right: var(--rule-thin); }
+  .home-stat-band__inner > .stat:nth-child(odd)  { padding-left: 0; }
   .home-stat-band__inner > .stat:nth-child(even) { padding-right: 0; border-right: 0; }
   .home-stat-band__inner > .stat:nth-child(-n+2) {
     border-bottom: var(--rule-thin);
