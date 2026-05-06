@@ -3,19 +3,30 @@
 > Authoritative source: [`contracts/deployed.txt`](contracts/deployed.txt). This
 > file mirrors the latest deployment for human reference.
 
-## Current deployment — PUSD+ V2 upgrade (Deployment 4, 2026-05-04)
+## Current deployment — V2.1 direct-deposit + permissionless rebalance (Deployment 5, 2026-05-06)
+
+> ADR: [docs/design/decisions/0006-direct-vault-deposit.md](docs/design/decisions/0006-direct-vault-deposit.md)
 
 ### Contract Addresses (Push Chain Donut Testnet, chain 42101)
 
-| Contract                  | Proxy                                        |
-| ------------------------- | -------------------------------------------- |
-| PUSD                      | `0x488d080e16386379561a47A4955D22001d8A9D89` |
-| PUSDManager (upgraded v2) | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
-| PUSDPlusVault             | `0xb55a5B36d82D3B7f18Afe42F390De565080A49a1` |
-| InsuranceFund             | `0xFF7E741621ad5d39015759E3d606A631Fa319a62` |
-| Admin / Deployer          | `0xA1c1AF949C5752E9714cFE54f444cE80f078069A` |
+| Contract                    | Proxy                                        | Latest impl                                  |
+| --------------------------- | -------------------------------------------- | -------------------------------------------- |
+| PUSD                        | `0x488d080e16386379561a47A4955D22001d8A9D89` | `0x8b931D2844214E9f654b90A15B572b5d97c8ff8F` (unchanged since v1) |
+| PUSDManager (upgraded v2.1) | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` | `0xA1e8D6312fc1BB6B88d9326F6115a7396eCcD487` (v2.1) |
+| PUSDPlusVault (upgraded v2.1) | `0xb55a5B36d82D3B7f18Afe42F390De565080A49a1` | `0x6d17846330766f243D3A78A8b1FC7D61a9795D81` (v2.1) |
+| InsuranceFund               | `0xFF7E741621ad5d39015759E3d606A631Fa319a62` | `0x5eb7c329B7a178Be60B8770727Add801B3ceC834` (unchanged since v2) |
+| V3Math library              | n/a (linked at deploy)                       | `0xc90a042d74fc921405992ab463d03ae2a19eb06a` (unchanged since v2) |
+| Admin / Deployer            | `0xA1c1AF949C5752E9714cFE54f444cE80f078069A` |                                              |
 
 All four contracts are UUPS proxies — interact via the proxy address only.
+
+### V2.1 changes summary
+
+- **PUSDManager.depositToPlus rewrite**: direct path forwards reserves directly to vault (no PUSD round-trip); wrap path basket-redeems caller's PUSD into vault inventory. Function-body-only — storage layout below `__gap_v2` unchanged.
+- **PUSDPlusVault**: `_convertIdleReservesToPusd` drains preferred asset first; `rebalance` permissionless after a 1h cooldown (KEEPER bypasses); new `setPublicRebalanceCooldown` setter (capped at 24h).
+- **Storage**: PUSDPlusVault gained one slot for `(lastRebalanceAt, publicRebalanceCooldown)` packed; `__gap[40]` → `__gap[39]`.
+- **Pre-upgrade**: POOL_ADMIN ran `PopulateVaultBasket.s.sol` so all 9 supported tokens are in `vault.basket` (required by direct-deposit defensive `inBasket` check).
+- **Post-upgrade**: `setPublicRebalanceCooldown(3600)` called (UUPS swap doesn't re-run `initialize`); legacy 253 PUSD held by vault drained via `UnwrapLegacyPUSD.s.sol` proportional split.
 
 ### Explorer Links
 - PUSD: https://donut.push.network/address/0x488d080e16386379561a47A4955D22001d8A9D89

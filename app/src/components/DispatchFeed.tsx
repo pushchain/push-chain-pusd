@@ -16,7 +16,8 @@ import { useProtocolDispatch, type DispatchRow } from '../hooks/useProtocolDispa
 import { explorerTx, formatAmount, formatRelative, truncAddr } from '../lib/format';
 
 function dotClass(type: DispatchRow['type']): string {
-  return type === 'MINT' ? 'dispatch__dot--mint' : 'dispatch__dot--redeem';
+  if (type === 'MINT' || type === 'MINT_PLUS') return 'dispatch__dot--mint';
+  return 'dispatch__dot--redeem';
 }
 
 function describe(row: DispatchRow): {
@@ -37,9 +38,26 @@ function describe(row: DispatchRow): {
       footPrefix: 'from',
     };
   }
+  if (row.type === 'REDEEM') {
+    return {
+      head: 'REDEEM',
+      body: <><strong>−{pusd} PUSD</strong> burned; {token} {sym} paid on {chain}.</>,
+      footAddr: row.recipient,
+      footPrefix: 'to',
+    };
+  }
+  if (row.type === 'MINT_PLUS') {
+    return {
+      head: 'MINT PUSD+',
+      body: <><strong>+{pusd} PUSD+</strong> minted against {token} {sym} from {chain}.</>,
+      footAddr: row.user,
+      footPrefix: 'from',
+    };
+  }
+  // REDEEM_PLUS
   return {
-    head: 'REDEEM',
-    body: <><strong>−{pusd} PUSD</strong> burned; {token} {sym} paid on {chain}.</>,
+    head: 'REDEEM PUSD+',
+    body: <><strong>−{pusd} PUSD+</strong> burned; preferred {sym} on {chain}.</>,
     footAddr: row.recipient,
     footPrefix: 'to',
   };

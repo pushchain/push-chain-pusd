@@ -1,7 +1,7 @@
 ---
 name: push-pusd
 description: Integrate with PUSD and PUSD+ — the cross-chain par-backed stablecoin and yield-bearing companion on Push Chain Donut Testnet. Mint PUSD by depositing USDC/USDT from any supported chain, redeem PUSD for any reserve token, mint/redeem PUSD+ in one call, read protocol state, or call the contracts on-chain from another smart contract. Two integration paths from off-chain (external-chain wallet via multicall, or native Push EOA) and a Solidity interface for on-chain integrations.
-version: 3.0.0
+version: 3.1.0
 network: testnet
 chain_id: 42101
 rpc: https://evm.donut.rpc.push.org/
@@ -411,7 +411,9 @@ await (await pc.universal.sendTransaction({
 
 ## Mint PUSD+ (depositToPlus)
 
-`depositToPlus(tokenIn, amount, recipient)` accepts **either** PUSD or any reserve token. The reserve path mints PUSD into the vault and immediately wraps; the wrap leg charges no fee. Surplus haircut on the reserve still applies.
+`depositToPlus(tokenIn, amount, recipient)` accepts **either** PUSD or any reserve token. User-facing API unchanged across v2 → v2.1.
+
+> **v2.1 (2026-05-06)** — direct path (`tokenIn` = USDC.eth, USDT.eth, etc.) sends reserves **directly to the vault**, no intermediate PUSD mint. Wrap path (`tokenIn` = PUSD) basket-redeems caller's PUSD into vault inventory. Surplus haircut on the reserve still applies; wrap leg charges no fee. Same caller-visible behavior; the vault now accumulates diverse reserve inventory organically — better LP support.
 
 **Path A — multicall, reserve → PUSD+ in one signature:**
 

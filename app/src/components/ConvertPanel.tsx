@@ -217,9 +217,30 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
   const feeAmount = useMemo(() => {
     if (mode !== 'redeem' || parsedAmount === 0n) return 0n;
+    // PUSD+ redeem path is fee-exempt (manager._payoutToUser fee=0 for vault).
+    if (isPlus) return 0n;
     return (parsedAmount * BigInt(baseFeeBps)) / 10_000n;
-  }, [mode, parsedAmount, baseFeeBps]);
-  const receiveAmount = mode === 'mint' ? parsedAmount : parsedAmount - feeAmount;
+  }, [mode, parsedAmount, baseFeeBps, isPlus]);
+
+  // v2.1: PUSD+ mint/redeem amounts go through NAV. PUSD direct mint/redeem
+  // stay 1:1 (PUSD is 1:1 par-backed by manager reserves).
+  const receiveAmount = useMemo(() => {
+    if (parsedAmount === 0n) return 0n;
+    const NAV_PRECISION = 1_000_000_000_000_000_000n; // 1e18
+    if (mode === 'mint') {
+      if (isPlus && nav.navE18 > 0n) {
+        // plusOut = pusdIn × 1e18 / navE18  (pre-deposit NAV; matches vault.previewMintPlus)
+        return (parsedAmount * NAV_PRECISION) / nav.navE18;
+      }
+      return parsedAmount;
+    }
+    // redeem
+    if (isPlus && nav.navE18 > 0n) {
+      // pusdOwed = plusIn × navE18 / 1e18  (matches vault.previewBurnPlus)
+      return (parsedAmount * nav.navE18) / NAV_PRECISION;
+    }
+    return parsedAmount - feeAmount;
+  }, [mode, parsedAmount, feeAmount, isPlus, nav.navE18]);
 
   // "Exact out" helper: solve for burn so that (burn - burn*fee%) = current parsedAmount.
   const handleExactReceive = () => {
@@ -862,7 +883,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                 </button>
               )}
             </span>
-            <span>1 : 1</span>
+            <span>{isPlus ? `NAV ${nav.pusdPerPlus.toFixed(6)}` : '1 : 1'}</span>
           </div>
           <div className="input-shell">
             <div

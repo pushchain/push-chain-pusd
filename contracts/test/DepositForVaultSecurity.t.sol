@@ -260,16 +260,14 @@ contract DepositForVaultSecurityTest is Test {
     ///         `redeemFromPlus → burnPlus → _convertIdleReservesToPusd`,
     ///         even though the outer manager call already holds the lock.
     function testLegitimateInnerCallSucceedsDuringRedeemFromPlus() public {
-        // Mint PUSD+ for alice, then convert vault PUSD into a non-PUSD reserve
-        // so the redeem path forces a tier-2 conversion (the legitimate
-        // depositForVault re-entry the bypass exists for).
+        // v2.1 — depositToPlus already puts USDC directly in the vault, so
+        // redeemFromPlus naturally exercises the tier-2 conversion (vault has
+        // 0 idle PUSD, must convert USDC → PUSD via depositForVault).
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, alice);
         vm.stopPrank();
-
-        vm.prank(keeper);
-        vault.redeemPusdForToken(800e6, address(usdc)); // vault: 200 PUSD + 800 USDC
+        // Vault: 1000 USDC + 0 PUSD.
 
         uint256 usdcBefore = usdc.balanceOf(alice);
         vm.prank(alice);
@@ -323,7 +321,8 @@ contract DepositForVaultSecurityTest is Test {
     // -------------------------------------------------------------------
 
     function testInvariantsHoldAfterRedeemFromPlusConversion() public {
-        // Alice + bob seed both reserves so the vault has multi-asset idle.
+        // v2.1 — direct deposits put USDC directly in vault. Redeem
+        // automatically hits tier-2 (vault has 0 PUSD).
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, alice);
@@ -332,10 +331,7 @@ contract DepositForVaultSecurityTest is Test {
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, bob);
         vm.stopPrank();
-
-        // Convert all vault PUSD into USDC so a redeem must hit tier-2.
-        vm.prank(keeper);
-        vault.redeemPusdForToken(2_000e6, address(usdc));
+        // Vault: 2000 USDC. Manager: 0 USDC.
 
         vm.prank(alice);
         manager.redeemFromPlus(500e6, address(usdc), true, alice);

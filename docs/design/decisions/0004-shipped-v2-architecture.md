@@ -1,8 +1,9 @@
 # ADR 0004 — Shipped V2 Architecture
 
-**Status:** Accepted
+**Status:** Accepted (deposit side amended by [ADR 0006](0006-direct-vault-deposit.md), 2026-05-06)
 **Date:** 2026-05-04
 **Supersedes:** [ADR 0003 — Product Architecture (Two-Tier)](0003-product-architecture.md)
+**Amended by:** [ADR 0006 — Direct Vault Deposits + Basket Wrap (V2.1)](0006-direct-vault-deposit.md) — `PUSDManager.depositToPlus` rewrite to send reserves directly to the vault; the fee-exempt-flag isolation model from this ADR is preserved on the redemption side.
 
 ---
 

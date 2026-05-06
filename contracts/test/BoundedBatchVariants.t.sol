@@ -203,19 +203,14 @@ contract BoundedBatchVariantsTest is Test {
     // -------------------------------------------------------------------
 
     function _seedPositions(uint256 n) internal {
-        // Seed `n` positions in the vault by minting PUSD+, swapping vault
-        // PUSD for reserve tokens, then opening pools.
+        // v2.1 — direct deposits put reserves into the vault directly. No
+        // keeper conversion step needed before opening pools.
         for (uint256 i; i < n; i++) {
             vm.startPrank(alice);
             tokens[0].approve(address(manager), 200e6);
             manager.depositToPlus(address(tokens[0]), 200e6, alice);
             tokens[1].approve(address(manager), 200e6);
             manager.depositToPlus(address(tokens[1]), 200e6, alice);
-            vm.stopPrank();
-
-            vm.startPrank(keeper);
-            vault.redeemPusdForToken(200e6, address(tokens[0]));
-            vault.redeemPusdForToken(200e6, address(tokens[1]));
             vm.stopPrank();
 
             vm.prank(poolAdmin);

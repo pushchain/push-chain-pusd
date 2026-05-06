@@ -1,12 +1,15 @@
 /**
  * VaultBook — PUSD+ vault section on /reserves.
  *
- * Layout (top to bottom):
- *   1. Stat strip — total assets / NAV / supply / queued
- *   2. Composition bar — idle PUSD · idle reserves · deployed in LP
- *   3. NAV sparkline + APY trio (1d / 7d / 30d, derived from Rebalanced events)
- *   4. Queue stats — opened / filled / open now / median time-to-fill
- *   5. Insurance fund row — per-token + cumulative, with TVL ratio markers
+ * Layout (top to bottom, v2.1):
+ *   1. Stat strip — total assets / NAV / supply / deployed
+ *   2. Composition bar — idle reserves · deployed in LP
+ *      (idle PUSD dropped: under v2.1, vault holds reserves directly,
+ *      not PUSD claim tickets. Idle PUSD is normally 0.)
+ *   3. Rewards strip — cumulative yield captured + 1d/7d/30d APY
+ *   4. NAV over time — sparkline of nav() at each Rebalanced event
+ *   5. Queue stats — opened / filled / open now / median time-to-fill
+ *   6. Insurance fund row — per-token + cumulative, with TVL ratio markers
  *
  * Reads use existing `useVaultBook` (RPC) + `useNAVHistory` and `useQueueStats`
  * (Blockscout events). All polling cadences are independent.
@@ -19,7 +22,6 @@ import { useVaultBook } from '../hooks/useVaultBook';
 import { explorerAddress, formatAmount, truncAddr } from '../lib/format';
 import { Sparkline } from './Sparkline';
 
-const IDLE_PUSD_COLOR     = 'var(--c-ink)';
 const IDLE_RESERVE_COLOR  = 'var(--c-magenta)';
 const DEPLOYED_COLOR      = 'var(--c-jade)';
 
@@ -28,12 +30,9 @@ function pct(numer: bigint, denom: bigint): number {
   return Number((numer * 10_000n) / denom) / 100;
 }
 
-function formatApy(v: number | null): string {
-  if (v === null || !isFinite(v)) return '—';
-  // Realistic LP yields stay in single-digit %. Anything beyond 100% means
-  // the APY window crossed a fresh-deployment bootstrap; render it but cap
-  // visually so it doesn't dominate.
-  return `${(v * 100).toFixed(2)}%`;
+function formatApy(v: { rate: number | null; bootstrap: boolean } | null): string {
+  if (!v || v.rate === null || !isFinite(v.rate)) return '—';
+  return `${(v.rate * 100).toFixed(2)}%`;
 }
 
 function formatDuration(ms: number | null): string {
@@ -54,19 +53,30 @@ export function VaultBook() {
 
   // useCountUp hooks must be invoked unconditionally before any early
   // return — keeps hook order stable when V2 isn't configured.
-  const idleSum = book.basketIdle.reduce((a, s) => a + s.amountPusd, 0n);
+  // v2.1: under direct deposits the vault doesn't accumulate idle PUSD,
+  // so any pusdIdle balance gets folded into "idle reserves" for display.
+  const idleSum = book.basketIdle.reduce((a, s) => a + s.amountPusd, 0n) + book.pusdIdle;
   const totalAssetsCounted = useCountUp(book.totalAssets);
   const supplyCounted = useCountUp(book.plusTotalSupply);
   const queuedCounted = useCountUp(book.totalQueuedPusd);
-  const idlePusdCounted = useCountUp(book.pusdIdle);
   const idleReservesCounted = useCountUp(idleSum);
   const deployedCounted = useCountUp(book.deployedPusd);
   const ifTotalCounted = useCountUp(book.insuranceFund.totalPusd);
 
+  // Rewards = NAV appreciation above par × current supply, in PUSD.
+  // (nav - 1e18) * supply / 1e18, in 6-dec units. Floors at 0 for the
+  // bootstrap window when NAV could briefly be below 1e18 (it shouldn't,
+  // I2 is monotonic; but defensive).
+  const NAV_PRECISION = 1_000_000_000_000_000_000n; // 1e18
+  const rewardsPusd =
+    book.navE18 > NAV_PRECISION
+      ? ((book.navE18 - NAV_PRECISION) * book.plusTotalSupply) / NAV_PRECISION
+      : 0n;
+  const rewardsCounted = useCountUp(rewardsPusd);
+
   if (book.unconfigured) return null;
 
   const total = book.totalAssets;
-  const pusdPct     = pct(book.pusdIdle, total);
   const reservesPct = pct(idleSum, total);
   const deployedPct = pct(book.deployedPusd, total);
 
@@ -110,31 +120,52 @@ export function VaultBook() {
             <div className="stat__sub">CIRCULATING</div>
           </div>
           <div className="stat">
-            <div className="stat__label">QUEUED</div>
-            <div className="stat__value">
-              {formatAmount(queuedCounted, 6, { maxFractionDigits: 0 })}
+            <div className="stat__label">YIELD GENERATED</div>
+            <div className="stat__value" style={{ color: 'var(--c-jade)' }}>
+              {formatAmount(rewardsCounted, 6, { maxFractionDigits: 2 })}
               <em> PUSD</em>
             </div>
-            <div
-              className={`stat__sub ${queuedRatio >= 5 ? 'stat__sub--delta-down' : ''}`}
-            >
-              {queuedRatio.toFixed(2)}% OF TVL
-            </div>
+            <div className="stat__sub">(NAV − 1.00) × SUPPLY</div>
+          </div>
+        </div>
+
+        {/* NAV over time — leads the section so the yield story shows first */}
+        <div className="section__header" style={{ marginTop: 24 }}>
+          <span>§ NAV OVER TIME</span>
+          <span>SAMPLED AT EACH REBALANCE · MONOTONIC NON-DECREASING</span>
+        </div>
+
+        <div
+          style={{
+            marginTop: 12,
+            background: 'var(--c-paper)',
+            border: 'var(--rule-thin)',
+            padding: '16px 20px',
+          }}
+        >
+          <Sparkline
+            points={sparkPoints}
+            width={1200}
+            height={160}
+            fixedDisplayHeight={160}
+            ariaLabel={`NAV over ${sparkPoints.length} samples`}
+          />
+          <div className="meta-sm" style={{ marginTop: 10 }}>
+            {nav.loading
+              ? 'reading rebalance events…'
+              : sparkPoints.length <= 1
+                ? 'Genesis 1.000000 · awaiting first keeper rebalance.'
+                : `${sparkPoints.length} sample${sparkPoints.length === 1 ? '' : 's'} · genesis 1.000000 · current ${book.pusdPerPlus.toFixed(6)}`}
           </div>
         </div>
 
         {/* Composition */}
-        <div className="section__header" style={{ marginTop: 24 }}>
+        <div className="section__header" style={{ marginTop: 32 }}>
           <span>§ COMPOSITION</span>
           <span>WHERE THE TOTAL ASSETS LIVE</span>
         </div>
 
         <div className="dist-bar" role="img" aria-label="Vault composition">
-          <div
-            className="dist-bar__seg"
-            style={{ width: `${Math.max(0.5, pusdPct)}%`, background: IDLE_PUSD_COLOR }}
-            title={`Idle PUSD · ${pusdPct.toFixed(2)}%`}
-          />
           <div
             className="dist-bar__seg"
             style={{ width: `${Math.max(0.5, reservesPct)}%`, background: IDLE_RESERVE_COLOR }}
@@ -147,37 +178,39 @@ export function VaultBook() {
           />
         </div>
         <div className="dist-legend">
-          <LegendItem color={IDLE_PUSD_COLOR} label="IDLE PUSD" pct={pusdPct} note={formatAmount(idlePusdCounted, 6, { maxFractionDigits: 0 }) + ' PUSD'} />
           <LegendItem color={IDLE_RESERVE_COLOR} label="IDLE RESERVES" pct={reservesPct} note={formatAmount(idleReservesCounted, 6, { maxFractionDigits: 0 }) + ' PUSD'} />
           <LegendItem color={DEPLOYED_COLOR} label="DEPLOYED" pct={deployedPct} note={formatAmount(deployedCounted, 6, { maxFractionDigits: 0 }) + ' PUSD'} />
         </div>
 
-        {/* NAV history + APY */}
+        {/* APY windows + deployed share */}
         <div className="section__header" style={{ marginTop: 32 }}>
-          <span>§ NAV HISTORY</span>
-          <span>FROM REBALANCED EVENTS · ANNUALIZED APY</span>
+          <span>§ YIELD CADENCE</span>
+          <span>ANNUALIZED APY · CURRENT DEPLOYMENT</span>
         </div>
 
-        <div className="vault-nav-grid">
-          <div className="vault-nav-grid__chart">
-            <Sparkline
-              points={sparkPoints}
-              width={520}
-              height={84}
-              ariaLabel={`NAV over ${sparkPoints.length} rebalances`}
-            />
-            <div className="meta-sm" style={{ marginTop: 6 }}>
-              {nav.loading
-                ? 'reading rebalance events…'
-                : sparkPoints.length === 0
-                  ? 'No rebalances recorded yet — keeper will emit one per loop.'
-                  : `${sparkPoints.length} sample${sparkPoints.length === 1 ? '' : 's'}`}
-            </div>
+        <div className="stat-strip">
+          <div className="stat">
+            <div className="stat__label">APY · 1D</div>
+            <div className="stat__value">{formatApy(nav.apy1d)}</div>
+            <div className="stat__sub">{nav.apy1d.bootstrap ? 'REALIZED · BOOTSTRAP' : 'SHORT-WINDOW SLOPE'}</div>
           </div>
-          <div className="vault-nav-grid__apy">
-            <ApyCell label="1D" value={nav.apy1d} />
-            <ApyCell label="7D" value={nav.apy7d} />
-            <ApyCell label="30D" value={nav.apy30d} />
+          <div className="stat">
+            <div className="stat__label">APY · 7D</div>
+            <div className="stat__value" style={{ color: 'var(--c-magenta)' }}>{formatApy(nav.apy7d)}</div>
+            <div className="stat__sub">{nav.apy7d.bootstrap ? 'REALIZED · BOOTSTRAP' : 'HEADLINE'}</div>
+          </div>
+          <div className="stat">
+            <div className="stat__label">APY · 30D</div>
+            <div className="stat__value">{formatApy(nav.apy30d)}</div>
+            <div className="stat__sub">{nav.apy30d.bootstrap ? 'REALIZED · BOOTSTRAP' : 'SMOOTHED'}</div>
+          </div>
+          <div className="stat">
+            <div className="stat__label">DEPLOYED</div>
+            <div className="stat__value">
+              {formatAmount(deployedCounted, 6, { maxFractionDigits: 0 })}
+              <em> PUSD</em>
+            </div>
+            <div className="stat__sub">{deployedPct.toFixed(2)}% IN LP</div>
           </div>
         </div>
 
@@ -187,36 +220,38 @@ export function VaultBook() {
           <span>BURNED → FILLED · CROSS-EVENT</span>
         </div>
 
-        <div className="stat-strip">
-          <div className="stat">
+        <div className="queue-grid">
+          <div className="queue-grid__cell">
+            <div className="stat__label">QUEUED</div>
+            <div
+              className={`stat__value ${queuedRatio >= 5 ? 'stat__sub--delta-down' : ''}`}
+            >
+              {formatAmount(queuedCounted, 6, { maxFractionDigits: 0 })}
+              <em> PUSD</em>
+            </div>
+            <div className="stat__sub">{queuedRatio.toFixed(2)}% OF TVL</div>
+          </div>
+          <div className="queue-grid__cell">
             <div className="stat__label">OPENED</div>
             <div className="stat__value">{queue.opened}</div>
             <div className="stat__sub">BURNEDPLUS WITH QUEUEID</div>
           </div>
-          <div className="stat">
+          <div className="queue-grid__cell">
             <div className="stat__label">FILLED</div>
             <div className="stat__value">{queue.filled}</div>
             <div className="stat__sub">QUEUECLAIMFILLED</div>
           </div>
-          <div className="stat">
-            <div className="stat__label">OPEN NOW</div>
-            <div className="stat__value">{queue.openNow}</div>
-            <div className="stat__sub">UNRESOLVED</div>
-          </div>
-          <div className="stat">
+          <div className="queue-grid__cell">
             <div className="stat__label">TIME-TO-FILL</div>
             <div className="stat__value">
               {formatDuration(queue.timeToFillMedianMs)}
               <em> median</em>
             </div>
-            <div className="stat__sub">MAX {formatDuration(queue.timeToFillMaxMs)}</div>
+            <div className="stat__sub">{queue.openNow} OPEN · MAX {formatDuration(queue.timeToFillMaxMs)}</div>
           </div>
         </div>
-      </section>
 
-      {/* Insurance Fund */}
-      <section className="section">
-        <div className="section__header">
+        <div className="section__header" style={{ marginTop: 64 }}>
           <span style={{ color: 'var(--c-jade)' }}>§ INSURANCE FUND</span>
           <span>HAIRCUT SKIM · SAFETY NET</span>
         </div>

@@ -4,7 +4,7 @@ pragma solidity 0.8.22;
 import "./DeployBase.s.sol";
 
 /**
- * @title  DeployPUSDPlusV2
+ * @title  DeployPUSDV2
  * @notice V2 deploy — upgrades existing PUSD V1 deployment to V2 (PUSD+).
  *
  *         Flow (matches design doc §12):
@@ -24,10 +24,10 @@ import "./DeployBase.s.sol";
  *
  *         Required env vars: see .env.example.
  *         Run:
- *           forge script script/DeployPUSDPlus.v2.s.sol:DeployPUSDPlusV2 \
+ *           forge script script/DeployPUSD.v2.s.sol:DeployPUSDV2 \
  *             --rpc-url $PUSH_RPC --broadcast --verify
  */
-contract DeployPUSDPlusV2 is DeployBase {
+contract DeployPUSDV2 is DeployBase {
     function run() external returns (V2Result memory r) {
         Wiring memory w = _readWiringForV2();
         uint256 deployerKey = vm.envUint("PRIVATE_KEY");

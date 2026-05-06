@@ -16,7 +16,7 @@ import "./DeployBase.s.sol";
  *         Use DeployPUSD.v1.s.sol when:
  *           - You only need the V1 stable, no PUSD+ yet.
  *
- *         Use DeployPUSDPlus.v2.s.sol when:
+ *         Use DeployPUSD.v2.s.sol when:
  *           - V1 is already deployed at PUSD_PROXY / PUSD_MANAGER_PROXY and
  *             you want to upgrade in place + add the vault.
  *

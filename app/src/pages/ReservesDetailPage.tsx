@@ -23,8 +23,6 @@ import { useCountUp } from '../hooks/useCountUp';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useReserves, type ReserveRow } from '../hooks/useReserves';
-
-type View = 'pusd' | 'plus';
 import {
   explorerAddress,
   formatAmount,
@@ -32,6 +30,8 @@ import {
   formatRelative,
   truncAddr,
 } from '../lib/format';
+
+type View = 'pusd' | 'plus';
 
 const STATUS_LABEL: Record<string, string> = {
   ENABLED: 'ENABLED',
@@ -140,13 +140,13 @@ export default function ReservesDetailPage() {
             {view === 'pusd' ? (
               <>Every dollar <em>on-chain</em>, every second.</>
             ) : (
-              <>NAV grows with every <em>rebalance</em>.</>
+              <>Asset that <em>grows</em> with every <em>rebalance</em>.</>
             )}
           </h1>
           <p className="hero__lead" style={{ maxWidth: '72ch' }}>
             {view === 'pusd'
               ? 'This page lists every token PUSDManager currently holds. Balances and statuses are contract reads, not a snapshot. Refresh the page and the numbers refresh with it.'
-              : 'The PUSD+ balance sheet — total assets, idle vs deployed, NAV history, queue lifecycle, and the insurance fund. All numbers are live contract reads + on-chain events.'}
+              : 'The PUSD+ balance sheet including total assets, idle vs deployed, NAV history, queue lifecycle, and the insurance fund. All numbers are live contract reads + on-chain events.'}
           </p>
         </div>
       </section>

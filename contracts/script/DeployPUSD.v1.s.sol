@@ -11,7 +11,7 @@ import "./DeployBase.s.sol";
  *
  *         For a fresh chain that wants the WHOLE V1+V2 stack, use
  *         DeployFull.s.sol. To upgrade an existing V1 deployment to V2 and
- *         add the vault, use DeployPUSDPlus.v2.s.sol.
+ *         add the vault, use DeployPUSD.v2.s.sol.
  *
  *         Required env vars: PRIVATE_KEY, ADMIN_ADDRESS.
  *         Run:

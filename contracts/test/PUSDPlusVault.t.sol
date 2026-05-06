@@ -372,39 +372,54 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testDepositToPlus_reservePath() public {
+        // v2.1 — direct path: tokenIn moves directly to vault; no PUSD minted.
         uint256 amount = 1_000e6;
+        uint256 pusdSupplyBefore = pusd.totalSupply();
 
         vm.startPrank(alice);
         usdc.approve(address(manager), amount);
         manager.depositToPlus(address(usdc), amount, alice);
         vm.stopPrank();
 
-        // PUSD+ minted 1:1 at bootstrap NAV
+        // PUSD+ minted 1:1 at bootstrap NAV.
         assertEq(vault.balanceOf(alice), amount);
-        // PUSD now sits in the vault as idle reserve
-        assertEq(pusd.balanceOf(address(vault)), amount);
-        // USDC moved to manager as reserve
-        assertEq(usdc.balanceOf(address(manager)), amount);
+        // USDC landed in the vault directly (no round-trip through manager).
+        assertEq(usdc.balanceOf(address(vault)), amount);
+        // Manager retained no USDC (no haircut today; not minting).
+        assertEq(usdc.balanceOf(address(manager)), 0);
+        // PUSD totalSupply unchanged — direct path doesn't mint PUSD.
+        assertEq(pusd.totalSupply(), pusdSupplyBefore);
+        // Vault holds USDC in basket; idleReservesPusd counts it.
         assertEq(vault.idleReservesPusd(), amount);
         assertEq(vault.totalAssets(), amount);
         assertEq(vault.nav(), 1e18);
     }
 
     function testDepositToPlus_wrapPath() public {
-        // Alice first mints PUSD via manager.deposit
+        // v2.1 — wrap path basket-redeems the caller's PUSD into vault inventory.
+        // Alice first mints PUSD via plain deposit (so manager has reserves to
+        // back the wrap basket-redeem).
         vm.startPrank(alice);
         usdc.approve(address(manager), 500e6);
         manager.deposit(address(usdc), 500e6, alice);
         assertEq(pusd.balanceOf(alice), 500e6);
+        // Manager now holds 500 USDC; PUSD totalSupply = 500.
 
-        // Now wrap PUSD into PUSD+
+        // Now wrap 500 PUSD → vault gets 500 USDC (basket sole reserve).
+        uint256 pusdSupplyBefore = pusd.totalSupply();
         pusd.approve(address(manager), 500e6);
         manager.depositToPlus(address(pusd), 500e6, alice);
         vm.stopPrank();
 
+        // Alice has PUSD+; PUSD was burned.
         assertEq(vault.balanceOf(alice), 500e6);
         assertEq(pusd.balanceOf(alice), 0);
-        assertEq(pusd.balanceOf(address(vault)), 500e6);
+        // Wrap path burned 500 PUSD; manager reserves dropped to vault.
+        assertEq(pusd.totalSupply(), pusdSupplyBefore - 500e6);
+        // Vault received basket reserves (proportional — only USDC available).
+        assertEq(usdc.balanceOf(address(vault)), 500e6);
+        assertEq(usdc.balanceOf(address(manager)), 0);
+        assertEq(pusd.balanceOf(address(vault)), 0);
     }
 
     function testMintPlus_onlyManager() public {
@@ -429,6 +444,8 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testRedeemFromPlus_instant_USDCpayout() public {
+        // v2.1 — vault holds USDC directly (not PUSD claim ticket).
+        // burnPlus tier-2 converts USDC → PUSD via depositForVault → manager pays USDC.
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, alice);
@@ -441,13 +458,19 @@ contract PUSDPlusVaultTest is Test {
         // Alice burned 500 PUSD+, received 500 USDC at NAV=1, zero fee on the compose path.
         assertEq(vault.balanceOf(alice), 500e6);
         assertEq(usdc.balanceOf(alice) - usdcBefore, 500e6);
-        // Vault retained 500 PUSD idle.
-        assertEq(pusd.balanceOf(address(vault)), 500e6);
+        // Vault retained 500 USDC idle (preferred-first conversion drained the
+        // 500 USDC needed; remaining 500 USDC stays in basket).
+        assertEq(usdc.balanceOf(address(vault)), 500e6);
+        assertEq(pusd.balanceOf(address(vault)), 0);
         // No fees accrued (zero-fee compose path).
         assertEq(manager.accruedFees(address(usdc)), 0);
     }
 
     function testRedeemFromPlus_unwrapPath() public {
+        // v2.1 — alice deposits USDC directly to vault, then unwraps PUSD+ for PUSD.
+        // Vault has 1000 USDC, no PUSD. burnPlus tier-2 converts 500 USDC → 500
+        // PUSD via depositForVault → vault sends PUSD to manager.
+        // _payoutToUser sees preferredAsset == pusd → forwards PUSD to alice.
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, alice);
@@ -466,31 +489,25 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testRedeemFromPlus_convertsIdleNonPusd() public {
-        // Alice mints 1k PUSD+ via USDC.
+        // v2.1 — vault holds reserves directly. The "convert" tier 2 flow is
+        // exercised on every redeem (vault has no PUSD). Tests that the
+        // preferred-first conversion drains USDC and pays USDC.
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, alice);
         vm.stopPrank();
+        // Vault: 1000 USDC + 0 PUSD. Manager: 0 USDC + 0 PUSD.
 
-        // Keeper converts 600 of the vault's PUSD → 600 USDC (fee-exempt).
-        // Vault now: 400 PUSD idle + 600 USDC idle. Manager: 400 USDC.
-        vm.prank(keeper);
-        vault.redeemPusdForToken(600e6, address(usdc));
-        assertEq(pusd.balanceOf(address(vault)), 400e6);
-        assertEq(usdc.balanceOf(address(vault)), 600e6);
-
-        // Alice redeems 800 PUSD+ → vault has only 400 PUSD; needs to convert
-        // 400 worth of idle USDC back to PUSD via fee-exempt manager.deposit.
+        // Alice redeems 800 PUSD+ for USDC. Vault has 0 PUSD → tier 2 converts
+        // 800 USDC → 800 PUSD via depositForVault → manager has 800 USDC + 800
+        // PUSD. Manager._payoutToUser preferred USDC → pays alice 800 USDC.
         uint256 usdcBefore = usdc.balanceOf(alice);
         vm.prank(alice);
         manager.redeemFromPlus(800e6, address(usdc), true, alice);
 
-        // After tier-2 conversion, vault sourced full 800 PUSD → manager →
-        // _payoutToUser → preferred USDC path (manager has 800 USDC = 400 leftover
-        // + 400 just received via tier-2 deposit).
         assertEq(usdc.balanceOf(alice) - usdcBefore, 800e6);
         assertEq(vault.balanceOf(alice), 200e6);
-        // Vault retained 200 USDC + 0 PUSD idle.
+        // Vault retained 200 USDC after preferred-first drain.
         assertEq(usdc.balanceOf(address(vault)), 200e6);
         assertEq(pusd.balanceOf(address(vault)), 0);
     }
@@ -500,8 +517,9 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testRedeemFromPlus_queueAndFulfill() public {
-        // alice + bob each deposit 1000 PUSD+ via different reserves so the
-        // vault holds idle for both basket tokens.
+        // v2.1 — alice + bob each deposit 1000 PUSD+ via different reserves
+        // so vault holds 1000 USDC + 1000 USDT directly (no keeper conversion
+        // needed under v2.1).
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, alice);
@@ -510,14 +528,7 @@ contract PUSDPlusVaultTest is Test {
         usdt.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdt), 1_000e6, bob);
         vm.stopPrank();
-        // Vault: 2000 PUSD idle, supply 2000 PUSD+. Manager: 1000 USDC + 1000 USDT.
-
-        // Keeper redeems all PUSD into reserves to seed pools.
-        vm.startPrank(keeper);
-        vault.redeemPusdForToken(1_000e6, address(usdc));
-        vault.redeemPusdForToken(1_000e6, address(usdt));
-        vm.stopPrank();
-        // Vault: 0 PUSD + 1000 USDC + 1000 USDT. Manager: 0 USDC + 0 USDT.
+        // Vault: 1000 USDC + 1000 USDT idle, 0 PUSD. Manager: 0 USDC + 0 USDT.
 
         // POOL_ADMIN locks 800+800 = 1600 PUSD-equivalent into LP.
         vm.prank(poolAdmin);
@@ -574,7 +585,8 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testNAVAccruesFromHarvest() public {
-        // Two depositors so we have enough reserves to seed a pool.
+        // v2.1 — direct deposits put reserves into the vault directly; no
+        // keeper conversion step needed before opening the LP.
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdc), 1_000e6, alice);
@@ -583,12 +595,7 @@ contract PUSDPlusVaultTest is Test {
         usdt.approve(address(manager), 1_000e6);
         manager.depositToPlus(address(usdt), 1_000e6, bob);
         vm.stopPrank();
-
-        // Convert PUSD → reserves.
-        vm.startPrank(keeper);
-        vault.redeemPusdForToken(500e6, address(usdc));
-        vault.redeemPusdForToken(500e6, address(usdt));
-        vm.stopPrank();
+        // Vault: 1000 USDC + 1000 USDT idle. No keeper conversion needed.
 
         // Open a 400+400 LP position.
         vm.prank(poolAdmin);
@@ -681,10 +688,20 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testOnlyKeeperCanRebalance() public {
-        vm.expectRevert();
+        // v2.1: rebalance is permissionless-with-cooldown.
+        // Public call before cooldown elapsed → reverts.
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PUSDPlusVault.Vault_RebalanceCooldown.selector,
+                uint256(vault.lastRebalanceAt()) + uint256(vault.publicRebalanceCooldown())
+            )
+        );
         vault.rebalance();
+
+        // Keeper bypasses cooldown — can call at any time.
         vm.prank(keeper);
-        vault.rebalance(); // no-op when no positions; must not revert
+        vault.rebalance();
     }
 
     function testOnlyPoolAdminCanOpenPool() public {
@@ -731,16 +748,20 @@ contract PUSDPlusVaultTest is Test {
     // -----------------------------------------------------------------
 
     function testVaultPublicRedeemIsFeeExempt() public {
-        // Set non-zero base fee so we'd notice if it's charged.
+        // v2.1: under direct deposits, vault doesn't naturally hold PUSD.
+        // To exercise the keeper's `redeemPusdForToken` (which calls public
+        // manager.redeem and verifies fee-exempt branch), seed the vault with
+        // PUSD via a plain deposit + transfer.
         vm.prank(admin);
         manager.setBaseFee(50); // 0.5% — well below 1% cap
 
-        // Get reserves into manager via a normal user deposit.
         vm.startPrank(alice);
         usdc.approve(address(manager), 1_000e6);
-        manager.depositToPlus(address(usdc), 1_000e6, alice);
+        manager.deposit(address(usdc), 1_000e6, alice);
+        // Alice has 1000 PUSD; donate 500 to vault.
+        pusd.transfer(address(vault), 500e6);
         vm.stopPrank();
-        // Vault: 1000 PUSD idle. Manager: 1000 USDC.
+        // Vault: 500 PUSD idle. Manager: 1000 USDC.
 
         uint256 vaultUsdcBefore = usdc.balanceOf(address(vault));
         vm.prank(keeper);
@@ -829,6 +850,7 @@ contract PUSDPlusVaultTest is Test {
         address plusVaultBefore = manager.plusVault();
         bool feeExemptBefore = manager.feeExempt(address(vault));
         uint256 supplyBefore = vault.totalSupply();
+        uint256 vaultUsdcBefore = usdc.balanceOf(address(vault));
 
         // Deploy a new impl (same source) and upgrade the proxy. Caller is
         // `admin` who holds UPGRADER_ROLE in setUp().
@@ -842,13 +864,15 @@ contract PUSDPlusVaultTest is Test {
         assertEq(manager.plusVault(), plusVaultBefore);
         assertEq(manager.feeExempt(address(vault)), feeExemptBefore);
         assertEq(vault.totalSupply(), supplyBefore);
+        assertEq(usdc.balanceOf(address(vault)), vaultUsdcBefore, "vault USDC preserved");
 
-        // And the v2 surface still works after the upgrade.
+        // And the v2.1 surface still works after the upgrade.
         vm.startPrank(alice);
         usdc.approve(address(manager), 100e6);
         manager.depositToPlus(address(usdc), 100e6, alice);
         vm.stopPrank();
         assertEq(vault.balanceOf(alice), 1_100e6);
+        assertEq(usdc.balanceOf(address(vault)), vaultUsdcBefore + 100e6);
     }
 
     // -----------------------------------------------------------------
@@ -869,7 +893,210 @@ contract PUSDPlusVaultTest is Test {
         assertEq(vault.balanceOf(alice), 1_000e6);
         assertEq(vault.balanceOf(bob), 500e6);
         assertEq(vault.totalSupply(), 1_500e6);
+        // v2.1: vault.totalAssets reflects USDC + USDT directly (basket counted).
         assertEq(vault.totalAssets(), 1_500e6);
+        assertEq(usdc.balanceOf(address(vault)), 1_000e6);
+        assertEq(usdt.balanceOf(address(vault)), 500e6);
         assertEq(vault.nav(), 1e18);
+    }
+
+    // =========================================================================
+    // v2.1 — new tests
+    // =========================================================================
+
+    /// @dev Direct path lands USDC in vault, not manager; no PUSD minted.
+    function testDepositToPlus_directPath_landsInVault() public {
+        uint256 amt = 1_000e6;
+        uint256 pusdSupplyBefore = pusd.totalSupply();
+        vm.startPrank(alice);
+        usdc.approve(address(manager), amt);
+        manager.depositToPlus(address(usdc), amt, alice);
+        vm.stopPrank();
+
+        assertEq(usdc.balanceOf(address(vault)), amt, "vault holds USDC");
+        assertEq(usdc.balanceOf(address(manager)), 0, "manager retains nothing (no haircut)");
+        assertEq(pusd.totalSupply(), pusdSupplyBefore, "PUSD supply unchanged");
+        assertEq(vault.balanceOf(alice), amt, "alice has PUSD+");
+        assertEq(vault.totalAssets(), amt);
+    }
+
+    /// @dev Direct path with non-zero haircut: full amount to manager,
+    ///      haircut accrues, net forwarded to vault.
+    function testDepositToPlus_directPath_haircutAccrues() public {
+        vm.prank(admin);
+        manager.setSurplusHaircutBps(address(usdc), 100); // 1%
+
+        uint256 amt = 1_000e6;
+        vm.startPrank(alice);
+        usdc.approve(address(manager), amt);
+        manager.depositToPlus(address(usdc), amt, alice);
+        vm.stopPrank();
+
+        // 1% to manager's accruedHaircut; rest to vault.
+        assertEq(manager.accruedHaircut(address(usdc)), 10e6);
+        assertEq(usdc.balanceOf(address(manager)), 10e6);
+        assertEq(usdc.balanceOf(address(vault)), 990e6);
+        assertEq(vault.balanceOf(alice), 990e6);
+        assertEq(vault.totalAssets(), 990e6);
+    }
+
+    /// @dev Wrap path: manager pre-seeded with 600 USDC + 400 USDT. User wraps
+    ///      100 PUSD. Vault receives 60 USDC + 40 USDT (proportional).
+    function testDepositToPlus_wrapPath_basketDistribution() public {
+        // Seed manager: alice + bob deposit different reserves.
+        vm.startPrank(alice);
+        usdc.approve(address(manager), 600e6);
+        manager.deposit(address(usdc), 600e6, alice);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        usdt.approve(address(manager), 400e6);
+        manager.deposit(address(usdt), 400e6, bob);
+        vm.stopPrank();
+        // Manager: 600 USDC + 400 USDT. PUSD totalSupply: 1000 (alice 600 + bob 400).
+
+        // Alice wraps 100 PUSD.
+        vm.startPrank(alice);
+        pusd.approve(address(manager), 100e6);
+        manager.depositToPlus(address(pusd), 100e6, alice);
+        vm.stopPrank();
+
+        // Vault receives ~60 USDC + ~40 USDT. Allow 1-wei rounding.
+        assertApproxEqAbs(usdc.balanceOf(address(vault)), 60e6, 1, "vault USDC");
+        assertApproxEqAbs(usdt.balanceOf(address(vault)), 40e6, 1, "vault USDT");
+        assertEq(pusd.totalSupply(), 900e6, "PUSD burned 100");
+        assertEq(vault.balanceOf(alice), 100e6, "alice has 100 PUSD+");
+    }
+
+    /// @dev Wrap path reverts when manager has zero reserves.
+    function testDepositToPlus_wrapPath_emptyManagerReverts() public {
+        // Force-set alice's PUSD balance via storage (no v1 deposit happened).
+        // PUSD has no public mint sink for tests; use admin-granted MINTER_ROLE
+        // path to inject PUSD without backing — this is an edge-case test only.
+        vm.prank(admin);
+        pusd.grantRole(keccak256("MINTER_ROLE"), admin);
+        vm.prank(admin);
+        pusd.mint(alice, 100e6);
+
+        vm.startPrank(alice);
+        pusd.approve(address(manager), 100e6);
+        vm.expectRevert("PUSDManager: insufficient total liquidity");
+        manager.depositToPlus(address(pusd), 100e6, alice);
+        vm.stopPrank();
+    }
+
+    /// @dev Direct path reverts for REDEEM_ONLY token.
+    function testDepositToPlus_directPath_redeemOnlyReverts() public {
+        vm.prank(admin);
+        manager.setTokenStatus(address(usdc), PUSDManager.TokenStatus.REDEEM_ONLY);
+
+        vm.startPrank(alice);
+        usdc.approve(address(manager), 100e6);
+        vm.expectRevert("PUSDManager: token not enabled for deposits");
+        manager.depositToPlus(address(usdc), 100e6, alice);
+        vm.stopPrank();
+    }
+
+    /// @dev Direct path reverts when token not in vault basket (defensive check).
+    function testDepositToPlus_directPath_notInBasketReverts() public {
+        vm.prank(poolAdmin);
+        vault.removeBasketToken(address(usdc));
+
+        vm.startPrank(alice);
+        usdc.approve(address(manager), 100e6);
+        vm.expectRevert("PUSDManager: token not in vault basket");
+        manager.depositToPlus(address(usdc), 100e6, alice);
+        vm.stopPrank();
+    }
+
+    /// @dev Preferred-first conversion: vault drains USDT (preferred) instead
+    ///      of basket[0] when user requests USDT.
+    function testConvertIdleReserves_preferredFirst() public {
+        // Seed vault: 500 USDC + 500 USDT.
+        vm.startPrank(alice);
+        usdc.approve(address(manager), 500e6);
+        manager.depositToPlus(address(usdc), 500e6, alice);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        usdt.approve(address(manager), 500e6);
+        manager.depositToPlus(address(usdt), 500e6, bob);
+        vm.stopPrank();
+        // Vault: 500 USDC + 500 USDT. Bob has 500 PUSD+.
+
+        // Bob redeems 200 PUSD+ wanting USDT.
+        vm.prank(bob);
+        manager.redeemFromPlus(200e6, address(usdt), true, bob);
+
+        // Vault drained USDT (preferred), USDC untouched.
+        assertEq(usdc.balanceOf(address(vault)), 500e6, "USDC must be untouched");
+        assertEq(usdt.balanceOf(address(vault)), 300e6, "USDT drops by 200");
+    }
+
+    /// @dev Preferred-first falls back to basket order when not enough preferred.
+    function testConvertIdleReserves_preferredFallsBack() public {
+        // Seed: alice 500 USDC, bob 50 USDT.
+        vm.startPrank(alice);
+        usdc.approve(address(manager), 500e6);
+        manager.depositToPlus(address(usdc), 500e6, alice);
+        vm.stopPrank();
+        vm.startPrank(bob);
+        usdt.approve(address(manager), 50e6);
+        manager.depositToPlus(address(usdt), 50e6, bob);
+        vm.stopPrank();
+        // Vault: 500 USDC + 50 USDT.
+
+        // Alice redeems 200 PUSD+ wanting USDT (only 50 available).
+        vm.prank(alice);
+        manager.redeemFromPlus(200e6, address(usdt), true, alice);
+
+        // Vault drained all USDT first, then 150 USDC for the rest.
+        assertEq(usdt.balanceOf(address(vault)), 0, "USDT fully drained");
+        assertEq(usdc.balanceOf(address(vault)), 350e6, "USDC drained by 150");
+    }
+
+    /// @dev Permissionless rebalance: keeper bypasses cooldown, public must wait.
+    function testRebalance_keeperBypassesCooldown() public {
+        vm.prank(keeper);
+        vault.rebalance();
+        uint32 firstAt = vault.lastRebalanceAt();
+
+        // Keeper can call again immediately.
+        vm.warp(block.timestamp + 1);
+        vm.prank(keeper);
+        vault.rebalance();
+        assertGt(vault.lastRebalanceAt(), firstAt);
+    }
+
+    /// @dev Public callers gated by cooldown.
+    function testRebalance_publicRequiresCooldown() public {
+        // First call by keeper, sets lastRebalanceAt.
+        vm.prank(keeper);
+        vault.rebalance();
+
+        // Public call before cooldown reverts.
+        vm.prank(alice);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                PUSDPlusVault.Vault_RebalanceCooldown.selector,
+                uint256(vault.lastRebalanceAt()) + uint256(vault.publicRebalanceCooldown())
+            )
+        );
+        vault.rebalance();
+
+        // After cooldown, public succeeds.
+        vm.warp(block.timestamp + 1 hours + 1);
+        vm.prank(alice);
+        vault.rebalance();
+        assertEq(vault.lastRebalanceAt(), uint32(block.timestamp));
+    }
+
+    /// @dev setPublicRebalanceCooldown bounded at 24h.
+    function testRebalance_cooldownSetterCap() public {
+        vm.prank(vaultAdmin);
+        vault.setPublicRebalanceCooldown(24 hours);
+        assertEq(vault.publicRebalanceCooldown(), 24 hours);
+
+        vm.prank(vaultAdmin);
+        vm.expectRevert(abi.encodeWithSelector(PUSDPlusVault.Vault_CooldownTooLong.selector, 24 hours + 1));
+        vault.setPublicRebalanceCooldown(24 hours + 1);
     }
 }

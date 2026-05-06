@@ -6,9 +6,9 @@
  * cards lets them click [CLAIM] to call `vault.fulfillQueueClaim(id)`.
  */
 
+import { usePushChain, usePushChainClient } from '@pushchain/ui-kit';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { usePushChain, usePushChainClient } from '@pushchain/ui-kit';
 import { PUSD_PLUS_ADDRESS } from '../contracts/config';
 import { useNAV } from '../hooks/useNAV';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
@@ -51,6 +51,25 @@ export function BalanceStrip() {
   return (
     <div className="balance-strip">
       <div className="balance-strip__cards">
+        {!unconfigured && (
+          <div className="balance-card balance-card--plus">
+            <div className="balance-card__head">
+              <span className="balance-card__label">PUSD+</span>
+              <span className="balance-card__tag">YIELD · NAV {nav.pusdPerPlus.toFixed(6)}</span>
+            </div>
+            <div className="balance-card__amount">
+              {pusdPlusLoading ? '…' : formatAmount(pusdPlusBalance, 6, { maxFractionDigits: 6 })}
+            </div>
+            <div className="balance-card__actions">
+              <Link to="/convert/mint" className="balance-card__action">MINT PUSD+ →</Link>
+              <Link to="/convert/redeem" className="balance-card__action">REDEEM →</Link>
+              <Link to="/convert/redeem?wrap=1" className="balance-card__action">
+                CONVERT TO PUSD →
+              </Link>
+            </div>
+          </div>
+        )}
+
         <div className="balance-card">
           <div className="balance-card__head">
             <span className="balance-card__label">PUSD</span>
@@ -69,25 +88,6 @@ export function BalanceStrip() {
             )}
           </div>
         </div>
-
-        {!unconfigured && (
-          <div className="balance-card balance-card--plus">
-            <div className="balance-card__head">
-              <span className="balance-card__label">PUSD+</span>
-              <span className="balance-card__tag">YIELD · NAV {nav.pusdPerPlus.toFixed(6)}</span>
-            </div>
-            <div className="balance-card__amount">
-              {pusdPlusLoading ? '…' : formatAmount(pusdPlusBalance, 6, { maxFractionDigits: 6 })}
-            </div>
-            <div className="balance-card__actions">
-              <Link to="/convert/mint" className="balance-card__action">MINT PUSD+ →</Link>
-              <Link to="/convert/redeem" className="balance-card__action">REDEEM →</Link>
-              <Link to="/convert/redeem?wrap=1" className="balance-card__action balance-card__action--accent">
-                CONVERT TO PUSD →
-              </Link>
-            </div>
-          </div>
-        )}
       </div>
 
       {queue.claims.length > 0 && (

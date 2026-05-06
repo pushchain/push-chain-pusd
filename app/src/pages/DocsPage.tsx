@@ -14,7 +14,8 @@
  * Code blocks use var(--c-ink) surface / var(--c-cream) text — no new colors.
  */
 
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 
 /* =========================================================================
    PART 1 — Editorial index data
@@ -321,7 +322,20 @@ function PathTag({ path }: { path: "a" | "b" }) {
    Page
    ====================================================================== */
 
+type DocsView = 'pusd' | 'plus';
+
 export default function DocsPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const initialView: DocsView = searchParams.get('view') === 'plus' ? 'plus' : 'pusd';
+  const [view, setViewState] = useState<DocsView>(initialView);
+  const setView = (next: DocsView) => {
+    setViewState(next);
+    const sp = new URLSearchParams(searchParams);
+    if (next === 'plus') sp.set('view', 'plus');
+    else sp.delete('view');
+    setSearchParams(sp, { replace: true });
+  };
+
   return (
     <>
       {/* ═══════════════════════════════════════════════════════════════════
@@ -341,42 +355,72 @@ export default function DocsPage() {
             className="hero__title"
             style={{ fontSize: "clamp(44px, 5.5vw, 72px)" }}
           >
-            Build with <em style={{ color: "var(--c-magenta)" }}>PUSD</em>.
+            {view === 'pusd' ? (
+              <>Build with <em style={{ color: 'var(--c-magenta)' }}>PUSD</em>.</>
+            ) : (
+              <>
+                Build with <em style={{ color: 'var(--c-magenta)' }}>PUSD+</em>.
+              </>
+            )}
           </h1>
           <p className="hero__lead" style={{ maxWidth: "72ch" }}>
-            Architecture first. Then on-chain direct contract calls. Then the
-            off-chain SDK path via Push Chain's universal transaction layer.
+            {view === 'pusd'
+              ? "Architecture first. Then on-chain direct contract calls. Then the off-chain SDK path via Push Chain's universal transaction layer."
+              : 'The yield sidecar. NAV-per-share over manager reserves, harvested from Uniswap V3 stable pairs. Mint paths, redeem cascade, and the permissionless rebalance.'}
           </p>
+        </div>
+
+        <div className="container" style={{ marginTop: 32 }}>
+          <div className="reserves-toggle" role="tablist" aria-label="Docs view">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'pusd'}
+              className={`reserves-toggle__btn ${view === 'pusd' ? 'reserves-toggle__btn--active' : ''}`}
+              onClick={() => setView('pusd')}
+            >
+              PUSD
+              <span className="reserves-toggle__tag">PAR · 1:1</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={view === 'plus'}
+              className={`reserves-toggle__btn reserves-toggle__btn--plus ${view === 'plus' ? 'reserves-toggle__btn--active' : ''}`}
+              onClick={() => setView('plus')}
+            >
+              PUSD+
+              <span className="reserves-toggle__tag">YIELD · NAV</span>
+            </button>
+          </div>
         </div>
       </section>
 
-      <section
-        style={{
-          background: "var(--c-paper)",
-          borderTop: "var(--rule-thin)",
-          borderBottom: "var(--rule-thin)",
-        }}
-      >
+      <section className="section-rail">
         <div className="container">
-          {/* ── Navigation index ──────────────────────────────────────── */}
+          {/* ── Navigation index — sticky on desktop, flat on tablet/mobile ── */}
           <nav
             aria-label="Developer guide sections"
-            style={{
-              display: "flex",
-              gap: "2px",
-              flexWrap: "wrap",
-              padding: "16px 0 12px 0",
-              marginBottom: 0,
-            }}
+            className="section-rail__inner"
           >
-            {[
-              { label: "Architecture", href: "#arch" },
-              { label: "Off-Chain SDK · Writes", href: "#off-chain" },
-              { label: "On-Chain Contract Call", href: "#on-chain" },
-              { label: "ABI Fragments", href: "#abi" },
-              { label: "Quick Ref", href: "#quick-ref" },
-              { label: "For AI · LLMs.txt", href: "#machine-readable" },
-            ].map(({ label, href }) => (
+            {(view === 'plus'
+              ? [
+                  { label: "Yield Sidecar", href: "#pusd-plus" },
+                  { label: "Off-Chain SDK · Writes", href: "#plus-off-chain" },
+                  { label: "On-Chain Contract Call", href: "#plus-on-chain" },
+                  { label: "ABI Fragments", href: "#plus-abi" },
+                  { label: "Quick Ref", href: "#plus-quick-ref" },
+                  { label: "For AI · LLMs.txt", href: "#plus-machine-readable" },
+                ]
+              : [
+                  { label: "Architecture", href: "#arch" },
+                  { label: "Off-Chain SDK · Writes", href: "#off-chain" },
+                  { label: "On-Chain Contract Call", href: "#on-chain" },
+                  { label: "ABI Fragments", href: "#abi" },
+                  { label: "Quick Ref", href: "#quick-ref" },
+                  { label: "For AI · LLMs.txt", href: "#machine-readable" },
+                ]
+            ).map(({ label, href }) => (
               <a
                 key={href}
                 href={href}
@@ -415,6 +459,7 @@ export default function DocsPage() {
 
       <section>
         <div className="container">
+          {view === 'pusd' && <>
           {/* ── i. Architecture ─────────────────────────────────────────── */}
           <div className="docs__chapter" id="arch">
             <div className="docs__chapter-head">
@@ -579,7 +624,481 @@ Net token out    = pusdAmount − floor(pusdAmount × (baseFee + preferredFee) /
               activates — your transaction won't revert.
             </Note>
           </div>
+          </>}
 
+          {view === 'plus' && <>
+          {/* ── i. PUSD+ ──────────────────────────────────────────────── */}
+          <div className="docs__chapter" id="pusd-plus">
+            <div className="docs__chapter-head">
+              <div className="docs__chapter-num">i.</div>
+              <div className="docs__chapter-meta">
+                <h2 className="docs__chapter-title">
+                  PUSD<em style={{ color: "var(--c-magenta)" }}>+</em> · Yield
+                  Sidecar
+                </h2>
+                <p className="docs__chapter-lede">
+                  A separate, opt-in NAV-per-share token built on top of PUSD.
+                  Mint with any reserve token (or wrap PUSD); the vault deploys
+                  a slice into Uniswap V3 stable pairs and harvests fees.
+                  Redemptions are tier-cascaded: instant where idle, basket
+                  conversion next, FIFO queue last.
+                </p>
+              </div>
+            </div>
+
+            <SubHead>Live addresses · Donut Testnet</SubHead>
+            <DevTable
+              head={["Contract", "Role", "Proxy address"]}
+              rows={[
+                [
+                  "PUSDManager",
+                  "Dispatch surface — call mint/redeem here",
+                  "`0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46`",
+                ],
+                [
+                  "PUSDPlusVault",
+                  "NAV-bearing token + LP positions",
+                  "`0xb55a5B36d82D3B7f18Afe42F390De565080A49a1`",
+                ],
+                [
+                  "InsuranceFund",
+                  "Receives haircut on harvested LP fees",
+                  "`0xa45D70a2BdF6cF60dD42b8eEf5b1F8b8c91D9a3a`",
+                ],
+              ]}
+            />
+            <Note>
+              <strong>Always call <Ic>PUSDManager</Ic> for mint/redeem.</strong>{' '}
+              The vault is wired through — calls flow{' '}
+              <Ic>caller → PUSDManager.depositToPlus / redeemFromPlus → PUSDPlusVault</Ic>.
+              You only call the vault directly for views (<Ic>nav()</Ic>,{' '}
+              <Ic>previewMintPlus</Ic>) or the permissionless{' '}
+              <Ic>rebalance()</Ic> / <Ic>fulfillQueueClaim()</Ic> helpers.
+            </Note>
+
+            <SubHead>How NAV grows</SubHead>
+            <Block lang="invariant">
+              {`navE18 = totalAssets / totalSupply         (1e18 fixed point)
+totalAssets = idleReservesPusd + deployedPusd
+NAV is monotonic non-decreasing — yield only flows up.`}
+            </Block>
+            <p className="docs__entry-meta" style={{ marginTop: 4 }}>
+              Each keeper <Ic>rebalance()</Ic> harvests Uniswap V3 fees,
+              forwards the configured haircut to InsuranceFund, and re-prices
+              NAV. Holders own the same number of PUSD+ tokens — their PUSD
+              claim grows.
+            </p>
+
+            <SubHead>Mint paths · v2.1 (2026-05)</SubHead>
+            <DevTable
+              head={["Path", "Caller pays", "What lands in vault"]}
+              rows={[
+                [
+                  "Direct (`tokenIn != PUSD`)",
+                  "Any enabled reserve",
+                  "Net reserve token (after surplus haircut). No PUSD minted.",
+                ],
+                [
+                  "Wrap (`tokenIn == PUSD`)",
+                  "PUSD",
+                  "Proportional basket from manager reserves. PUSD burned.",
+                ],
+              ]}
+            />
+            <Block lang="solidity">
+              {`function depositToPlus(
+    address tokenIn,        // any enabled reserve, OR address(pusd) for wrap
+    uint256 amount,
+    address recipient
+) external nonReentrant;
+// Emits: DepositedToPlus(caller, tokenIn, amount, plusOut, recipient)`}
+            </Block>
+
+            <SubHead>Redeem cascade</SubHead>
+            <DevTable
+              head={["Tier", "Source", "Latency"]}
+              rows={[
+                ["1 · Instant", "Idle PUSD already on vault", "Same tx"],
+                [
+                  "2 · Convert",
+                  "Vault drains preferred asset → manager → PUSD; pays you",
+                  "Same tx",
+                ],
+                [
+                  "3 · Queue",
+                  "Residual claim — keeper or anyone calls fulfillQueueClaim once liquidity returns",
+                  "Async (FIFO)",
+                ],
+              ]}
+            />
+            <Block lang="solidity">
+              {`function redeemFromPlus(
+    uint256 plusAmount,
+    address preferredAsset,
+    bool    allowBasket,
+    address recipient
+) external nonReentrant returns (uint256 pusdReturned);
+// pusdReturned == 0 means the redeem is fully queued.
+
+function fulfillQueueClaim(uint256 queueId) external; // anyone, when fillable`}
+            </Block>
+
+            <SubHead>Permissionless rebalance</SubHead>
+            <p className="docs__entry-meta">
+              The keeper bypasses the cooldown, but anyone can also call{" "}
+              <Ic>rebalance()</Ic> once <Ic>publicRebalanceCooldown</Ic> has
+              elapsed since the last harvest. This decentralises liveness:
+              keeper outage doesn't pause yield.
+            </p>
+            <Block lang="solidity">
+              {`function rebalance() external; // KEEPER any time; public after cooldown
+function nav() external view returns (uint256 navE18);
+function totalAssets() external view returns (uint256);
+function previewMintPlus(uint256 pusdIn) external view returns (uint256);
+function previewBurnPlus(uint256 plusIn) external view returns (uint256);`}
+            </Block>
+
+            <Note>
+              I1 (PUSD = backing) narrows under v2.1 to the manager only.
+              Vault assets are NOT counted toward PUSD's collateral ratio —
+              they back PUSD+ holders directly.
+            </Note>
+          </div>
+
+          {/* ── ii. PUSD+ Off-Chain SDK ─────────────────────────────────── */}
+          <div className="docs__chapter" id="plus-off-chain">
+            <div className="docs__chapter-head">
+              <div className="docs__chapter-num">ii.</div>
+              <div className="docs__chapter-meta">
+                <h2 className="docs__chapter-title">
+                  Off-Chain SDK · PUSD<em style={{ color: 'var(--c-magenta)' }}>+</em> Writes
+                </h2>
+                <p className="docs__chapter-lede">
+                  Mint and redeem PUSD+ from any chain through Push Chain's
+                  universal transaction layer. Same dispatch as PUSD, just
+                  different selectors on PUSDManager.
+                </p>
+              </div>
+            </div>
+
+            <SubHead>Mint PUSD+ — direct path (any reserve token)</SubHead>
+            <Block lang="@pushchain/ui-kit · React">
+              {`import { usePushChainClient } from '@pushchain/ui-kit';
+import { Interface } from 'ethers';
+
+const MANAGER = '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46';
+const TOKEN   = '0x7A58048036206bB898008b5bBDA85697DB1e5d66'; // USDC.eth on Donut
+
+const iface = new Interface([
+  'function depositToPlus(address tokenIn, uint256 amount, address recipient)'
+]);
+
+function MintPlus({ amount, recipient }: { amount: bigint; recipient: \`0x\${string}\` }) {
+  const { pushChainClient } = usePushChainClient();
+  return (
+    <button onClick={async () => {
+      const data = iface.encodeFunctionData('depositToPlus', [TOKEN, amount, recipient]);
+      const tx = await pushChainClient.universal.sendTransaction({ to: MANAGER, value: 0n, data });
+      await tx.wait();
+    }}>Mint PUSD+</button>
+  );
+}`}
+            </Block>
+
+            <SubHead>Mint PUSD+ — wrap path (caller pays PUSD)</SubHead>
+            <Block lang="@pushchain/core · Node">
+              {`// tokenIn === PUSD address triggers the basket-redeem wrap path.
+// Manager burns the caller's PUSD and pays a proportional basket to the vault.
+const PUSD = '0x488d080e16386379561a47A4955D22001d8A9D89';
+const data = iface.encodeFunctionData('depositToPlus', [PUSD, amount, recipient]);
+const tx = await pushChainClient.universal.sendTransaction({ to: MANAGER, value: 0n, data });`}
+            </Block>
+
+            <SubHead>Redeem PUSD+ — burn for PUSD/reserves</SubHead>
+            <Block lang="solidity">
+              {`function redeemFromPlus(
+    uint256 plusAmount,
+    address preferredAsset,
+    bool    allowBasket,
+    address recipient
+) external returns (uint256 pusdReturned);
+// pusdReturned == 0 means the redeem is fully queued (await fulfillQueueClaim).`}
+            </Block>
+            <Block lang="@pushchain/ui-kit · React">
+              {`const iface = new Interface([
+  'function redeemFromPlus(uint256 plusAmount, address preferredAsset, bool allowBasket, address recipient)'
+]);
+
+const data = iface.encodeFunctionData('redeemFromPlus', [
+  plusAmount,
+  preferredAsset,   // address(0) for basket-only
+  true,              // allowBasket — keep true so you don't revert under low liquidity
+  recipient,
+]);
+
+const tx = await pushChainClient.universal.sendTransaction({ to: MANAGER, value: 0n, data });`}
+            </Block>
+
+            <SubHead>Settle a queued claim</SubHead>
+            <p className="docs__entry-meta">
+              When the vault is illiquid, <Ic>redeemFromPlus</Ic> opens a
+              FIFO queue entry. Anyone can settle it once liquidity returns —
+              the keeper does this automatically; integrators may do it for
+              their own users.
+            </p>
+            <Block lang="solidity">
+              {`function fulfillQueueClaim(uint256 queueId) external; // permissionless`}
+            </Block>
+            <Block lang="@pushchain/core">
+              {`const iface = new Interface(['function fulfillQueueClaim(uint256 queueId)']);
+const data  = iface.encodeFunctionData('fulfillQueueClaim', [queueId]);
+const tx    = await pushChainClient.universal.sendTransaction({ to: VAULT, value: 0n, data });`}
+            </Block>
+
+            <Note>
+              All three calls are <Ic>nonReentrant</Ic>. They follow the same
+              dispatch contract as PUSD writes, so connect-state, signing,
+              and gas-abstraction behave identically.
+            </Note>
+          </div>
+
+          {/* ── iii. PUSD+ On-Chain Contract Call ───────────────────────── */}
+          <div className="docs__chapter" id="plus-on-chain">
+            <div className="docs__chapter-head">
+              <div className="docs__chapter-num">iii.</div>
+              <div className="docs__chapter-meta">
+                <h2 className="docs__chapter-title">
+                  On-Chain · Contract Calls Vault
+                </h2>
+                <p className="docs__chapter-lede">
+                  Composing PUSD+ from another contract on Push Chain. Use the
+                  manager's <Ic>depositToPlus</Ic> and <Ic>redeemFromPlus</Ic>{' '}
+                  the same way you would v1's deposit/redeem; the vault is
+                  reached transitively.
+                </p>
+              </div>
+            </div>
+
+            <SubHead>Mint to recipient</SubHead>
+            <Block lang="solidity">
+              {`interface IPUSDManager {
+    function depositToPlus(address tokenIn, uint256 amount, address recipient) external;
+    function redeemFromPlus(uint256 plusAmount, address preferredAsset, bool allowBasket, address recipient) external returns (uint256);
+}
+
+interface IPUSDPlusVault {
+    function nav() external view returns (uint256 navE18);
+    function totalAssets() external view returns (uint256);
+    function previewMintPlus(uint256 pusdIn) external view returns (uint256);
+    function previewBurnPlus(uint256 plusIn) external view returns (uint256);
+    function fulfillQueueClaim(uint256 queueId) external;
+}
+
+contract MyVaultStrategy {
+    IERC20 immutable usdc;
+    IPUSDManager immutable manager;
+    IPUSDPlusVault immutable vault;
+
+    function depositIntoYield(uint256 amount, address recipient) external {
+        usdc.approve(address(manager), amount);
+        manager.depositToPlus(address(usdc), amount, recipient);
+    }
+
+    function pullYield(uint256 plusAmount, address recipient) external {
+        // Caller must have approved this contract to spend PUSD+.
+        manager.redeemFromPlus(plusAmount, address(usdc), true, recipient);
+    }
+}`}
+            </Block>
+
+            <SubHead>Quote before you act</SubHead>
+            <Block lang="solidity">
+              {`uint256 plusOutPreview = vault.previewMintPlus(pusdValue);
+uint256 pusdOutPreview = vault.previewBurnPlus(plusAmount);
+uint256 navE18         = vault.nav();   // 1e18 fixed point`}
+            </Block>
+            <Note>
+              NAV is monotonic non-decreasing. <Ic>previewMintPlus</Ic> uses
+              pre-deposit NAV — the price you see here is the price you mint
+              at, modulo same-block rebalances.
+            </Note>
+          </div>
+
+          {/* ── iv. PUSD+ ABI fragments ─────────────────────────────────── */}
+          <div className="docs__chapter" id="plus-abi">
+            <div className="docs__chapter-head">
+              <div className="docs__chapter-num">iv.</div>
+              <div className="docs__chapter-meta">
+                <h2 className="docs__chapter-title">ABI Fragments · Vault</h2>
+                <p className="docs__chapter-lede">
+                  Drop these into your integration. Encode with{' '}
+                  <Ic>ethers.Interface</Ic> or <Ic>viem.encodeFunctionData</Ic>.
+                </p>
+              </div>
+            </div>
+
+            <SubHead>PUSDManager — PUSD+ writes</SubHead>
+            <Block lang="abi">
+              {`function depositToPlus(address tokenIn, uint256 amount, address recipient)
+function redeemFromPlus(uint256 plusAmount, address preferredAsset, bool allowBasket, address recipient) returns (uint256 pusdReturned)
+
+// Events
+event DepositedToPlus(address indexed sender, address indexed tokenIn, uint256 amountIn, uint256 plusOut, address indexed recipient)
+event RedeemedFromPlus(address indexed sender, uint256 plusIn, address indexed preferredAsset, uint256 pusdReturned, uint256 queueId, address indexed recipient)`}
+            </Block>
+
+            <SubHead>PUSDPlusVault — quotes, queue, NAV</SubHead>
+            <Block lang="abi">
+              {`function nav() view returns (uint256 navE18)
+function totalAssets() view returns (uint256)
+function previewMintPlus(uint256 pusdIn) view returns (uint256)
+function previewBurnPlus(uint256 plusIn) view returns (uint256)
+function inBasket(address token) view returns (bool)
+function basketLength() view returns (uint256)
+function rebalance()
+function fulfillQueueClaim(uint256 queueId)
+function queue(uint256 id) view returns (
+  address sender,
+  address recipient,
+  address preferredAsset,
+  uint96  pusdOwed,
+  uint64  openedAt,
+  uint64  filledAt
+)
+function nextQueueId() view returns (uint256)
+
+// Events (the ones an integrator usually subscribes to)
+event Rebalanced(uint256 timestamp, uint256 navE18)
+event MintedPlus(address indexed recipient, uint256 pusdIn, uint256 plusOut, uint256 navE18)
+event BurnedPlus(address indexed from, uint256 plusIn, uint256 pusdOwed, uint256 pusdReturned, uint256 queueId)
+event QueueClaimFilled(uint256 indexed queueId, address indexed recipient, uint256 pusdAmount, address indexed asset)`}
+            </Block>
+          </div>
+
+          {/* ── v. PUSD+ Quick Reference ────────────────────────────────── */}
+          <div className="docs__chapter" id="plus-quick-ref">
+            <div className="docs__chapter-head">
+              <div className="docs__chapter-num">v.</div>
+              <div className="docs__chapter-meta">
+                <h2 className="docs__chapter-title">Quick Reference</h2>
+                <p className="docs__chapter-lede">
+                  Operational gotchas when integrating PUSD+. Mostly the same
+                  patterns as v1, with three new things to know.
+                </p>
+              </div>
+            </div>
+
+            <DevTable
+              head={["Question", "Answer"]}
+              rows={[
+                [
+                  "What address do I call?",
+                  "Always PUSDManager. The vault is wired through; you never call it directly for mint/redeem.",
+                ],
+                [
+                  "Why is my deposit reverting with `token not in vault basket`?",
+                  "v2.1 requires the reserve token to be in vault.basket. POOL_ADMIN runs `vault.addBasketToken()` after every new manager.addSupportedToken().",
+                ],
+                [
+                  "What does `pusdReturned == 0` mean on redeem?",
+                  "Vault was illiquid. The redeem is queued — settle later via fulfillQueueClaim or wait for the keeper.",
+                ],
+                [
+                  "Can I open a Uniswap V3 position with my own tokens?",
+                  "No. Pool ops are POOL_ADMIN-gated. End users mint via depositToPlus and let the keeper run the LP strategy.",
+                ],
+                [
+                  "How do I get a NAV quote?",
+                  "vault.nav() returns 1e18 fixed point. Or vault.previewMintPlus(pusdAmount) for the minted-share quote at current NAV.",
+                ],
+                [
+                  "Do I need to handle rebalances in my UI?",
+                  "No. NAV is monotonic; the Rebalanced event is informational. Just refresh nav() on poll.",
+                ],
+              ]}
+            />
+
+            <Note>
+              <strong>Always pass <Ic>allowBasket = true</Ic> to{' '}
+              <Ic>redeemFromPlus</Ic></strong> in production. If the preferred
+              asset is dry the vault falls back to a proportional basket, and
+              your transaction won't revert.
+            </Note>
+          </div>
+
+          {/* ── vi. PUSD+ Machine Readable ──────────────────────────────── */}
+          <div
+            className="docs__chapter"
+            id="plus-machine-readable"
+            style={{ borderBottom: 'none' }}
+          >
+            <div className="docs__chapter-head">
+              <div className="docs__chapter-num">vi.</div>
+              <div className="docs__chapter-meta">
+                <h2 className="docs__chapter-title">
+                  Machine Readable · LLMs.txt for AI
+                </h2>
+                <p className="docs__chapter-lede">
+                  PUSD+ is covered in the same Skill and llms.txt index as
+                  PUSD core — agents land once and discover both products.
+                </p>
+              </div>
+            </div>
+
+            <SubChapter
+              num="vi.i"
+              title="Skill"
+              lede="The Skill bundle includes PUSD+ flows: depositToPlus, redeemFromPlus, fulfillQueueClaim, NAV reads, vault role table, ABI fragments, common mistakes."
+            />
+            <Lead>
+              One self-contained markdown that an agent can read end-to-end
+              and act on.
+            </Lead>
+            <Block lang="url">
+              {`https://pusd.push.org/agents/skill/push-pusd/SKILL.md`}
+            </Block>
+            <p
+              style={{
+                fontFamily: 'var(--f-mono)',
+                fontSize: 12,
+                lineHeight: 1.65,
+                color: 'var(--c-ink-dim)',
+                margin: '8px 0 0',
+              }}
+            >
+              <a
+                href="/agents/skill/push-pusd/SKILL.md"
+                style={{ color: 'var(--c-magenta)' }}
+              >
+                Open the Skill →
+              </a>
+            </p>
+
+            <SubChapter
+              num="vi.ii"
+              title="LLMs.txt"
+              lede="Entry-point map. Tells an agent that PUSD+ exists, where the Skill is, where the docs live."
+            />
+            <Block lang="url">{`https://pusd.push.org/llms.txt`}</Block>
+
+            <SubChapter
+              num="vi.iii"
+              title="How to use them"
+              lede="Drop one of these prompts into your tool and it'll integrate PUSD+ end-to-end."
+            />
+            <Block lang="prompt">
+              {`# Self-contained Skill:
+"Read https://pusd.push.org/agents/skill/push-pusd/SKILL.md
+ and integrate PUSD+ deposit + redeem into my dApp."
+
+# Or start at the entry-point map:
+"Read https://pusd.push.org/llms.txt and follow the link
+ to the Skill."`}
+            </Block>
+          </div>
+          </>}
+
+          {view === 'pusd' && <>
           {/* ── ii. Off-Chain SDK ──────────────────────────────────────── */}
           <div className="docs__chapter" id="off-chain">
             <div className="docs__chapter-head">
@@ -957,7 +1476,7 @@ await (await pc.universal.sendTransaction({
             </Block>
           </div>
 
-          {/* ── iii. On-Chain Contract Call ──────────────────────────────── */}
+          {/* ── iii. On-Chain Contract Call ─────────────────────────────── */}
           <div className="docs__chapter" id="on-chain">
             <div className="docs__chapter-head">
               <div className="docs__chapter-num">iii.</div>
@@ -1283,7 +1802,7 @@ const REDEEM_ABI = [{ type: 'function', name: 'redeem', stateMutability: 'nonpay
 
           </div>
 
-          {/* ── vi. Machine Readable ──────────────────────────────────────── */}
+          {/* ── vii. Machine Readable ─────────────────────────────────────── */}
           <div
             className="docs__chapter"
             id="machine-readable"
@@ -1402,6 +1921,7 @@ const REDEEM_ABI = [{ type: 'function', name: 'redeem', stateMutability: 'nonpay
  to the Skill."`}
             </Block>
           </div>
+          </>}
         </div>
       </section>
     </>

@@ -48,6 +48,13 @@ Both products go through the same `PUSDManager` entrypoint contract.
 PUSDPlusVault is the NAV-bearing token; InsuranceFund is a passive
 sidecar that receives a haircut on harvested LP fees.
 
+> **v2.1 (2026-05-06)** — `depositToPlus` direct path now sends reserves
+> directly to the vault (no PUSD round-trip). Wrap path basket-redeems
+> caller's PUSD into vault inventory. User-facing API unchanged. The
+> vault accumulates diverse reserve inventory organically, unblocking
+> stable/stable LP. `PUSDPlusVault.rebalance()` is now permissionless
+> after a 1h cooldown (KEEPER bypasses), decentralizing liveness.
+
 ## The two integration paths (the architectural fact every integrator needs)
 
 PUSD writes go through `pushChainClient.universal.sendTransaction(...)`.

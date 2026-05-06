@@ -784,12 +784,24 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
     // =====================================================================
 
     /**
-     * @notice One-shot mint of PUSD+. If `tokenIn == address(pusd)`, wraps PUSD
-     *         straight into PUSD+. Otherwise pulls reserve from caller, mints
-     *         PUSD to the vault, then mints PUSD+ to recipient at vault NAV.
-     * @dev    Reserve path strictly preserves PUSD's 1:1 invariant: every
-     *         reserve unit pulled mints exactly one PUSD; that PUSD is the sole
-     *         basis for the PUSD+ being minted. The wrap leg charges no fee.
+     * @notice One-shot mint of PUSD+ (v2.1).
+     *
+     *         Direct path (tokenIn != PUSD):
+     *           Pulls full amount to manager, accrues surplusHaircut, forwards
+     *           net to vault. NO PUSD minted on this path; pusd.totalSupply is
+     *           unchanged. Reverts if tokenIn is not in the vault's basket
+     *           (would otherwise strand reserves outside the NAV-counted set).
+     *
+     *         Wrap path (tokenIn == PUSD):
+     *           Burns caller's PUSD via _executeBasketRedeemFrom and pays a
+     *           proportional basket of reserves to the vault. effectiveBaseFee = 0
+     *           (vault is fee-exempt; this is a protocol-internal compose).
+     *           Reverts if manager has insufficient total reserve liquidity.
+     *
+     * @dev    I1 preserved on both paths. Direct path doesn't touch PUSD supply
+     *         or alter manager's PUSD-backing balance (haircut is isolated by
+     *         accruedHaircut). Wrap path drops PUSD totalSupply and manager
+     *         reserves by exactly `amount` PUSD-equivalent in the same call frame.
      */
     function depositToPlus(address tokenIn, uint256 amount, address recipient) external nonReentrant {
         require(plusVault != address(0), "PUSDManager: plusVault unset");
@@ -797,20 +809,26 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
         require(recipient != address(0), "PUSDManager: recipient cannot be zero address");
 
         if (tokenIn == address(pusd)) {
-            // Wrap path: PUSD already exists — forward to vault, mint PUSD+.
-            IERC20(address(pusd)).safeTransferFrom(msg.sender, plusVault, amount);
-            uint256 plusOut = IPUSDPlusVault(plusVault).mintPlus(amount, recipient);
-            emit DepositedToPlus(msg.sender, tokenIn, amount, plusOut, recipient);
+            // Wrap path: burn PUSD from caller, pay basket reserves to vault.
+            _executeBasketRedeemFrom(amount, plusVault, msg.sender, 0);
+            uint256 plusOutWrap = IPUSDPlusVault(plusVault).mintPlus(amount, recipient);
+            emit DepositedToPlus(msg.sender, tokenIn, amount, plusOutWrap, recipient);
             return;
         }
 
-        // Mint path: reserve → PUSD → PUSD+. Re-uses existing deposit invariants.
+        // Direct path.
         TokenInfo memory tokenInfo = supportedTokens[tokenIn];
         require(tokenInfo.status == TokenStatus.ENABLED, "PUSDManager: token not enabled for deposits");
 
+        // Defensive: ensure vault counts this token in NAV. Without this,
+        // forwarded reserves would sit in vault.balanceOf but not be counted
+        // in idleReservesPusd, and mintPlus would revert on `ta >= pusdIn`
+        // with a non-obvious error.
+        require(IPUSDPlusVault(plusVault).inBasket(tokenIn), "PUSDManager: token not in vault basket");
+
+        // Pull to manager so the surplus haircut accrues alongside v1 `deposit`.
         IERC20(tokenIn).safeTransferFrom(msg.sender, address(this), amount);
 
-        // Apply the existing surplus haircut on entry (cap is now 1000 bps).
         uint256 surplusTokenAmount = (amount * tokenInfo.surplusHaircutBps) / BASIS_POINTS;
         uint256 netTokenAmount = amount - surplusTokenAmount;
         if (surplusTokenAmount > 0) {
@@ -818,12 +836,13 @@ contract PUSDManager is Initializable, AccessControlUpgradeable, UUPSUpgradeable
             emit SurplusAccrued(tokenIn, 0, surplusTokenAmount);
         }
 
-        // Mint PUSD straight to the vault (no detour through msg.sender).
-        uint256 pusdAmount = _normalizeDecimalsToPUSD(netTokenAmount, tokenInfo.decimals);
-        pusd.mint(plusVault, pusdAmount);
+        // Forward net to the vault — vault.basket counts this in idleReservesPusd.
+        IERC20(tokenIn).safeTransfer(plusVault, netTokenAmount);
 
-        uint256 plusOutMinted = IPUSDPlusVault(plusVault).mintPlus(pusdAmount, recipient);
-        emit DepositedToPlus(msg.sender, tokenIn, amount, plusOutMinted, recipient);
+        uint256 pusdValue = _normalizeDecimalsToPUSD(netTokenAmount, tokenInfo.decimals);
+        uint256 plusOutDirect = IPUSDPlusVault(plusVault).mintPlus(pusdValue, recipient);
+
+        emit DepositedToPlus(msg.sender, tokenIn, amount, plusOutDirect, recipient);
     }
 
     /**

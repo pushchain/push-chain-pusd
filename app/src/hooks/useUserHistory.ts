@@ -11,6 +11,7 @@
 import { usePushChainClient } from '@pushchain/ui-kit';
 import { useEffect, useState } from 'react';
 import { TOKENS, tokenByAddress, type ReserveToken } from '../contracts/tokens';
+import { PUSD_ADDRESS } from '../contracts/config';
 import { fetchManagerLogs } from '../lib/blockscout';
 
 const POLL_MS = 30_000;
@@ -42,6 +43,19 @@ export type UserHistoryState = {
 };
 
 function unknownAssetFromAddress(address: `0x${string}`): HistoryRow['asset'] {
+  // The wrap path of depositToPlus uses PUSD itself as tokenIn — it's not a
+  // reserve token but it's not "unknown" either. Surface it as PUSD so the
+  // UI doesn't render `UNK · UNK`.
+  if (address.toLowerCase() === PUSD_ADDRESS.toLowerCase()) {
+    return {
+      symbol: 'PUSD',
+      chain: 'PUSH_DONUT',
+      chainLabel: 'Push Chain Donut Testnet',
+      chainShort: 'PUSH DONUT',
+      address,
+      decimals: 6,
+    };
+  }
   return {
     symbol: 'UNK',
     chain: 'UNKNOWN',

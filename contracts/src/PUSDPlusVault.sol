@@ -88,6 +88,7 @@ contract PUSDPlusVault is
     uint16 public constant MIN_UNWIND_CAP_BPS = 100; // 1%
     uint16 public constant MAX_UNWIND_CAP_BPS = 5000; // 50%
     uint16 public constant MAX_DEPLOYMENT_CAP_BPS = 8500; // 85%
+    uint32 public constant MAX_REBALANCE_COOLDOWN = 24 hours; // v2.1
     uint256 public constant BPS_DENOMINATOR = 10_000;
     uint256 public constant NAV_PRECISION = 1e18;
 
@@ -197,12 +198,29 @@ contract PUSDPlusVault is
     error Vault_QueueUnderfunded(uint256 queueId, uint256 have, uint256 need);
     error Vault_NavZero();
     error Vault_BootstrapZeroSupply();
+    error Vault_RebalanceCooldown(uint256 nextAllowedAt);
+    error Vault_CooldownTooLong(uint32 cooldown);
+
+    // =========================================================================
+    // v2.1 — permissionless rebalance state (packs into one slot)
+    // =========================================================================
+
+    /// @notice Block timestamp of the most recent rebalance call. Updated by
+    ///         both KEEPER calls and public calls.
+    uint32 public lastRebalanceAt;
+    /// @notice Minimum elapsed time between public (non-KEEPER) rebalance calls.
+    ///         KEEPER bypasses this entirely. VAULT_ADMIN-settable; capped at
+    ///         MAX_REBALANCE_COOLDOWN (24h) to prevent governance from making
+    ///         the function permissioned-by-stealth.
+    uint32 public publicRebalanceCooldown;
 
     // =========================================================================
     // Storage gap — reserve slots for future versions without colliding.
+    //               v2.1: __gap[40] → __gap[39] after consuming one slot for
+    //               (lastRebalanceAt, publicRebalanceCooldown) packed.
     // =========================================================================
 
-    uint256[40] private __gap;
+    uint256[39] private __gap;
 
     // =========================================================================
     // Constructor / initializer
@@ -215,7 +233,7 @@ contract PUSDPlusVault is
 
     /// @notice One-time initialiser. Called inside the proxy via timelock.
     /// @dev    Hard-capped defaults are NOT set here — the atomic deploy
-    ///         proposal (DeployPUSDPlus.s.sol) sets them post-construction.
+    ///         proposal (DeployPUSD.v2.s.sol) sets them post-construction.
     function initialize(address admin, address _pusd, address _manager, address _positionManager, address _v3Factory)
         external
         initializer
@@ -245,6 +263,8 @@ contract PUSDPlusVault is
         feeTierAllowed[500] = true;
         defaultTickLower = -20;
         defaultTickUpper = 20;
+        publicRebalanceCooldown = 1 hours; // v2.1 default; tunable up to MAX_REBALANCE_COOLDOWN
+        lastRebalanceAt = uint32(block.timestamp); // start cooldown clock at deploy
     }
 
     /// @inheritdoc ERC20Upgradeable
@@ -393,9 +413,12 @@ contract PUSDPlusVault is
         _burn(from, plusIn); // commit user to entry-NAV
 
         // Tier 1 + tier 2 — try to source PUSD up to pusdOwed.
+        // v2.1: pass preferredAsset so vault drains the asset the user
+        //       requested first; manager's preferred-payout path then succeeds
+        //       without basket fallback in the common case.
         uint256 idlePusd = pusd.balanceOf(address(this));
         if (idlePusd < pusdOwed) {
-            _convertIdleReservesToPusd(pusdOwed - idlePusd);
+            _convertIdleReservesToPusd(pusdOwed - idlePusd, preferredAsset);
             idlePusd = pusd.balanceOf(address(this));
         }
 
@@ -433,19 +456,36 @@ contract PUSDPlusVault is
     ///      step strictly preserves total PUSD-equivalent value (1:1 by manager
     ///      invariant) and skips both the manager's reentrancy lock and surplus
     ///      haircut — see PUSDManager.depositForVault.
-    function _convertIdleReservesToPusd(uint256 target) internal {
+    ///
+    ///      v2.1 — `preferred` is drained first when set, so the manager ends
+    ///      up holding the asset the caller asked for and can pay out via the
+    ///      preferred branch on `_payoutToUser`. Falls back to basket order
+    ///      for any residual.
+    function _convertIdleReservesToPusd(uint256 target, address preferred) internal {
         if (target == 0) return;
         uint256 raised;
+
+        // 1. Prefer the user's requested asset first (when applicable).
+        if (preferred != address(0) && preferred != address(pusd) && inBasket[preferred]) {
+            uint256 bal = IERC20(preferred).balanceOf(address(this));
+            if (bal > 0) {
+                uint256 take = target < bal ? target : bal;
+                IERC20(preferred).forceApprove(address(manager), take);
+                raised += manager.depositForVault(preferred, take);
+            }
+        }
+
+        // 2. Fall back to basket order for any remaining target.
         uint256 n = basket.length;
         for (uint256 i; i < n && raised < target; ++i) {
             address tk = basket[i];
+            if (tk == preferred) continue; // already drained above
             uint256 bal = IERC20(tk).balanceOf(address(this));
             if (bal == 0) continue;
             uint256 take = (target - raised) < bal ? (target - raised) : bal;
 
             IERC20(tk).forceApprove(address(manager), take);
-            uint256 minted = manager.depositForVault(tk, take);
-            raised += minted;
+            raised += manager.depositForVault(tk, take);
         }
     }
 
@@ -460,7 +500,9 @@ contract PUSDPlusVault is
 
         uint256 idlePusd = pusd.balanceOf(address(this));
         if (idlePusd < q.pusdOwed) {
-            _convertIdleReservesToPusd(uint256(q.pusdOwed) - idlePusd);
+            // v2.1: forward the queued entry's preferredAsset so conversion
+            //       targets it first — keeps end-to-end coherent across queue.
+            _convertIdleReservesToPusd(uint256(q.pusdOwed) - idlePusd, q.preferredAsset);
             idlePusd = pusd.balanceOf(address(this));
         }
         if (idlePusd < q.pusdOwed) revert Vault_QueueUnderfunded(queueId, idlePusd, q.pusdOwed);
@@ -482,15 +524,25 @@ contract PUSDPlusVault is
     // Keeper — daily rebalance routine (§6)
     // =========================================================================
 
-    /// @notice Daily keeper rebalance — harvest fees from every owned position
-    ///         and apply haircut. Off-chain keeper logic decides which positions
-    ///         to top up or open; this function performs only the deterministic
-    ///         onchain side. Idempotent: positions with no fees emit zero amounts.
-    /// @dev    Steps 1 + 2 of design doc §6. Steps 3-7 (NAV recompute, deployment
-    ///         ratio gate, auto-open, top-up, out-of-range handling) are computed
-    ///         off-chain by the keeper, which then calls openPool / topUpPosition
-    ///         / closePool with concrete parameters under POOL_ADMIN_ROLE.
-    function rebalance() external nonReentrant whenNotPaused onlyRole(KEEPER_ROLE) {
+    /// @notice Keeper-or-public rebalance — harvest fees from every owned
+    ///         position and apply haircut. Off-chain keeper logic decides
+    ///         which positions to top up or open; this function performs only
+    ///         the deterministic onchain side. Idempotent: positions with no
+    ///         fees emit zero amounts.
+    /// @dev    Steps 1 + 2 of design doc §6. Steps 3–7 (NAV recompute,
+    ///         deployment ratio gate, auto-open, top-up, out-of-range
+    ///         handling) are computed off-chain by the keeper, which then
+    ///         calls openPool / topUpPosition / closePool with concrete
+    ///         parameters under POOL_ADMIN_ROLE.
+    ///
+    ///         v2.1 permissioning: KEEPER_ROLE may call at any time (no
+    ///         cooldown). Anyone else may call once
+    ///         `block.timestamp >= lastRebalanceAt + publicRebalanceCooldown`.
+    ///         The public path keeps the protocol live if the designated
+    ///         keeper goes offline; the cooldown deters spam.
+    function rebalance() external nonReentrant whenNotPaused {
+        _enforceRebalanceCooldown();
+
         uint256 n = positionIds.length;
         for (uint256 i; i < n; ++i) {
             uint256 tokenId = positionIds[i];
@@ -507,13 +559,17 @@ contract PUSDPlusVault is
             if (a0 > 0) _haircut(token0, a0);
             if (a1 > 0) _haircut(token1, a1);
         }
+        lastRebalanceAt = uint32(block.timestamp);
         emit Rebalanced(block.timestamp, nav());
     }
 
     /// @notice Bounded variant of rebalance — harvests positionIds[startIdx .. startIdx+count).
-    /// @dev    Same per-position semantics as `rebalance`. Issued by the keeper in pages
-    ///         once positionIds grows past gas-budget for a single pass.
-    function rebalanceBatch(uint256 startIdx, uint256 count) external nonReentrant whenNotPaused onlyRole(KEEPER_ROLE) {
+    /// @dev    Same per-position semantics as `rebalance`. Same v2.1
+    ///         permissioning: KEEPER bypasses cooldown; public callers must
+    ///         wait `publicRebalanceCooldown` since the last rebalance call.
+    function rebalanceBatch(uint256 startIdx, uint256 count) external nonReentrant whenNotPaused {
+        _enforceRebalanceCooldown();
+
         uint256 n = positionIds.length;
         require(startIdx < n, "Vault: startIdx out of range");
         uint256 end = startIdx + count;
@@ -533,7 +589,18 @@ contract PUSDPlusVault is
             if (a0 > 0) _haircut(token0, a0);
             if (a1 > 0) _haircut(token1, a1);
         }
+        lastRebalanceAt = uint32(block.timestamp);
         emit Rebalanced(block.timestamp, nav());
+    }
+
+    /// @dev v2.1 — gate non-keeper rebalance callers behind a cooldown so the
+    ///      function can be permissionless without enabling block-by-block
+    ///      spam. Caller pays own gas regardless; cooldown removes the
+    ///      timing-game incentive.
+    function _enforceRebalanceCooldown() internal view {
+        if (hasRole(KEEPER_ROLE, msg.sender)) return;
+        uint256 nextAllowed = uint256(lastRebalanceAt) + uint256(publicRebalanceCooldown);
+        if (block.timestamp < nextAllowed) revert Vault_RebalanceCooldown(nextAllowed);
     }
 
     /// @dev Sends `haircutBps × amount` of `token` to the insurance fund. The
@@ -774,6 +841,15 @@ contract PUSDPlusVault is
         if (fund == address(0)) revert Vault_ZeroAddress();
         emit AddressUpdated("insuranceFund", insuranceFund, fund);
         insuranceFund = fund;
+    }
+
+    /// @notice v2.1 — adjust the cooldown that gates non-KEEPER `rebalance`
+    ///         callers. Cap MAX_REBALANCE_COOLDOWN (24h) prevents governance
+    ///         from making the function permissioned-by-stealth.
+    function setPublicRebalanceCooldown(uint32 cooldown) external onlyRole(VAULT_ADMIN_ROLE) {
+        if (cooldown > MAX_REBALANCE_COOLDOWN) revert Vault_CooldownTooLong(cooldown);
+        emit ConfigUpdated("publicRebalanceCooldown", uint256(publicRebalanceCooldown), uint256(cooldown));
+        publicRebalanceCooldown = cooldown;
     }
 
     // =========================================================================
