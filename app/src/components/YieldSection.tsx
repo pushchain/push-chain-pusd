@@ -33,9 +33,13 @@ function pct(numer: bigint, denom: bigint): number {
 type Props = {
   /** Trigger sitting on the divider rule (the chest, mirror of piggy). */
   trigger: ReactNode;
+  /** Monotonic counter — bumped on each §02 swap so the title element can
+   *  remount via React key and re-run the magenta shine keyframe. 0 means
+   *  no shine has fired yet (initial mount). */
+  shineKey?: number;
 };
 
-export function YieldSection({ trigger }: Props) {
+export function YieldSection({ trigger, shineKey = 0 }: Props) {
   const book = useVaultBook();
   const nav = useNAVHistory();
 
@@ -65,7 +69,10 @@ export function YieldSection({ trigger }: Props) {
 
       <div className="book">
         <div>
-          <h2 className="book__title">
+          <h2
+            key={`yield-title-${shineKey}`}
+            className={`book__title${shineKey > 0 ? ' book__title--shine' : ''}`}
+          >
             The <em>yield.</em>
           </h2>
           <div className="book__sub">
@@ -79,11 +86,13 @@ export function YieldSection({ trigger }: Props) {
             {book.pusdPerPlus.toFixed(6)}
           </span>
           <div className="book__totals-label">NAV · PUSD PER PUSD+</div>
-        </div>
-        {/* Trigger spans both columns in its own grid row — mirror of the
-         * piggy's slot on the Book view. */}
-        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-          {trigger}
+
+
+          {/* Trigger spans both columns in its own grid row — mirror of the
+          * piggy's slot on the Book view. */}
+          <div className="book__totals-switch" style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+            {trigger}
+          </div>
         </div>
       </div>
 

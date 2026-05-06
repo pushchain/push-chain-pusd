@@ -100,6 +100,21 @@ export default function HomePage() {
   // crossfade rides on top of the coin shower so the swap is masked.
   const [proofFaded, setProofFaded] = useState(false);
 
+  // Slanted magenta shine sweep applied to "The book." / "The yield." each
+  // time the title appears after a swap. Implemented as a monotonically
+  // increasing counter — pinned to the title element as a React key so
+  // every increment forces a remount, which cleanly restarts the CSS
+  // keyframe even on rapid back-to-back swaps. 0 means "no shine yet"
+  // (initial page load), so we only apply the shine class when > 0.
+  const [shineKey, setShineKey] = useState(0);
+
+  // Shared engagement flag for the §02 switch chips. The pulsing magenta
+  // glow is for first-time attention only — once the user hovers or
+  // clicks ANY chip (piggy or chest), it stops permanently for both
+  // sides, so the chest doesn't restart the pulse after the first swap.
+  const [chipEngaged, setChipEngaged] = useState(false);
+  const engageChip = useCallback(() => setChipEngaged(true), []);
+
   // Memoize the splash callbacks so SplashOverlay's useEffect doesn't see
   // them as new every render — otherwise the timers restart and the peak
   // fires repeatedly, ping-ponging the view back to its original state.
@@ -116,6 +131,9 @@ export default function HomePage() {
   const onSplashPeak = useCallback(() => {
     setProofView((v) => (v === 'book' ? 'yield' : 'book'));
     setProofFaded(false);
+    // Bump the shine counter on each peak — the title element keys off it
+    // and remounts, restarting the magenta-sweep keyframe.
+    setShineKey((k) => k + 1);
   }, []);
   const onSplashDone = useCallback(() => {
     setSplash(null);
@@ -440,7 +458,16 @@ export default function HomePage() {
           }}
         >
         {proofView === 'yield' ? (
-          <YieldSection trigger={<ChestTrigger onTrigger={triggerToBook} />} />
+          <YieldSection
+            trigger={
+              <ChestTrigger
+                onTrigger={triggerToBook}
+                engaged={chipEngaged}
+                onEngage={engageChip}
+              />
+            }
+            shineKey={shineKey}
+          />
         ) : (
         <section className="section">
           <div className="section__header">
@@ -455,7 +482,10 @@ export default function HomePage() {
 
           <div className="book">
             <div>
-              <h2 className="book__title">
+              <h2
+                key={`book-title-${shineKey}`}
+                className={`book__title${shineKey > 0 ? ' book__title--shine' : ''}`}
+              >
                 The <em>book.</em>
               </h2>
               <div className="book__sub">
@@ -474,12 +504,17 @@ export default function HomePage() {
               <div className="book__totals-label">
                 GROSS RESERVES · USD · 6DP
               </div>
-            </div>
-            {/* Trigger spans both columns in its own grid row, right-aligned
-             * so it sits below the gross-reserves total without crowding the
-             * left column. Stacks naturally on narrow viewports. */}
-            <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: 4 }}>
-              <PiggyTrigger onTrigger={triggerToYield} />
+
+              {/* Trigger spans both columns in its own grid row, right-aligned
+              * so it sits below the gross-reserves total without crowding the
+              * left column. Stacks naturally on narrow viewports. */}
+              <div className="book__totals-switch" style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', marginTop: 24 }}>
+                <PiggyTrigger
+                  onTrigger={triggerToYield}
+                  engaged={chipEngaged}
+                  onEngage={engageChip}
+                />
+              </div>
             </div>
           </div>
 
