@@ -308,17 +308,17 @@ export default function HomePage() {
        * `.numbered-list` markup — visual design is unchanged. */}
       <div className="container">
         <section className="section">
-          <div className="section__header" style={{ overflow: "hidden" }}>
+          <div className="section__header promise-section-header">
             <span>§ 01 · THE PROMISE</span>
             {/* Two stacked taglines crossfade with the curtain progress.
              * The PUSD line fades out as the curtain pulls aside; the PUSD+
              * line fades in. Position absolute so they share the same slot. */}
             <span style={{ position: 'relative', display: 'inline-block', minWidth: '34ch' }}>
               <span
+                className="promise-tagline"
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  textAlign: 'right',
                   opacity: 1 - promiseOpen,
                   transition: 'opacity 240ms ease-out',
                 }}
@@ -326,10 +326,10 @@ export default function HomePage() {
                 REDEEMABLE · RULES-BASED · REVERSIBLE
               </span>
               <span
+                className="promise-tagline"
                 style={{
                   position: 'absolute',
                   inset: 0,
-                  textAlign: 'right',
                   opacity: promiseOpen,
                   transition: 'opacity 240ms ease-out',
                   color: 'var(--c-magenta)',

@@ -1051,7 +1051,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 .slogan-band__inner {
-  padding: 22px 0;
+  padding: 22px 12px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -1080,6 +1080,28 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .slogan-band__inner--plus .slogan-band__item { color: var(--c-cream); }
 .slogan-band__inner--plus .slogan-band__item + .slogan-band__item::before {
   color: var(--c-cream);
+}
+
+@media (max-width: 900px) {
+  .slogan-band__inner {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    justify-items: center;
+  }
+  /* Odd non-first items (item 3) open a new row — strip their dot. */
+  .slogan-band__inner .slogan-band__item::before {
+    content: none;
+  }
+}
+
+@media (max-width: 540px) {
+  .slogan-band__inner {
+    grid-template-columns: 1fr;
+  }
+  /* Each item is now its own row — restore the dot for odd non-firsts. */
+  .slogan-band__inner .slogan-band__item::before {
+    content: '';
+  }
 }
 
 /* ==========================================================================
@@ -3538,6 +3560,12 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   color: inherit;
   opacity: 0.6;
 }
+
+.promise-tagline { text-align: right; }
+@media (max-width: 600px) { .promise-tagline { text-align: left; } }
+
+.section__header.promise-section-header { display: flex; }
+@media (max-width: 900px) { .section__header.promise-section-header { gap: 4px } }
 
 /* Sticky chapter index — desktop only. Tablet/mobile gets a flat header. */
 .section-rail {
