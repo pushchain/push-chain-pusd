@@ -24,8 +24,8 @@ import { ChestTrigger } from "../components/ChestTrigger";
 import { ConvertPanel } from "../components/ConvertPanel";
 import { DispatchFeed } from "../components/DispatchFeed";
 import { PiggyTrigger } from "../components/PiggyTrigger";
-import { ProofTypewriter } from "../components/ProofTypewriter";
 import { PromiseCurtain } from "../components/PromiseCurtain";
+import { ProofTypewriter } from "../components/ProofTypewriter";
 import { SloganBand } from "../components/SloganBand";
 import { SplashOverlay } from "../components/SplashOverlay";
 import { Ticker } from "../components/Ticker";
@@ -308,7 +308,7 @@ export default function HomePage() {
        * `.numbered-list` markup — visual design is unchanged. */}
       <div className="container">
         <section className="section">
-          <div className="section__header">
+          <div className="section__header" style={{ overflow: "hidden" }}>
             <span>§ 01 · THE PROMISE</span>
             {/* Two stacked taglines crossfade with the curtain progress.
              * The PUSD line fades out as the curtain pulls aside; the PUSD+

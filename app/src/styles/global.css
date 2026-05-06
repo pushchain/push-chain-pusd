@@ -155,6 +155,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   max-width: var(--col-max);
   margin: 0 auto;
   padding: 0 var(--gutter);
+  overflow: hidden;
 }
 
 .container--wide { max-width: 1320px; }
@@ -919,7 +920,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
 .stat:first-child  { padding-left: 0; }
 .stat:last-child   { padding-right: 0; }
-.stat + .stat      { border-left: var(--rule-thin); }
+/* .stat + .stat      { border-left: var(--rule-thin); } */
 
 .stat__label {
   font-family: var(--f-mono);
@@ -975,6 +976,7 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 @media (max-width: 900px) {
+  .section__header { display: block; }
   .stat-strip { grid-template-columns: repeat(2, 1fr); row-gap: 20px; }
   .stat-strip .stat:nth-child(odd) { border-left: none; padding-left: 0; }
   .stat-strip .stat:nth-child(even) { padding-right: 0; }
