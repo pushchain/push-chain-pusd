@@ -599,11 +599,17 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     if (mode === 'mint' && account && !mintRecipientValid) {
       return 'INVALID PUSH CHAIN RECIPIENT';
     }
-    const amt = formatAmount(parsedAmount, decimals, { maxFractionDigits: 2 });
-    if (mode === 'mint') return `MINT ${amt} ${productLabel} →`;
+    // For PUSD+ mint/redeem the receive amount goes through NAV — the
+    // input ≠ the output. Show the *receive* amount on the button so
+    // "MINT N PUSD+" matches what actually lands in the user's wallet.
+    // PUSD direct (1:1) keeps parsedAmount; both end up showing the
+    // user-facing number.
+    const outAmt = formatAmount(receiveAmount, 6, { maxFractionDigits: 2 });
+    const inAmt = formatAmount(parsedAmount, decimals, { maxFractionDigits: 2 });
+    if (mode === 'mint') return `MINT ${outAmt} ${productLabel} →`;
     return needsExternalRecipient
       ? `REDEEM → SEND TO ${selected.chainShort} →`
-      : `REDEEM ${amt} ${productLabel} →`;
+      : `REDEEM ${inAmt} ${productLabel} →`;
   })();
 
   const ctaDisabled =

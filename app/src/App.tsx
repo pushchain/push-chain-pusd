@@ -33,6 +33,7 @@ import ConvertPage from './pages/ConvertPage';
 import DashboardPage from './pages/DashboardPage';
 import DocsPage from './pages/DocsPage';
 import HomePage from './pages/HomePage';
+import MintPage from './pages/MintPage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
 
 function App() {
@@ -46,7 +47,7 @@ function App() {
             <Route path="/" element={<HomePage />} />
             <Route path="/convert" element={<Navigate to="/convert/mint" replace />} />
             <Route path="/convert/:mode" element={<ConvertPage />} />
-            <Route path="/mint" element={<Navigate to="/convert/mint" replace />} />
+            <Route path="/mint" element={<MintPage />} />
             <Route path="/redeem" element={<Navigate to="/convert/redeem" replace />} />
             <Route path="/reserves" element={<ReservesDetailPage />} />
             <Route path="/dashboard" element={<DashboardPage />} />

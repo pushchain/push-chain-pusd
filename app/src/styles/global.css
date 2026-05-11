@@ -786,18 +786,22 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   max-width: 64ch;
 }
 
-/* The typewriter line — a single mono row, ▶ prefix, blinking ▌ cursor. */
+/* The typewriter line — a mono row, ▶ prefix, blinking ▌ cursor. We
+ * reserve TWO lines of vertical space so that a phrase wrapping to a
+ * second line doesn't push the rest of the hero down — the layout
+ * stays still across every phrase in the cycle. */
 .proof-tw__line {
   margin-top: 6px;
   display: flex;
-  align-items: baseline;
+  align-items: flex-start;
   gap: 10px;
   font-family: var(--f-mono);
   /* Lower clamp floor (13px) so the longest phrases still fit on phones. */
   font-size: clamp(13px, 1.4vw, 18px);
+  line-height: 1.4;
   letter-spacing: 0.005em;
   color: var(--c-ink);
-  min-height: 1.4em; /* keeps the row from collapsing during the gap phase */
+  min-height: 2.8em; /* two-line reservation, no body re-flow on wrap */
   /* min-width: 0 on the flex container lets its own flex parent shrink. */
   min-width: 0;
 }
@@ -976,7 +980,8 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 @media (max-width: 900px) {
-  .section__header { display: block; }
+  .section__header { gap: 4px !important; }
+  .hero__kicker { gap: 4px !important; }
   .stat-strip { grid-template-columns: repeat(2, 1fr); row-gap: 20px; }
   .stat-strip .stat:nth-child(odd) { border-left: none; padding-left: 0; }
   .stat-strip .stat:nth-child(even) { padding-right: 0; }
@@ -1302,6 +1307,233 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 @keyframes proof-switch-pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(255, 61, 165, 0.55); }
   50%      { box-shadow: 0 0 0 12px rgba(255, 61, 165, 0); }
+}
+
+/* ---------------------------------------------------------------------------
+ * /mint — table-driven mint surface. Reuses .table, .table-wrap, and the
+ * cell visibility helpers; adds amount inputs, a recipient field, and a
+ * compact per-row action button with status line.
+ * ------------------------------------------------------------------------- */
+.mint-recipient {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--c-paper);
+  border: var(--rule-thin);
+}
+.mint-recipient__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.mint-recipient__input {
+  width: 100%;
+  background: var(--c-cream);
+  border: var(--rule-thin);
+  padding: 10px 12px;
+  font-family: var(--f-mono);
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: var(--c-ink);
+  outline: none;
+}
+.mint-recipient__input:focus { border-color: var(--c-magenta); }
+
+.mint-table tbody td {
+  vertical-align: middle;
+}
+.mint-amount-input {
+  width: 100%;
+  min-width: 0;
+  background: var(--c-cream);
+  border: var(--rule-thin);
+  padding: 8px 10px;
+  font-family: var(--f-mono);
+  font-variant-numeric: tabular-nums;
+  font-size: 14px;
+  color: var(--c-ink);
+  outline: none;
+  max-width: 140px;
+}
+.mint-amount-input:focus { border-color: var(--c-magenta); }
+.mint-amount-input:disabled { background: var(--c-paper); color: var(--c-ink-mute); cursor: not-allowed; }
+
+.mint-row-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 16px;
+  background: var(--c-ink);
+  color: var(--c-cream);
+  border: 2px solid var(--c-ink);
+  font-family: var(--f-mono);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  cursor: pointer;
+  white-space: nowrap;
+  min-width: 92px;
+  transition: background 160ms ease, border-color 160ms ease, color 160ms ease;
+}
+.mint-row-btn:hover:not(:disabled) {
+  background: var(--c-magenta);
+  border-color: var(--c-magenta);
+}
+.mint-row-btn:disabled {
+  background: var(--c-paper);
+  color: var(--c-ink-mute);
+  border-color: var(--c-ink-mute);
+  cursor: not-allowed;
+}
+
+.mint-row-status {
+  display: block;
+  margin-top: 6px;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--c-ink-mute);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  max-width: 180px;
+}
+.mint-row-status--ok  { color: var(--c-jade); white-space: normal; max-width: 220px; }
+.mint-row-status--err { color: var(--c-oxblood); white-space: normal; }
+.mint-row-status--pending {
+  color: var(--c-magenta);
+  white-space: normal;
+  max-width: 220px;
+}
+.mint-row-status__progress {
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--c-ink-mute);
+  margin-bottom: 3px;
+}
+.mint-row-status__leg {
+  display: inline-block;
+  padding: 0 4px;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  color: var(--c-ink-mute);
+  border: var(--rule-thin);
+  margin-right: 4px;
+}
+.mint-row-status--ok .mint-row-status__leg { border-color: var(--c-jade); color: var(--c-jade); }
+
+/* Account context — header strip showing the user's connected address +
+ * Push UEA so the per-row resolved recipients in the table read in
+ * context. */
+.mint-acct {
+  margin-top: 18px;
+  padding: 14px 16px;
+  background: var(--c-paper);
+  border: var(--rule-thin);
+}
+.mint-acct__row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 4px 0;
+}
+.mint-acct__row + .mint-acct__row { border-top: var(--rule-thin); padding-top: 8px; margin-top: 4px; }
+.mint-acct .mono { color: var(--c-ink); font-size: 13px; letter-spacing: 0.02em; }
+
+/* Per-row recipient cell — clubbed display: address + a small kind tag
+ * (UOA / CEA / UEA) stacked vertically. Clicking promotes the cell to
+ * an inline edit input for an override. */
+.mint-recipient-cell { min-width: 180px; }
+.mint-recipient-display {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  padding: 4px 6px;
+  margin: -4px -6px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 2px;
+  transition: background 140ms ease;
+}
+.mint-recipient-display:hover { background: var(--c-paper); }
+.mint-recipient-display .mono {
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--c-ink);
+}
+.mint-recipient-tag {
+  font-family: var(--f-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  padding: 1px 6px;
+  border: var(--rule-thin);
+  color: var(--c-ink-mute);
+  background: var(--c-cream);
+}
+.mint-recipient-tag--uoa {
+  color: var(--c-ink);
+  border-color: var(--c-ink);
+}
+.mint-recipient-tag--cea {
+  color: var(--c-magenta);
+  border-color: var(--c-magenta);
+}
+.mint-recipient-tag--uea {
+  color: var(--c-jade);
+  border-color: var(--c-jade);
+}
+.mint-recipient-edit {
+  width: 100%;
+  min-width: 180px;
+  padding: 6px 8px;
+  background: var(--c-cream);
+  border: 2px solid var(--c-magenta);
+  outline: none;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--c-ink);
+}
+
+/* Per-row destination toggle: SOURCE CHAIN / PUSH CHAIN. Two flush
+ * mono buttons styled as a segmented control. */
+.mint-dest-toggle {
+  display: inline-flex;
+  border: var(--rule-thin);
+  background: var(--c-cream);
+}
+.mint-dest-toggle__btn {
+  padding: 8px 12px;
+  background: transparent;
+  border: none;
+  border-right: var(--rule-thin);
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 140ms ease, color 140ms ease;
+}
+.mint-dest-toggle__btn:last-child { border-right: none; }
+.mint-dest-toggle__btn:hover:not(:disabled):not(.is-active) { color: var(--c-ink); }
+.mint-dest-toggle__btn.is-active {
+  background: var(--c-ink);
+  color: var(--c-cream);
+}
+.mint-dest-toggle__btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+@media (max-width: 720px) {
+  .mint-amount-input        { max-width: 100%; }
+  .mint-row-btn             { padding: 9px 12px; font-size: 10px; min-width: 72px; }
+  .mint-dest-toggle__btn    { padding: 6px 8px; font-size: 9px; }
 }
 
 /* ---------------------------------------------------------------------------
@@ -3651,6 +3883,10 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 
 .promise-tagline { text-align: right; }
 @media (max-width: 600px) { .promise-tagline { text-align: left; } }
+
+@media (max-width: 600px) {
+  .promise-tagline-wrap { min-width: 0 !important; width: 100%; }
+}
 
 .section__header.promise-section-header { display: flex; }
 @media (max-width: 900px) { .section__header.promise-section-header { gap: 4px } }

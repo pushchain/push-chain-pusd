@@ -331,7 +331,7 @@ export default function HomePage() {
             {/* Two stacked taglines crossfade with the curtain progress.
              * The PUSD line fades out as the curtain pulls aside; the PUSD+
              * line fades in. Position absolute so they share the same slot. */}
-            <span style={{ position: 'relative', display: 'inline-block', minWidth: '34ch' }}>
+            <span className="promise-tagline-wrap" style={{ position: 'relative', display: 'inline-block', minWidth: '34ch' }}>
               <span
                 className="promise-tagline"
                 style={{
