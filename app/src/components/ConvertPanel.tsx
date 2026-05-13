@@ -715,51 +715,48 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     if (advanced) navigate(`/convert/${next}`);
   };
 
+  console.log(plusEnabled, 'plus', PUSD_PLUS_ADDRESS)
+
   return (
     <div className="convert">
-      <div className="convert__head">
-        <div className="convert__title">{title}</div>
-        <div className="convert__kicker">{kicker}</div>
-      </div>
-
-      {plusEnabled && (
-        <div className="convert__product" role="tablist" aria-label="Product">
-          <button
-            type="button"
-            role="tab"
-            aria-selected={isPlus}
-            className={`convert__product-btn ${isPlus ? 'convert__product-btn--active' : ''}`}
-            onClick={() => {
-              if (!isPlus) {
-                setProduct('pusd-plus');
-                setAmount('');
-                setStage({ kind: 'idle' });
-              }
-            }}
-            disabled={submitting}
-          >
-            PUSD+
-            <span className="convert__product-tag">YIELD</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-selected={!isPlus}
-            className={`convert__product-btn ${!isPlus ? 'convert__product-btn--active' : ''}`}
-            onClick={() => {
-              if (isPlus) {
-                setProduct('pusd');
-                setAmount('');
-                setStage({ kind: 'idle' });
-              }
-            }}
-            disabled={submitting}
-          >
-            PUSD
-            <span className="convert__product-tag">PAR</span>
-          </button>
-        </div>
-      )}
+        {plusEnabled && (
+          <div className="convert__product" role="tablist" aria-label="Product">
+            <button
+              type="button"
+              role="tab"
+              aria-selected={isPlus}
+              className={`convert__product-btn ${isPlus ? 'convert__product-btn--active' : ''}`}
+              onClick={() => {
+                if (!isPlus) {
+                  setProduct('pusd-plus');
+                  setAmount('');
+                  setStage({ kind: 'idle' });
+                }
+              }}
+              disabled={submitting}
+            >
+              PUSD+
+              <span className="convert__product-tag">YIELD</span>
+            </button>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={!isPlus}
+              className={`convert__product-btn ${!isPlus ? 'convert__product-btn--active' : ''}`}
+              onClick={() => {
+                if (isPlus) {
+                  setProduct('pusd');
+                  setAmount('');
+                  setStage({ kind: 'idle' });
+                }
+              }}
+              disabled={submitting}
+            >
+              PUSD
+              <span className="convert__product-tag">PAR</span>
+            </button>
+          </div>
+        )}
 
       <div className="convert__tabs" role="tablist">
         <button
@@ -892,17 +889,17 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               )}
             </div>
 
-           {<button
-              type="button"
-              className="src-header__action"
-              onClick={handleSwitchAccount}
-              disabled={submitting}
-            >
-              Don’t have USDC/USDT? {' '}
-              <span className="src-header__action-link">
-                Mint using faucet here ↗
-              </span>
-            </button>}
+            {mode === 'mint' && (!amount || Number(amount) === 0) && (
+              <button
+                type="button"
+                className="src-header__action"
+                onClick={() => navigate('/mint')}
+                disabled={submitting}
+              >
+                Don&apos;t have USDC/USDT?{' '}
+                <span className="src-header__action-link">Mint using faucet here ↗</span>
+              </button>
+            )}
           </div>
 
 
