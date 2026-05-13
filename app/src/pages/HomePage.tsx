@@ -651,7 +651,7 @@ export default function HomePage() {
         </div>
 
         {/* ============================================ §03 · MANIFESTO ====== */}
-        <section className="section">
+        <section className="section--manifesto">
           <div className="section__header">
             <span>§ 03 · DESIGN</span>
             <span>THREE PRINCIPLES · NOT FOUR</span>
