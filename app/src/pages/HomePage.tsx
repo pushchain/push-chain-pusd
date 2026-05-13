@@ -3,7 +3,7 @@
  *
  * Composition, top to bottom, matches the Issue 01 mockup:
  *
- *   HERO         — "A dollar that works on every chain." + inline ConvertPanel
+ *   HERO         — "A Dollar that works on every chain." + inline ConvertPanel
  *   STAT STRIP   — CIRCULATION / COLLATERAL RATIO / ASSETS · CHAINS / BASE FEE
  *   TICKER       — live one-line tape (peg · supply · ratio · top shares)
  *   SLOGAN BAND  — italic editorial voice
@@ -213,9 +213,9 @@ export default function HomePage() {
               </div>
               <h1 className="hero__title">
                 {view === 'pusd' ? (
-                  <>A dollar that works on <em>every</em> chain.</>
+                  <>A Dollar that works on <em>every</em> chain.</>
                 ) : (
-                  <>A dollar that <em>grows</em> while it sits.</>
+                  <>A Dollar that <em>grows</em> while it sits.</>
                 )}
               </h1>
               <p className="hero__lead">
@@ -392,11 +392,8 @@ export default function HomePage() {
                   <div className="numbered-list__item">
                     <div className="numbered-list__num">03</div>
                     <div className="numbered-list__body">
-                      <strong>The book is on-chain.</strong> Every token, every
-                      balance, every status change is a contract read. You don't
-                      have to trust a dashboard. The collateral ratio above is
-                      computed live from the PUSDManager contract and refreshes
-                      every few seconds.
+                      <strong>The book is on-chain.</strong> Every token, every balance, every status change is a contract read. You don't have to trust a dashboard. The collateral ratio above is computed live from the PUSDManager contract and refreshes
+                      every few seconds. Circle attests monthly. We attest every block.
                     </div>
                   </div>
                 </div>
@@ -412,11 +409,8 @@ export default function HomePage() {
                   <div className="numbered-list__item">
                     <div className="numbered-list__num">01</div>
                     <div className="numbered-list__body">
-                      <strong>NAV per share, monotonic non decreasing.</strong>{' '}
-                      Each rebalance harvests Uniswap V3 stable pair fees and
-                      re prices PUSD+ upward. Holders keep the same number of
-                      tokens; their PUSD claim grows. No rebase, no synthetic
-                      share dilution.
+                      <strong>Your claim is always growing.</strong>{' '}
+                       Each rebalance harvests Uniswap V3 stable pair fees and re prices PUSD+ upward. Holders keep the same number of tokens; their PUSD claim grows. No rebase, no synthetic share dilution.
                     </div>
                   </div>
                   <div className="numbered-list__item">
@@ -489,10 +483,7 @@ export default function HomePage() {
                 The <em>book.</em>
               </h2>
               <div className="book__sub">
-                Every token PUSD Manager currently holds. Balances shown in
-                native decimals; shares are computed over reserves normalized to
-                PUSD precision. Status drives what mint and redeem flows are
-                allowed per-asset.
+                The book. Every token, every chain, every balance. Computed from PUSDManager. Refreshed every few seconds. No PDFs, no auditors, no quarter-lag.
               </div>
             </div>
             <div className="book__totals">
@@ -671,7 +662,7 @@ export default function HomePage() {
               <h3 className="manifesto__title">Boring is the feature.</h3>
               <p className="manifesto__body">
                 PUSD doesn't rehypothecate, the risk is contained to you getting a stablecoin on a different chain in times of emergency.<br /><br />Your coins are always backed by either USDT or USDC.
-                
+
               </p>
             </div>
             <div className="manifesto__col">

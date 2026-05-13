@@ -23,9 +23,9 @@ import { useEffect, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 
 const PUSD_SLOGANS: readonly string[] = [
+  'Backed, not printed.',
   'Boring is the feature.',
   'Unit of settlement, not speculation.',
-  'Backed, not printed.',
   'Universally Available.',
 ];
 
