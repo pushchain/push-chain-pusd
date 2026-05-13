@@ -1252,19 +1252,35 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             <div className="convert__grid-value">{isPlus ? nav.pusdPerPlus.toFixed(6) : '1.000000'}</div>
           </div>
           <div>
-            <div className="convert__grid-label">SOURCE</div>
-            <div className="convert__grid-value">
-              {mode === 'mint'
-                ? `${selected.symbol} · ${isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}`
-                : `${productLabel} · PUSH CHAIN`}
+            <div className="convert__grid-label">FROM</div>
+            <div className="convert__grid-value convert__grid-value--col">
+              {mode === 'mint' ? (
+                <>
+                  <span>{selected.symbol}</span>
+                  <span className="convert__grid-chain">{isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}</span>
+                </>
+              ) : (
+                <>
+                  <span>{productLabel}</span>
+                  <span className="convert__grid-chain">PUSH CHAIN</span>
+                </>
+              )}
             </div>
           </div>
           <div>
-            <div className="convert__grid-label">DESTINATION</div>
-            <div className="convert__grid-value">
-              {mode === 'mint'
-                ? `${productLabel} · PUSH CHAIN`
-                : `${selected.symbol} · ${isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}`}
+            <div className="convert__grid-label">TO</div>
+            <div className="convert__grid-value convert__grid-value--col">
+              {mode === 'mint' ? (
+                <>
+                  <span>{productLabel}</span>
+                  <span className="convert__grid-chain">PUSH CHAIN</span>
+                </>
+              ) : (
+                <>
+                  <span>{selected.symbol}</span>
+                  <span className="convert__grid-chain">{isExternalRoute || !account ? selected.chainLabel : 'PUSH CHAIN'}</span>
+                </>
+              )}
             </div>
           </div>
         </div>

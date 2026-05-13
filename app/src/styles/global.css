@@ -2153,7 +2153,9 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .convert__grid > div {
   padding: 14px 16px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
 }
 
@@ -2173,6 +2175,23 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   font-variant-numeric: tabular-nums;
   font-size: 15px;
   color: var(--c-ink);
+  text-align: right;
+}
+
+.convert__grid-value--col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.convert__grid-chain {
+  color: #7B808A;
+  text-align: right;
+  font-family: var(--font-family-Font-1, "IBM Plex Mono");
+  font-size: 10px;
+  font-style: normal;
+  font-weight: var(--font-weight-400, 400);
+  line-height: 100%;
 }
 
 .convert__cta {
