@@ -2402,11 +2402,37 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .input-shell {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 16px 18px;
   background: var(--c-cream);
   border: var(--rule-thin);
   border-radius: var(--r-0);
+}
+
+.input-shell__faucet {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  color: var(--c-ink-mute);
+  border-top: var(--rule-thin);
+  padding-top: 8px;
+  box-sizing: border-box;
+}
+
+.input-shell__faucet-link {
+  color: var(--c-magenta);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.input-shell-item {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
 }
 
 .input-shell:focus-within { border-color: var(--c-magenta); }

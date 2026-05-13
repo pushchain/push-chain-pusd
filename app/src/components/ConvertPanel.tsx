@@ -868,6 +868,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             </button>
           </div>
           <div className="input-shell">
+            <div className="input-shell-item">
             <input
               className="input-shell__amount"
               inputMode="decimal"
@@ -888,8 +889,23 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               </button>
             ) : (
               <TokenPill symbol={productLabel} chainShort="PUSH" size="md" />
-            )}
+              )}
+            </div>
+
+           {<button
+              type="button"
+              className="src-header__action"
+              onClick={handleSwitchAccount}
+              disabled={submitting}
+            >
+              Don’t have USDC/USDT? {' '}
+              <span className="src-header__action-link">
+                Mint using faucet here ↗
+              </span>
+            </button>}
           </div>
+
+
           {mode === 'mint' && showSelector && (
             <div className="selector-panel" role="listbox" style={{ marginTop: 6 }}>
               {eligibleTokens.map((t) => {
