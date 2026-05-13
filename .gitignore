@@ -8,6 +8,7 @@ out/
 .env
 
 lib/
+!/app/src/lib
 
 .vscode/
 .idea/
