@@ -24,7 +24,7 @@
 import { usePushChain, usePushChainClient, usePushWalletContext } from '@pushchain/ui-kit';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS, PUSD_PLUS_ADDRESS } from '../contracts/config';
+import { CHAIN_ID, PUSD_ADDRESS, PUSD_MANAGER_ADDRESS, PUSD_PLUS_ADDRESS } from '../contracts/config';
 import { PUSD_WRAP_TOKEN, TOKENS, type ReserveToken } from '../contracts/tokens';
 import { useExternalTokenBalance } from '../hooks/useExternalTokenBalance';
 import { useInvariants } from '../hooks/useInvariants';
@@ -45,6 +45,7 @@ import {
 } from '../lib/cascade';
 import { explorerAddressForChain, explorerTxForChain } from '../lib/externalRpc';
 import { explorerTx, formatAmount, truncHash } from '../lib/format';
+import { reportQuestEvent, type QuestEventType } from '../lib/questWebhook';
 import {
   chainLabelFromKey,
   filterTokensByChainKey,
@@ -157,7 +158,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   // Selected asset is the PUSD wrap pseudo-token? Forces push route, uses
   // PUSD balance, and routes through the wrap/unwrap leg of depositToPlus /
   // redeemFromPlus.
-  const isPusdAsset = selected.address.toLowerCase() === PUSD_ADDRESS.toLowerCase();
+  const isPusdAsset = selected.address?.toLowerCase() === PUSD_ADDRESS?.toLowerCase();
 
   useEffect(() => {
     if (!eligibleTokens.some((t) => t.address === selected.address) && eligibleTokens.length) {
@@ -327,6 +328,51 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     return row.balance < parsedAmount;
   }, [mode, allowBasket, parsedAmount, invariants.perToken, selected.address]);
 
+  // --- quest webhook -----------------------------------------------------
+  const fireQuestEvent = async (txHash: `0x${string}`, failureReason?: string) => {
+    if (!account) return;
+    let eventType: QuestEventType;
+    let fromToken: string;
+    let toToken: string;
+
+    if (mode === 'mint') {
+      if (isPusdAsset && isPlus) {
+        eventType = 'CONVERT';
+        fromToken = 'PUSD';
+        toToken = 'PUSD+';
+      } else {
+        eventType = 'MINT';
+        fromToken = selected.symbol;
+        toToken = isPlus ? 'PUSD+' : 'PUSD';
+      }
+    } else {
+      if (isPusdAsset && isPlus) {
+        eventType = 'CONVERT';
+        fromToken = 'PUSD+';
+        toToken = 'PUSD';
+      } else {
+        eventType = 'REDEEM';
+        fromToken = isPlus ? 'PUSD+' : 'PUSD';
+        toToken = selected.symbol;
+      }
+    }
+
+    await reportQuestEvent({
+      eventId: txHash,
+      eventType,
+      status: failureReason ? 'FAILED' : 'COMPLETED',
+      userAddress: originAddress ?? account,
+      fromToken,
+      fromAmount: parsedAmount.toString(),
+      toToken,
+      toAmount: receiveAmount.toString(),
+      txHash,
+      chainId: CHAIN_ID.toString(),
+      eventTimestamp: new Date().toISOString(),
+      ...(failureReason ? { failureReason } : {}),
+    });
+  };
+
   // --- execution ---------------------------------------------------------
   const [stage, setStage] = useState<Stage>({ kind: 'idle' });
   const [progressNote, setProgressNote] = useState('');
@@ -358,6 +404,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
 
     setStage({ kind: 'preparing' });
     setProgressNote('');
+
+    // Tracks the on-chain hash once broadcast so the catch block can report
+    // FAILED events without relying on React state (which is stale inside the
+    // async closure).
+    let submittedHash: `0x${string}` | null = null;
 
     try {
       if (mode === 'mint') {
@@ -394,10 +445,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         setStage({ kind: 'signing' });
         const tx = await pushChainClient.universal.sendTransaction(txOptions);
         const hash = tx.hash as `0x${string}`;
+        submittedHash = hash;
         setStage({ kind: 'broadcasting', hash });
         await tx.wait();
         setStage({ kind: 'confirmed', hash });
         setAmount('');
+        await fireQuestEvent(hash);
         return;
       }
 
@@ -485,6 +538,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       setStage({ kind: 'signing' });
       const cascade = await pushChainClient.universal.executeTransactions(preparedTxs);
       const initialHash = cascade.initialTxHash as `0x${string}`;
+      submittedHash = initialHash;
       setStage({ kind: 'broadcasting', hash: initialHash });
       setProgressNote('Waiting for Push Chain confirmation…');
 
@@ -535,8 +589,16 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         setStage({ kind: 'confirmed', hash: initialHash });
       }
       setAmount('');
+      await fireQuestEvent(initialHash);
     } catch (err) {
-      setStage({ kind: 'error', message: err instanceof Error ? err.message : 'Transaction failed' });
+      const message = err instanceof Error ? err.message : 'Transaction failed';
+      setStage({ kind: 'error', message });
+      // Only report FAILED when the tx reached the chain (we have a hash).
+      // Pre-broadcast failures (user rejection, gas estimation, etc.) have no
+      // txHash so there's nothing to report.
+      if (submittedHash) {
+        await fireQuestEvent(submittedHash, message);
+      }
     }
   };
 
