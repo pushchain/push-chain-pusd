@@ -45,6 +45,7 @@ import {
 } from '../lib/cascade';
 import { explorerAddressForChain, explorerTxForChain } from '../lib/externalRpc';
 import { explorerTx, formatAmount, truncHash } from '../lib/format';
+import { normalizeToPUSD } from '../lib/invariants';
 import { reportQuestEvent, type QuestEventType } from '../lib/questWebhook';
 import {
   chainLabelFromKey,
@@ -90,7 +91,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const { PushChain } = usePushChain();
   const { handleConnectToPushWallet, handleUserLogOutEvent } = usePushWalletContext();
   const invariants = useInvariants();
-  const { baseFeeBps } = useProtocolStats();
+  const { baseFeeBps, preferredFeeMinBps, preferredFeeMaxBps } = useProtocolStats();
 
   const account = (pushChainClient?.universal?.account ?? null) as `0x${string}` | null;
   const origin = pushChainClient?.universal?.origin ?? null;
@@ -216,12 +217,43 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const exceedsBalance = balanceKnown && parsedAmount > balance;
   const solventHalt = invariants.state === 'violation';
 
+  // Declared early so feeAmount (below) can reference it. Toggle UI is rendered later.
+  const [allowBasket, setAllowBasket] = useState(false);
+
+  // Mirror PUSDManager._calculatePreferredFee — needed when allowBasket=false so
+  // the frontend's payout estimate matches the contract's actual transfer. If we
+  // only subtract baseFee here, the UEA receives less than receiveAmount and the
+  // cross-chain outbound leg fails with InsufficientBalance.
+  const preferredFeeBps = useMemo(() => {
+    if (preferredFeeMinBps === 0 && preferredFeeMaxBps === 0) return 0;
+    const rows = invariants.perToken;
+    if (rows.length === 0) return preferredFeeMaxBps; // optimistic max while loading
+    const totalPusd = rows.reduce(
+      (acc, r) => acc + normalizeToPUSD(r.balance, r.decimals),
+      0n,
+    );
+    if (totalPusd === 0n) return preferredFeeMaxBps;
+    const row = rows.find((r) => r.address.toLowerCase() === selected.address.toLowerCase());
+    if (!row) return preferredFeeMaxBps;
+    const tokenPusd = normalizeToPUSD(row.balance, row.decimals);
+    const liquidityPct = Number((tokenPusd * 10_000n) / totalPusd);
+    if (liquidityPct >= 5000) return preferredFeeMinBps;
+    if (liquidityPct <= 1000) return preferredFeeMaxBps;
+    const range = liquidityPct - 1000;
+    const feeRange = preferredFeeMaxBps - preferredFeeMinBps;
+    const feeReduction = Math.floor((range * feeRange) / 4000);
+    return preferredFeeMaxBps - feeReduction;
+  }, [preferredFeeMinBps, preferredFeeMaxBps, invariants.perToken, selected.address]);
+
   const feeAmount = useMemo(() => {
     if (mode !== 'redeem' || parsedAmount === 0n) return 0n;
     // PUSD+ redeem path is fee-exempt (manager._payoutToUser fee=0 for vault).
     if (isPlus) return 0n;
-    return (parsedAmount * BigInt(baseFeeBps)) / 10_000n;
-  }, [mode, parsedAmount, baseFeeBps, isPlus]);
+    // Single-token redeem charges baseFee + preferred premium; basket redeem
+    // charges baseFee only (preferred premium is per-token).
+    const totalBps = allowBasket ? baseFeeBps : baseFeeBps + preferredFeeBps;
+    return (parsedAmount * BigInt(totalBps)) / 10_000n;
+  }, [mode, parsedAmount, baseFeeBps, preferredFeeBps, allowBasket, isPlus]);
 
   // v2.1: PUSD+ mint/redeem amounts go through NAV. PUSD direct mint/redeem
   // stay 1:1 (PUSD is 1:1 par-backed by manager reserves).
@@ -244,9 +276,13 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   }, [mode, parsedAmount, feeAmount, isPlus, nav.navE18]);
 
   // "Exact out" helper: solve for burn so that (burn - burn*fee%) = current parsedAmount.
+  // Fee depends on basket mode: baseFee only when basket=on; baseFee+preferred otherwise.
+  // PUSD+ redeem path is fee-exempt — the inverse there is NAV, not fee (skipped).
   const handleExactReceive = () => {
-    if (!amountValid || baseFeeBps === 0) return;
-    const divisor = 10_000n - BigInt(baseFeeBps);
+    if (!amountValid || isPlus) return;
+    const feeBps = allowBasket ? baseFeeBps : baseFeeBps + preferredFeeBps;
+    if (feeBps === 0) return;
+    const divisor = 10_000n - BigInt(feeBps);
     const invertedBurn = (parsedAmount * 10_000n + divisor - 1n) / divisor; // ceiling div
     const base = 10n ** BigInt(decimals);
     const whole = invertedBurn / base;
@@ -256,7 +292,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   };
 
   // --- redeem recipient + advanced fields --------------------------------
-  const [allowBasket, setAllowBasket] = useState(false);
+  // (allowBasket state declared earlier so feeAmount can read it.)
 
   const [externalRecipient, setExternalRecipient] = useState('');
   const [recipientTouched, setRecipientTouched] = useState(false);
@@ -625,7 +661,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   };
 
   // --- derived labels ----------------------------------------------------
-  const feeBpsLabel = isPlus ? `NAV ${nav.pusdPerPlus.toFixed(6)}` : `${(baseFeeBps / 100).toFixed(2)}%`;
+  const effectiveFeeBps = mode === 'redeem' && !isPlus && !allowBasket
+    ? baseFeeBps + preferredFeeBps
+    : baseFeeBps;
+  const feeBpsLabel = isPlus ? `NAV ${nav.pusdPerPlus.toFixed(6)}` : `${(effectiveFeeBps / 100).toFixed(2)}%`;
 
   // Source / destination strings for the header + summary.
   const sourceLabel = mode === 'mint'
@@ -666,8 +705,8 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     // "MINT N PUSD+" matches what actually lands in the user's wallet.
     // PUSD direct (1:1) keeps parsedAmount; both end up showing the
     // user-facing number.
-    const outAmt = formatAmount(receiveAmount, 6, { maxFractionDigits: 2 });
-    const inAmt = formatAmount(parsedAmount, decimals, { maxFractionDigits: 2 });
+    const outAmt = formatAmount(receiveAmount, 6, { maxFractionDigits: 4 });
+    const inAmt = formatAmount(parsedAmount, decimals, { maxFractionDigits: 4 });
     if (mode === 'mint') return `MINT ${outAmt} ${productLabel} →`;
     return needsExternalRecipient
       ? `REDEEM → SEND TO ${selected.chainShort} →`
@@ -948,12 +987,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
           <div className="input-head">
             <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
               RECEIVE
-              {mode === 'redeem' && baseFeeBps > 0 && (
+              {mode === 'redeem' && !isPlus && effectiveFeeBps > 0 && (
                 <button
                   type="button"
                   data-tooltip={
                     amountValid
-                      ? `Receive exactly ${formatAmount(parsedAmount, decimals, { maxFractionDigits: 6 })} ${selected.symbol}. Increases burn slightly to cover the ${(baseFeeBps / 100).toFixed(2)}% fee`
+                      ? `Receive exactly ${formatAmount(parsedAmount, decimals, { maxFractionDigits: 6 })} ${selected.symbol}. Increases burn slightly to cover the ${(effectiveFeeBps / 100).toFixed(2)}% fee`
                       : 'Enter an amount, then click to receive that exact amount'
                   }
                   className="exact-out-btn"
@@ -972,7 +1011,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               aria-readonly="true"
               style={{ color: amountValid ? 'var(--c-magenta)' : 'var(--c-ink-mute)' }}
             >
-              {amountValid ? formatAmount(receiveAmount, 6, { maxFractionDigits: 2 }) : '0.00'}
+              {amountValid ? formatAmount(receiveAmount, 6, { maxFractionDigits: 4 }) : '0.0000'}
             </div>
             {mode === 'mint' ? (
               <TokenPill symbol={productLabel} chainShort="PUSH CHAIN" size="md" />

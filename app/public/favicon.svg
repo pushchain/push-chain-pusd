@@ -1,39 +1,15 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
-  <title>PUSD</title>
-  <!--
-    Option K — risograph duotone.
-    Ink ground, magenta shadow $ shifted +8 right +9 down, cream $ on top.
-    The offset is proportional so the misprint effect reads at every size:
-      16 px  → ~1–2 px fringe (subtle glow)
-      32 px  → ~3 px fringe (visible duotone)
-      192 px → ~15 px fringe (full risograph)
-      512 px → ~41 px fringe (editorial poster)
-  -->
-
-  <!-- Ground -->
-  <rect width="100" height="100" fill="#0f0d0a"/>
-
-  <!-- Shadow layer — magenta, shifted 8 % right + 9 % down -->
-  <text
-    x="54"
-    y="91"
-    font-family="Georgia,'Times New Roman',serif"
-    font-size="90"
-    font-weight="700"
-    fill="#dd44b9"
-    text-anchor="middle"
-    dominant-baseline="auto"
-  >$</text>
-
-  <!-- Main layer — cream, anchored at optical centre -->
-  <text
-    x="46"
-    y="82"
-    font-family="Georgia,'Times New Roman',serif"
-    font-size="90"
-    font-weight="700"
-    fill="#f3eee4"
-    text-anchor="middle"
-    dominant-baseline="auto"
-  >$</text>
+<svg width="100" height="100" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g clip-path="url(#clip0_47860_1366)">
+<rect width="100" height="100" fill="url(#paint0_radial_47860_1366)"/>
+<path d="M46.9999 80.8333V76.6666H42.7499C39.5832 76.6666 37.4999 74.5833 37.4999 71.3333C37.4999 69.5833 36.2499 68.3333 34.4999 68.3333H32.7499C30.5832 68.3333 29.1666 66.9166 29.1666 64.75V61.9166C29.1666 60.75 29.9166 60 31.0832 60H34.9999C36.4999 60 37.4999 61 37.4999 62.5V68.3333H46.9999V53.1666H42.9999C39.7499 53.1666 37.4999 50.9166 37.4999 47.5833C37.4999 45.9166 36.4166 44.8333 34.7499 44.8333H33.1666C30.7499 44.8333 29.1666 43.25 29.1666 40.8333V36.8333C29.1666 33.75 31.2499 31.6666 34.7499 31.6666C36.4166 31.6666 37.4999 30.5833 37.4999 28.9166V27.4166C37.4999 24.9166 39.1666 23.3333 41.6666 23.3333H46.9999V19.1666C46.9999 17.6666 47.9999 16.6666 49.4999 16.6666H50.3332C51.8332 16.6666 52.8332 17.6666 52.8332 19.1666V23.3333H57.2499C60.4166 23.3333 62.4999 25.4166 62.4999 28.6666C62.4999 30.4166 63.7499 31.6666 65.4999 31.6666H67.2499C69.4166 31.6666 70.8332 33.0833 70.8332 35.25V38.0833C70.8332 39.25 70.0832 40 68.9166 40H64.9999C63.4999 40 62.4999 39 62.4999 37.5V31.6666H52.8332V44.8333H56.9999C60.3332 44.8333 62.4999 47 62.4999 50.4166C62.4999 52.0833 63.5832 53.1666 65.2499 53.1666H66.7499C69.2499 53.1666 70.8332 54.75 70.8332 57.25V62.8333C70.8332 66.1666 68.6666 68.3333 65.2499 68.3333C63.5832 68.3333 62.4999 69.4166 62.4999 71.0833V72.5833C62.4999 75.0833 60.8332 76.6666 58.3332 76.6666H52.8332V80.8333C52.8332 82.3333 51.8332 83.3333 50.3332 83.3333H49.4999C47.9999 83.3333 46.9999 82.3333 46.9999 80.8333ZM37.4999 44.8333H46.9999V31.6666H37.4999V44.8333ZM52.8332 68.3333H62.4999V53.1666H52.8332V68.3333Z" fill="white"/>
+</g>
+<defs>
+<radialGradient id="paint0_radial_47860_1366" cx="0" cy="0" r="1" gradientTransform="matrix(104.687 -106.25 97.1573 110.07 21.875 82.8125)" gradientUnits="userSpaceOnUse">
+<stop offset="0.302885" stop-color="#CE3BEB"/>
+<stop offset="1" stop-color="#215FFF"/>
+</radialGradient>
+<clipPath id="clip0_47860_1366">
+<rect width="100" height="100" fill="white"/>
+</clipPath>
+</defs>
 </svg>

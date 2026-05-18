@@ -16,6 +16,8 @@ import { getReadProvider } from '../lib/provider';
 
 const MANAGER_ABI = [
   'function baseFee() view returns (uint256)',
+  'function preferredFeeMin() view returns (uint256)',
+  'function preferredFeeMax() view returns (uint256)',
   'function accruedFees(address) view returns (uint256)',
 ];
 
@@ -23,6 +25,8 @@ const POLL_MS = 12_000;
 
 export type ProtocolStatsState = {
   baseFeeBps: number;           // base fee in basis points (e.g. 5 == 0.05%)
+  preferredFeeMinBps: number;   // min preferred-asset premium fee in bps
+  preferredFeeMaxBps: number;   // max preferred-asset premium fee in bps
   accruedFeesTotal: bigint;     // normalized to 6dp
   loading: boolean;
   error: Error | null;
@@ -33,6 +37,8 @@ export function useProtocolStats(): ProtocolStatsState {
   const tokens = useMemo(() => TOKENS, []);
   const [state, setState] = useState<ProtocolStatsState>({
     baseFeeBps: 0,
+    preferredFeeMinBps: 0,
+    preferredFeeMaxBps: 0,
     accruedFeesTotal: 0n,
     loading: true,
     error: null,
@@ -47,18 +53,27 @@ export function useProtocolStats(): ProtocolStatsState {
         const manager = new ethers.Contract(PUSD_MANAGER_ADDRESS, MANAGER_ABI, getReadProvider());
 
         const baseFeePromise = manager.baseFee() as Promise<bigint>;
+        const prefMinPromise = manager.preferredFeeMin() as Promise<bigint>;
+        const prefMaxPromise = manager.preferredFeeMax() as Promise<bigint>;
         const feePromises = tokens.map((t) =>
           (manager.accruedFees(t.address) as Promise<bigint>)
             .then((raw) => normalizeToPUSD(BigInt(raw), t.decimals))
             .catch(() => 0n),
         );
 
-        const [baseFee, ...fees] = await Promise.all([baseFeePromise, ...feePromises]);
+        const [baseFee, prefMin, prefMax, ...fees] = await Promise.all([
+          baseFeePromise,
+          prefMinPromise,
+          prefMaxPromise,
+          ...feePromises,
+        ]);
         if (cancelled) return;
 
         const total = fees.reduce((acc, f) => acc + f, 0n);
         setState({
           baseFeeBps: Number(baseFee),
+          preferredFeeMinBps: Number(prefMin),
+          preferredFeeMaxBps: Number(prefMax),
           accruedFeesTotal: total,
           loading: false,
           error: null,
