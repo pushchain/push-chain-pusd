@@ -1670,14 +1670,24 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 /* ==========================================================================
+   12b. MANIFESTO SECTION — border lives on the grid, not the header
+   ========================================================================== */
+.section--manifesto {
+    border-top: none;
+    padding: 72px 0px;
+}
+.section--manifesto .section__header { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+.section--manifesto .manifesto { border-top: var(--rule-thin); border-bottom: var(--rule-thin); }
+
+/* ==========================================================================
    13. MANIFESTO — I. II. III. three-column grid
    ========================================================================== */
 .manifesto {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 0;
-  border-top: var(--rule-thin);
-  border-bottom: var(--rule-thin);
+  border: var(--rule-thin);
+  margin-top: 10px;
 }
 
 .manifesto__col {
@@ -2143,7 +2153,9 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .convert__grid > div {
   padding: 14px 16px;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
   gap: 6px;
 }
 
@@ -2163,6 +2175,23 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
   font-variant-numeric: tabular-nums;
   font-size: 15px;
   color: var(--c-ink);
+  text-align: right;
+}
+
+.convert__grid-value--col {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.convert__grid-chain {
+  color: #7B808A;
+  text-align: right;
+  font-family: var(--font-family-Font-1, "IBM Plex Mono");
+  font-size: 10px;
+  font-style: normal;
+  font-weight: var(--font-weight-400, 400);
+  line-height: 100%;
 }
 
 .convert__cta {
@@ -2373,11 +2402,37 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 .input-shell {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
   padding: 16px 18px;
   background: var(--c-cream);
   border: var(--rule-thin);
   border-radius: var(--r-0);
+}
+
+.input-shell__faucet {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  width: 100%;
+  font-family: var(--f-mono);
+  font-size: 10px;
+  color: var(--c-ink-mute);
+  border-top: var(--rule-thin);
+  padding-top: 8px;
+  box-sizing: border-box;
+}
+
+.input-shell__faucet-link {
+  color: var(--c-magenta);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.input-shell-item {
+    display: flex;
+    flex-direction: row;
+    width: 100%;
 }
 
 .input-shell:focus-within { border-color: var(--c-magenta); }

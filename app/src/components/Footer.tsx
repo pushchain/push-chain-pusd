@@ -30,9 +30,8 @@ export function Footer() {
               Push<em>USD</em>
             </div>
             <p className="footer__prose">
-              A universal dollar for applications that don&rsquo;t care which chain their
-              users walk in from. Issued on Push Chain. Redeemable against a basket.
-              Upgrade-gated, emergency-aware, audit-first.
+              Push USD is the universal dollar. Issued on Push Chain. Redeemable against a basket. Upgrade-gated,
+              emergency-aware, audit-first.
             </p>
           </div>
 

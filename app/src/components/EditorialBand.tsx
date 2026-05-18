@@ -80,8 +80,8 @@ export function EditorialBand() {
       <div className="container editorial-band__inner">
         <div className="editorial-band__left">
           <span>PUSH USD</span>
-          <span>·</span>
-          <span>{vol}, {no}</span>
+          {/*<span>·</span>*/}
+          {/*<span>{vol}, {no}</span>*/}
           <span>·</span>
           <span>{date}</span>
         </div>

@@ -3,7 +3,7 @@
  *
  * Composition, top to bottom, matches the Issue 01 mockup:
  *
- *   HERO         — "A dollar that works on every chain." + inline ConvertPanel
+ *   HERO         — "A Dollar that works on every chain." + inline ConvertPanel
  *   STAT STRIP   — CIRCULATION / COLLATERAL RATIO / ASSETS · CHAINS / BASE FEE
  *   TICKER       — live one-line tape (peg · supply · ratio · top shares)
  *   SLOGAN BAND  — italic editorial voice
@@ -213,9 +213,9 @@ export default function HomePage() {
               </div>
               <h1 className="hero__title">
                 {view === 'pusd' ? (
-                  <>A dollar that works on <em>every</em> chain.</>
+                  <>A Dollar that works on <em>every</em> chain.</>
                 ) : (
-                  <>A dollar that <em>grows</em> while it sits.</>
+                  <>A Dollar that <em>grows</em> while it sits.</>
                 )}
               </h1>
               <p className="hero__lead">
@@ -392,11 +392,8 @@ export default function HomePage() {
                   <div className="numbered-list__item">
                     <div className="numbered-list__num">03</div>
                     <div className="numbered-list__body">
-                      <strong>The book is on-chain.</strong> Every token, every
-                      balance, every status change is a contract read. You don't
-                      have to trust a dashboard. The collateral ratio above is
-                      computed live from the PUSDManager contract and refreshes
-                      every few seconds.
+                      <strong>The book is on-chain.</strong> Every token, every balance, every status change is a contract read. You don't have to trust a dashboard. The collateral ratio above is computed live from the PUSDManager contract and refreshes
+                      every few seconds. Circle attests monthly. We attest every block.
                     </div>
                   </div>
                 </div>
@@ -412,11 +409,8 @@ export default function HomePage() {
                   <div className="numbered-list__item">
                     <div className="numbered-list__num">01</div>
                     <div className="numbered-list__body">
-                      <strong>NAV per share, monotonic non decreasing.</strong>{' '}
-                      Each rebalance harvests Uniswap V3 stable pair fees and
-                      re prices PUSD+ upward. Holders keep the same number of
-                      tokens; their PUSD claim grows. No rebase, no synthetic
-                      share dilution.
+                      <strong>Your claim is always growing.</strong>{' '}
+                       Each rebalance harvests Uniswap V3 stable pair fees and re prices PUSD+ upward. Holders keep the same number of tokens; their PUSD claim grows. No rebase, no synthetic share dilution.
                     </div>
                   </div>
                   <div className="numbered-list__item">
@@ -489,10 +483,7 @@ export default function HomePage() {
                 The <em>book.</em>
               </h2>
               <div className="book__sub">
-                Every token PUSD Manager currently holds. Balances shown in
-                native decimals; shares are computed over reserves normalized to
-                PUSD precision. Status drives what mint and redeem flows are
-                allowed per-asset.
+                The book. Every token, every chain, every balance. Computed from PUSDManager. Refreshed every few seconds. No PDFs, no auditors, no quarter-lag.
               </div>
             </div>
             <div className="book__totals">
@@ -660,37 +651,37 @@ export default function HomePage() {
         </div>
 
         {/* ============================================ §03 · MANIFESTO ====== */}
-        <section className="section">
+        <section className="section--manifesto">
           <div className="section__header">
             <span>§ 03 · DESIGN</span>
             <span>THREE PRINCIPLES · NOT FOUR</span>
           </div>
           <div className="manifesto">
+
             <div className="manifesto__col">
               <div className="manifesto__numeral">I.</div>
-              <h3 className="manifesto__title">Boring is the feature.</h3>
-              <p className="manifesto__body">
-                PUSD doesn't rehypothecate, the risk is contained to you getting a stablecoin on a different chain in times of emergency.<br /><br />Your coins are always backed by either USDT or USDC.
-                
-              </p>
-            </div>
-            <div className="manifesto__col">
-              <div className="manifesto__numeral">II.</div>
-              <h3 className="manifesto__title">Universal by construction.</h3>
-              <p className="manifesto__body">
-                A user on Ethereum doesn't bridge, then approve, then deposit.
-                They sign once. The Push Chain SDK handles the route. The chain of origin is a
-                routing detail, not a user concern.<br /><br />
-                Similarly, choose a destination chain and the SDK will handle the rest in a single transaction.
-              </p>
-            </div>
-            <div className="manifesto__col">
-              <div className="manifesto__numeral">III.</div>
               <h3 className="manifesto__title">
                 Safest yield generation.
               </h3>
               <p className="manifesto__body">
-                <b>PUSD v2</b> introduces PUSD+, an opt-in feature that lends a portion of its reserves to Internal AMMs (Uniswap v3) of Push Chain. Swapping exclusively between stablecoins of different chains.<br /><br /><b>The Risk</b> remains the same, PUSD promise of 1:1 backing is not compromised.<br /><br /><b>The Yield</b> is distributed to PUSD+ holders.
+                <b>Introducing PUSD+</b>, that uses Internal AMMs (Uniswap v3) of Push Chain to generate yield. Swapping exclusively between stablecoins of different chains.<br /><br /><b>The Risk</b> remains the same, PUSD promise of 1:1 backing is not compromised.<br /><br /><b>The Yield</b> is distributed to PUSD+ holders.
+              </p>
+            </div>
+            <div className="manifesto__col">
+              <div className="manifesto__numeral">II.</div>
+              <h3 className="manifesto__title">Boring is the feature.</h3>
+              <p className="manifesto__body">
+                PUSD doesn't rehypothecate, the risk is contained to you getting a stablecoin on a different chain in times of emergency.<br /><br />Your coins are always backed by either USDT or USDC.
+              </p>
+            </div>
+            <div className="manifesto__col">
+              <div className="manifesto__numeral">III.</div>
+              <h3 className="manifesto__title">Universal by construction.</h3>
+              <p className="manifesto__body">
+                A user on Ethereum doesn't bridge, then approve, then deposit.
+                They sign once and done. The chain of origin is a
+                routing detail, not a user concern.<br /><br />
+                Similarly, choose a destination chain and the protocol will handle the rest in a single transaction.
               </p>
             </div>
           </div>
