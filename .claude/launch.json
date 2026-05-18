@@ -4,9 +4,9 @@
     {
       "name": "app",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev"],
+      "runtimeArgs": ["run", "dev", "--", "--port", "5180", "--strictPort"],
       "cwd": "app",
-      "port": 5173,
+      "port": 5180,
       "autoPort": true
     }
   ]

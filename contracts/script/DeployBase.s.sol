@@ -94,16 +94,17 @@ abstract contract DeployBase is Script {
     }
 
     function _addSupportedTokens(PUSDManager m) internal {
-        m.addSupportedToken(0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3, "USDT.eth", "Ethereum_Sepolia", 6);
+        m.addSupportedToken(0x0f97A213207703923F5f0C613C9827f7C9A0f96B, "USDT.eth", "Ethereum_Sepolia", 6);
         m.addSupportedToken(0x7A58048036206bB898008b5bBDA85697DB1e5d66, "USDC.eth", "Ethereum_Sepolia", 6);
         m.addSupportedToken(0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34, "USDT.sol", "Solana_Devnet", 6);
         m.addSupportedToken(0x04B8F634ABC7C879763F623e0f0550a4b5c4426F, "USDC.sol", "Solana_Devnet", 6);
-        m.addSupportedToken(0x2C455189D2af6643B924A981a9080CcC63d5a567, "USDT.base", "Base_Testnet", 6);
+        m.addSupportedToken(0x148823809B853e1db187BC09A9ac909BC42F971a, "USDT.base", "Base_Testnet", 6);
         m.addSupportedToken(0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1, "USDC.base", "Base_Testnet", 6);
-        m.addSupportedToken(0x76Ad08339dF606BeEDe06f90e3FaF82c5b2fb2E9, "USDT.arb", "Arbitrum_Sepolia", 6);
+        m.addSupportedToken(0xFE6E9DF2BbC9ce05D98b83B1365df6DcA9951891, "USDT.arb", "Arbitrum_Sepolia", 6);
         m.addSupportedToken(0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C, "USDC.arb", "Arbitrum_Sepolia", 6);
-        m.addSupportedToken(0x2f98B4235FD2BA0173a2B056D722879360B12E7b, "USDT.bnb", "BNB_Testnet", 6);
-        console.log("Supported tokens: 9 added");
+        m.addSupportedToken(0x731aF1Da5365259d27528557EE4aFBA4baC90ef2, "USDT.bsc", "BNB_Testnet", 6);
+        m.addSupportedToken(0x120EBf25Dad7D6a09Ad2316f23f9Be95DBb90639, "USDC.bsc", "BNB_Testnet", 6);
+        console.log("Supported tokens: 10 added");
     }
 
     function _transferAdmin(PUSD pusd, PUSDManager manager, address from, address to) internal {

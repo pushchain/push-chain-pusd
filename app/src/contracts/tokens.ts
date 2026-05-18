@@ -32,7 +32,7 @@ export type ReserveToken = {
 
 export const TOKENS: readonly ReserveToken[] = [
   {
-    address: '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3',
+    address: '0x0f97A213207703923F5f0C613C9827f7C9A0f96B',
     symbol: 'USDT',
     chain: 'Ethereum Sepolia',
     chainLabel: 'ETHEREUM SEPOLIA',
@@ -68,7 +68,7 @@ export const TOKENS: readonly ReserveToken[] = [
     moveableKey: ['SOLANA_DEVNET', 'USDC'],
   },
   {
-    address: '0x2C455189D2af6643B924A981a9080CcC63d5a567',
+    address: '0x148823809B853e1db187BC09A9ac909BC42F971a',
     symbol: 'USDT',
     chain: 'Base Sepolia',
     chainLabel: 'BASE SEPOLIA',
@@ -86,7 +86,7 @@ export const TOKENS: readonly ReserveToken[] = [
     moveableKey: ['BASE_SEPOLIA', 'USDC'],
   },
   {
-    address: '0x76Ad08339dF606BeEDe06f90e3FaF82c5b2fb2E9',
+    address: '0xFE6E9DF2BbC9ce05D98b83B1365df6DcA9951891',
     symbol: 'USDT',
     chain: 'Arbitrum Sepolia',
     chainLabel: 'ARBITRUM SEPOLIA',
@@ -104,13 +104,22 @@ export const TOKENS: readonly ReserveToken[] = [
     moveableKey: ['ARBITRUM_SEPOLIA', 'USDC'],
   },
   {
-    address: '0x2f98B4235FD2BA0173a2B056D722879360B12E7b',
+    address: '0x731aF1Da5365259d27528557EE4aFBA4baC90ef2',
     symbol: 'USDT',
     chain: 'BNB Testnet',
     chainLabel: 'BNB TESTNET',
-    chainShort: 'BNB',
+    chainShort: 'BNB TST',
     decimals: 6,
     moveableKey: ['BNB_TESTNET', 'USDT'],
+  },
+  {
+    address: '0x120EBf25Dad7D6a09Ad2316f23f9Be95DBb90639',
+    symbol: 'USDC',
+    chain: 'BNB Testnet',
+    chainLabel: 'BNB TESTNET',
+    chainShort: 'BNB TST',
+    decimals: 6,
+    moveableKey: ['BNB_TESTNET', 'USDC'],
   },
 ] as const;
 

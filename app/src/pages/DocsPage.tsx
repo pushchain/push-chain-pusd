@@ -488,8 +488,8 @@ PUSDManager.sol — reserve orchestrator, UUPS proxy
             <DevTable
               head={["Contract", "Proxy address"]}
               rows={[
-                ["PUSD", "`0x488d080e16386379561a47A4955D22001d8A9D89`"],
-                ["PUSDManager", "`0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46`"],
+                ["PUSD", "`0x774c799646bB60103e38Fd65b18D81bbDD1Aa760`"],
+                ["PUSDManager", "`0x775A23E81fCd1f9C2997663b45401bEe80e4242A`"],
               ]}
             />
             <p className="docs__entry-meta" style={{ marginTop: 6 }}>
@@ -513,55 +513,60 @@ PUSDManager.sol — reserve orchestrator, UUPS proxy
             </p>
 
             <SubHead>
-              Reserve tokens — 9 total, 5 chains, all 6 decimals on Donut
+              Reserve tokens — 10 total, 5 chains, all 6 decimals on Donut
             </SubHead>
             <DevTable
               head={["Symbol", "Origin chain", "Donut address"]}
               rows={[
                 [
-                  "USDT",
+                  "USDT.eth",
                   "Ethereum Sepolia",
-                  "`0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3`",
+                  "`0x0f97A213207703923F5f0C613C9827f7C9A0f96B`",
                 ],
                 [
-                  "USDC",
+                  "USDC.eth",
                   "Ethereum Sepolia",
                   "`0x7A58048036206bB898008b5bBDA85697DB1e5d66`",
                 ],
                 [
-                  "USDT",
+                  "USDT.sol",
                   "Solana Devnet",
                   "`0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34`",
                 ],
                 [
-                  "USDC",
+                  "USDC.sol",
                   "Solana Devnet",
-                  "`0xCd6e2e7A43E0Cfd0Df83dCb0EdB5c5EC4F27Ce8f`",
+                  "`0x04B8F634ABC7C879763F623e0f0550a4b5c4426F`",
                 ],
                 [
-                  "USDT",
+                  "USDT.base",
                   "Base Sepolia",
-                  "`0x9f475519ac7bdbEC65F00E2f6A6CB26c20B5Ff52`",
+                  "`0x148823809B853e1db187BC09A9ac909BC42F971a`",
                 ],
                 [
-                  "USDC",
+                  "USDC.base",
                   "Base Sepolia",
-                  "`0x2fCC0Ef4F0b0Ffb5Ee93F48B48F50Ef5e66c0b5b`",
+                  "`0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1`",
                 ],
                 [
-                  "USDT",
+                  "USDT.arb",
                   "Arbitrum Sepolia",
-                  "`0x3A3c8aFC2e7BCBe3d79Af9dD4cA4CD7C1eEDD23c`",
+                  "`0xFE6E9DF2BbC9ce05D98b83B1365df6DcA9951891`",
                 ],
                 [
-                  "USDC",
+                  "USDC.arb",
                   "Arbitrum Sepolia",
-                  "`0x9fa527Fe5e16b9e1bfa72Cb9C01d40aaab11EBC2`",
+                  "`0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C`",
                 ],
                 [
-                  "USDT",
+                  "USDT.bsc",
                   "BNB Testnet",
-                  "`0xEc9E90Dc88D86dB0e9E1f4aA59a61Df5f7A5E3b1`",
+                  "`0x731aF1Da5365259d27528557EE4aFBA4baC90ef2`",
+                ],
+                [
+                  "USDC.bsc",
+                  "BNB Testnet",
+                  "`0x120EBf25Dad7D6a09Ad2316f23f9Be95DBb90639`",
                 ],
               ]}
             />
@@ -654,12 +659,12 @@ Net token out    = pusdAmount − floor(pusdAmount × (baseFee + preferredFee) /
                 [
                   "PUSDManager",
                   "Dispatch surface — call mint/redeem here",
-                  "`0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46`",
+                  "`0x775A23E81fCd1f9C2997663b45401bEe80e4242A`",
                 ],
                 [
                   "PUSDPlusVault",
                   "NAV-bearing token + LP positions",
-                  "`0xb55a5B36d82D3B7f18Afe42F390De565080A49a1`",
+                  "`0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16`",
                 ],
                 [
                   "InsuranceFund",
@@ -787,7 +792,7 @@ function previewBurnPlus(uint256 plusIn) external view returns (uint256);`}
               {`import { usePushChainClient } from '@pushchain/ui-kit';
 import { Interface } from 'ethers';
 
-const MANAGER = '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46';
+const MANAGER = '0x775A23E81fCd1f9C2997663b45401bEe80e4242A';
 const TOKEN   = '0x7A58048036206bB898008b5bBDA85697DB1e5d66'; // USDC.eth on Donut
 
 const iface = new Interface([
@@ -810,7 +815,7 @@ function MintPlus({ amount, recipient }: { amount: bigint; recipient: \`0x\${str
             <Block lang="@pushchain/core · Node">
               {`// tokenIn === PUSD address triggers the basket-redeem wrap path.
 // Manager burns the caller's PUSD and pays a proportional basket to the vault.
-const PUSD = '0x488d080e16386379561a47A4955D22001d8A9D89';
+const PUSD = '0x774c799646bB60103e38Fd65b18D81bbDD1Aa760';
 const data = iface.encodeFunctionData('depositToPlus', [PUSD, amount, recipient]);
 const tx = await pushChainClient.universal.sendTransaction({ to: MANAGER, value: 0n, data });`}
             </Block>
@@ -1206,8 +1211,8 @@ function MintButton() {
     const h         = PushChain.utils.helpers;
     const amount    = h.parseUnits('100', 6);                              // 100 USDT (6 dec)
     const recipient = pushChainClient.universal.account.address as \`0x\${string}\`;
-    const TOKEN     = '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3' as const; // USDT-Sepolia on Donut
-    const MANAGER   = '0x809d550fca64d94Bd9F66E60752A544199cfAC3D' as const;
+    const TOKEN     = '0x0f97A213207703923F5f0C613C9827f7C9A0f96B' as const; // USDT.eth on Donut
+    const MANAGER   = '0x775A23E81fCd1f9C2997663b45401bEe80e4242A' as const;
 
     const multicall = [
       { to: TOKEN,   value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
@@ -1383,8 +1388,8 @@ await (await pc.universal.sendTransaction({
               the preferred reserve token to <Ic>recipient</Ic>:
             </Lead>
             <Block lang="tsx">
-              {`const MANAGER = '0x809d550fca64d94Bd9F66E60752A544199cfAC3D' as const;
-const TOKEN   = '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3' as const; // USDT-Sepolia on Donut, the asset you want back
+              {`const MANAGER = '0x775A23E81fCd1f9C2997663b45401bEe80e4242A' as const;
+const TOKEN   = '0x0f97A213207703923F5f0C613C9827f7C9A0f96B' as const; // USDT.eth on Donut, the asset you want back
 
 const redeem = async () => {
   const h          = PushChain.utils.helpers;
@@ -1573,7 +1578,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PUSDMinter {
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+        IPUSDManager(0x775A23E81fCd1f9C2997663b45401bEe80e4242A);
 
     /// @notice Pull \`amount\` of \`token\` from caller, deposit it into
     ///         PUSDManager, mint PUSD straight to \`recipient\`.
@@ -1609,9 +1614,9 @@ contract PUSDMinter {
             <Block lang="solidity">
               {`contract PUSDRedeemer {
     IPUSD        public constant PUSD =
-        IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
+        IPUSD(0x774c799646bB60103e38Fd65b18D81bbDD1Aa760);
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+        IPUSDManager(0x775A23E81fCd1f9C2997663b45401bEe80e4242A);
 
     /// @notice Pull PUSD from the caller, redeem it for \`preferredAsset\`,
     ///         deliver the proceeds to \`recipient\`.
@@ -1653,9 +1658,9 @@ contract PUSDMinter {
             <Block lang="solidity">
               {`contract PUSDReader {
     IPUSD        public constant PUSD =
-        IPUSD(0x488d080e16386379561A47A4955d22001D8a9D89);
+        IPUSD(0x774c799646bB60103e38Fd65b18D81bbDD1Aa760);
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+        IPUSDManager(0x775A23E81fCd1f9C2997663b45401bEe80e4242A);
 
     /// Quote how much PUSD a user would get from depositing \`amount\` of
     /// \`token\`, accounting for the manager's base fee (in basis points).

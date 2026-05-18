@@ -1,3 +1,71 @@
+## Deployment 6 — Fresh full redeploy for new reserve wrappers
+Date: 2026-05-18
+Chain: Push Chain Donut Testnet (42101)
+RPC: https://evm.donut.rpc.push.org/
+Admin: 0xA1c1AF949C5752E9714cFE54f444cE80f078069A
+Deployer: 0xA1c1AF949C5752E9714cFE54f444cE80f078069A
+
+Notes:
+  - Fresh full redeploy via DeployFull.s.sol because four USDT wrapper
+    addresses on Donut changed and a new USDC.bsc wrapper was added by
+    Push Chain. PUSDManager storage couldn't be cleanly mutated to swap
+    USDT addresses, so the cleanest path was redeploying all four proxies
+    (PUSD, PUSDManager, PUSDPlusVault, InsuranceFund) and re-registering
+    the new 10-token reserve set.
+  - BNB pair naming migrated from `.bnb` -> `.bsc`: both USDT.bsc and
+    USDC.bsc are registered under the canonical accessor going forward.
+    Chain namespace string on-chain remains "BNB_Testnet" to match the
+    SDK's MOVEABLE chain key.
+  - PopulateVaultBasket.s.sol run post-deploy: vault.basket = 10 tokens
+    (matches manager.supportedTokens). Script now reads
+    PUSD_PLUS_VAULT_ADDRESS from env instead of hardcoding the proxy, so
+    future redeploys don't need a source edit.
+  - Authoritative wrapper source: https://push.org/agents/contract-addresses.json
+
+Reserve tokens (10, all 6 decimals):
+  USDT.eth   (Ethereum_Sepolia)   0x0f97A213207703923F5f0C613C9827f7C9A0f96B  [NEW]
+  USDC.eth   (Ethereum_Sepolia)   0x7A58048036206bB898008b5bBDA85697DB1e5d66
+  USDT.sol   (Solana_Devnet)      0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34
+  USDC.sol   (Solana_Devnet)      0x04B8F634ABC7C879763F623e0f0550a4b5c4426F
+  USDT.base  (Base_Testnet)       0x148823809B853e1db187BC09A9ac909BC42F971a  [NEW]
+  USDC.base  (Base_Testnet)       0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1
+  USDT.arb   (Arbitrum_Sepolia)   0xFE6E9DF2BbC9ce05D98b83B1365df6DcA9951891  [NEW]
+  USDC.arb   (Arbitrum_Sepolia)   0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C
+  USDT.bsc   (BNB_Testnet)        0x731aF1Da5365259d27528557EE4aFBA4baC90ef2  [NEW, renamed from USDT.bnb]
+  USDC.bsc   (BNB_Testnet)        0x120EBf25Dad7D6a09Ad2316f23f9Be95DBb90639  [NEW token]
+
+Post-deploy smoke checks (PASS):
+  - PUSDManager.getSupportedTokensCount()  == 10
+  - PUSDPlusVault.basketLength()           == 10
+  - PUSDManager.plusVault                  == vault proxy
+  - PUSDManager.feeExempt[vault]           == true
+  - vault MANAGER_ROLE                     held by manager
+
+Contract Addresses:
+  PUSD Impl:                       0x8C9f40792079dA0FBb4e95Fc175a067e2a5f5322
+  PUSD Proxy:                      0x774c799646bB60103e38Fd65b18D81bbDD1Aa760
+  PUSDManager Impl:                0x04785d6214151C607ae6D800FB2f7c405BFDEe93
+  PUSDManager Proxy:               0x775A23E81fCd1f9C2997663b45401bEe80e4242A
+  PUSDPlusVault Impl:              0xA82591c7c1b978A918b905c6f5347E6Da3169327
+  PUSDPlusVault Proxy:             0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16
+  InsuranceFund Impl:              0xC21F074681F35BDA10102588D0fC3Fe6220E028e
+  InsuranceFund Proxy:             0x995348eABc39ecdF591b8A93B3568Dc3C1c0BBAD
+
+Explorer:
+  - PUSD Proxy:           https://donut.push.network/address/0x774c799646bB60103e38Fd65b18D81bbDD1Aa760
+  - PUSDManager Proxy:    https://donut.push.network/address/0x775A23E81fCd1f9C2997663b45401bEe80e4242A
+  - PUSDPlusVault Proxy:  https://donut.push.network/address/0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16
+  - InsuranceFund Proxy:  https://donut.push.network/address/0x995348eABc39ecdF591b8A93B3568Dc3C1c0BBAD
+
+Frontend env:
+  VITE_PUSD_ADDRESS=0x774c799646bB60103e38Fd65b18D81bbDD1Aa760
+  VITE_PUSD_MANAGER_ADDRESS=0x775A23E81fCd1f9C2997663b45401bEe80e4242A
+  VITE_PUSD_PLUS_ADDRESS=0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16
+  VITE_INSURANCE_FUND_ADDRESS=0x995348eABc39ecdF591b8A93B3568Dc3C1c0BBAD
+  VITE_CHAIN_ID=42101
+  VITE_RPC_URL=https://evm.donut.rpc.push.org/
+
+---
 ## Deployment 5 — V2.1 direct-deposit + permissionless rebalance (on top of Deployment 4)
 Date: 2026-05-06
 Chain: Push Chain Donut Testnet (42101)

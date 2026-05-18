@@ -1,16 +1,16 @@
 ---
 name: push-pusd
 description: Integrate with PUSD and PUSD+ — the cross-chain par-backed stablecoin and yield-bearing companion on Push Chain Donut Testnet. Mint PUSD by depositing USDC/USDT from any supported chain, redeem PUSD for any reserve token, mint/redeem PUSD+ in one call, read protocol state, or call the contracts on-chain from another smart contract. Two integration paths from off-chain (external-chain wallet via multicall, or native Push EOA) and a Solidity interface for on-chain integrations.
-version: 3.1.0
+version: 3.2.0
 network: testnet
 chain_id: 42101
 rpc: https://evm.donut.rpc.push.org/
 explorer: https://donut.push.network
 contracts:
-  pusd: '0x488d080e16386379561a47A4955D22001d8A9D89'
-  pusd_manager: '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46'
-  pusd_plus_vault: '0xb55a5B36d82D3B7f18Afe42F390De565080A49a1'
-  insurance_fund: '0xFF7E741621ad5d39015759E3d606A631Fa319a62'
+  pusd: '0x774c799646bB60103e38Fd65b18D81bbDD1Aa760'
+  pusd_manager: '0x775A23E81fCd1f9C2997663b45401bEe80e4242A'
+  pusd_plus_vault: '0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16'
+  insurance_fund: '0x995348eABc39ecdF591b8A93B3568Dc3C1c0BBAD'
 packages:
   frontend: '@pushchain/ui-kit'
   backend: '@pushchain/core'
@@ -66,30 +66,33 @@ InsuranceFund.sol     ─ passive sidecar; receives the LP-fee haircut
 
 | Contract       | Proxy                                        |
 | -------------- | -------------------------------------------- |
-| PUSD           | `0x488d080e16386379561a47A4955D22001d8A9D89` |
-| PUSDManager    | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
-| PUSDPlusVault  | `0xb55a5B36d82D3B7f18Afe42F390De565080A49a1` |
-| InsuranceFund  | `0xFF7E741621ad5d39015759E3d606A631Fa319a62` |
+| PUSD           | `0x774c799646bB60103e38Fd65b18D81bbDD1Aa760` |
+| PUSDManager    | `0x775A23E81fCd1f9C2997663b45401bEe80e4242A` |
+| PUSDPlusVault  | `0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16` |
+| InsuranceFund  | `0x995348eABc39ecdF591b8A93B3568Dc3C1c0BBAD` |
 
 RPC: `https://evm.donut.rpc.push.org/` — Explorer: `https://donut.push.network`
 
 Always interact with the **proxy** addresses. Implementations change on upgrade; the proxies do not.
 
-### Reserve tokens (9 total, 5 chains, all 6 decimals on Donut)
+### Reserve tokens (10 total, 5 chains, all 6 decimals on Donut)
 
-| Symbol | Origin chain     | Donut address                                |
-| ------ | ---------------- | -------------------------------------------- |
-| USDT   | Ethereum Sepolia | `0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3` |
-| USDC   | Ethereum Sepolia | `0x7A58048036206bB898008b5bBDA85697DB1e5d66` |
-| USDT   | Solana Devnet    | `0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34` |
-| USDC   | Solana Devnet    | `0x04B8F634ABC7C879763F623e0f0550a4b5c4426F` |
-| USDT   | Base Sepolia     | `0x2C455189D2af6643B924A981a9080CcC63d5a567` |
-| USDC   | Base Sepolia     | `0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1` |
-| USDT   | Arbitrum Sepolia | `0x76Ad08339dF606BeEDe06f90e3FaF82c5b2fb2E9` |
-| USDC   | Arbitrum Sepolia | `0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C` |
-| USDT   | BNB Testnet      | `0x2f98B4235FD2BA0173a2B056D722879360B12E7b` |
+| Symbol   | Origin chain     | Donut address                                |
+| -------- | ---------------- | -------------------------------------------- |
+| USDT.eth | Ethereum Sepolia | `0x0f97A213207703923F5f0C613C9827f7C9A0f96B` |
+| USDC.eth | Ethereum Sepolia | `0x7A58048036206bB898008b5bBDA85697DB1e5d66` |
+| USDT.sol | Solana Devnet    | `0x4f1A3D22d170a2F4Bddb37845a962322e24f4e34` |
+| USDC.sol | Solana Devnet    | `0x04B8F634ABC7C879763F623e0f0550a4b5c4426F` |
+| USDT.base| Base Sepolia     | `0x148823809B853e1db187BC09A9ac909BC42F971a` |
+| USDC.base| Base Sepolia     | `0xD7C6cA1e2c0CE260BE0c0AD39C1540de460e3Be1` |
+| USDT.arb | Arbitrum Sepolia | `0xFE6E9DF2BbC9ce05D98b83B1365df6DcA9951891` |
+| USDC.arb | Arbitrum Sepolia | `0x1091cCBA2FF8d2A131AE4B35e34cf3308C48572C` |
+| USDT.bsc | BNB Testnet      | `0x731aF1Da5365259d27528557EE4aFBA4baC90ef2` |
+| USDC.bsc | BNB Testnet      | `0x120EBf25Dad7D6a09Ad2316f23f9Be95DBb90639` |
 
 > Source of truth: this list ≡ on-chain enumeration via `PUSDManager.getSupportedTokenAt(i)` ≡ [`app/src/contracts/tokens.ts`](https://github.com/pushchain/push-chain-pusd/blob/main/app/src/contracts/tokens.ts). On-chain `chainNamespace` strings are `Ethereum_Sepolia`, `Solana_Devnet`, `Base_Testnet`, `Arbitrum_Sepolia`, `BNB_Testnet`.
+
+> **BNB pair naming (v3.2.0):** the canonical accessor for the BNB-side pair migrated from `.bnb` to `.bsc` — both `USDT.bsc` and `USDC.bsc` are tracked under this suffix on-chain. The MOVEABLE SDK still uses `BNB_TESTNET` as the chain-namespace key (e.g. `PushChain.CONSTANTS.MOVEABLE.TOKEN.PUSH_TESTNET_DONUT.USDC.bsc`). Legacy `USDT.bnb` from Deployment 5 is no longer registered.
 
 > `setPlusVault`, `setFeeExempt`, `depositForVault` on PUSDManager are **vault-only** — gated by a two-key check (`msg.sender == plusVault && feeExempt[plusVault]`). Don't call them from integrator code.
 
@@ -194,8 +197,8 @@ function MintButton() {
     const h = PushChain.utils.helpers;
     const amount = h.parseUnits('100', 6);
     const recipient = pushChainClient.universal.account.address as `0x${string}`;
-    const TOKEN = '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3' as const; // USDT-Sepolia on Donut
-    const MANAGER = '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46' as const;
+    const TOKEN = '0x0f97A213207703923F5f0C613C9827f7C9A0f96B' as const; // USDT.eth on Donut
+    const MANAGER = '0x775A23E81fCd1f9C2997663b45401bEe80e4242A' as const;
 
     const multicall = [
       { to: TOKEN, value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
@@ -330,8 +333,8 @@ await (await pc.universal.sendTransaction({
 ### React — single call
 
 ```tsx
-const MANAGER = '0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46' as const;
-const TOKEN = '0xCA0C5E6F002A389E1580F0DB7cd06e4549B5F9d3' as const; // the asset you want back
+const MANAGER = '0x775A23E81fCd1f9C2997663b45401bEe80e4242A' as const;
+const TOKEN = '0x0f97A213207703923F5f0C613C9827f7C9A0f96B' as const; // the asset you want back
 
 const redeem = async () => {
   const h = PushChain.utils.helpers;
@@ -418,7 +421,7 @@ await (await pc.universal.sendTransaction({
 **Path A — multicall, reserve → PUSD+ in one signature:**
 
 ```tsx
-const VAULT = '0xb55a5B36d82D3B7f18Afe42F390De565080A49a1' as const;
+const VAULT = '0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16' as const;
 
 const mintPlus = async () => {
   const h = PushChain.utils.helpers;
@@ -443,7 +446,7 @@ const wrapPusd = async () => {
   const h = PushChain.utils.helpers;
   const amount = h.parseUnits('100', 6);
   const recipient = pushChainClient.universal.account.address as `0x${string}`;
-  const PUSD = '0x488d080e16386379561a47A4955D22001d8A9D89' as const;
+  const PUSD = '0x774c799646bB60103e38Fd65b18D81bbDD1Aa760' as const;
 
   const multicall = [
     { to: PUSD, value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
@@ -470,7 +473,7 @@ const redeemPlus = async () => {
   const plusAmount = h.parseUnits('99', 6);
   const recipient = pushChainClient.universal.account.address as `0x${string}`;
   // Pass PUSD address as preferredAsset to receive PUSD directly (unwrap path).
-  const PUSD = '0x488d080e16386379561a47A4955D22001d8A9D89' as const;
+  const PUSD = '0x774c799646bB60103e38Fd65b18D81bbDD1Aa760' as const;
 
   await (await pushChainClient.universal.sendTransaction({
     to: MANAGER, value: 0n,
@@ -564,7 +567,7 @@ import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
 contract PUSDMinter {
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+        IPUSDManager(0x775A23E81fCd1f9C2997663b45401bEe80e4242A);
 
     /// @notice Pull `amount` of `token` from caller, deposit into PUSDManager,
     ///         mint PUSD straight to `recipient`.
@@ -581,7 +584,7 @@ contract PUSDMinter {
 ```solidity
 contract PUSDPlusMinter {
     IPUSDManager public constant MANAGER =
-        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+        IPUSDManager(0x775A23E81fCd1f9C2997663b45401bEe80e4242A);
 
     function mintPlusFor(address token, uint256 amount, address recipient) external {
         IERC20(token).transferFrom(msg.sender, address(this), amount);
@@ -596,9 +599,9 @@ contract PUSDPlusMinter {
 ```solidity
 contract PUSDPlusRedeemer {
     IPUSDManager   public constant MANAGER =
-        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+        IPUSDManager(0x775A23E81fCd1f9C2997663b45401bEe80e4242A);
     IPUSDPlusVault public constant VAULT =
-        IPUSDPlusVault(0xb55a5B36d82D3B7f18Afe42F390De565080A49a1);
+        IPUSDPlusVault(0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16);
 
     /// @notice Burn caller's PUSD+ and pay out into a reserve token. PUSD+
     ///         approval not required — vault burns msg.sender via the manager.
@@ -616,9 +619,9 @@ contract PUSDPlusRedeemer {
 ```solidity
 contract PUSDReader {
     IPUSDManager   public constant MANAGER =
-        IPUSDManager(0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46);
+        IPUSDManager(0x775A23E81fCd1f9C2997663b45401bEe80e4242A);
     IPUSDPlusVault public constant VAULT =
-        IPUSDPlusVault(0xb55a5B36d82D3B7f18Afe42F390De565080A49a1);
+        IPUSDPlusVault(0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16);
 
     function quoteMint(address token, uint256 amount)
         external view returns (uint256 expectedPUSD)

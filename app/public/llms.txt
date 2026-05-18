@@ -27,10 +27,10 @@ Solidity, plus addresses, fees, ABI fragments, and gotchas:
 | Chain          | Push Chain Donut Testnet (chain ID 42101)    |
 | RPC            | `https://evm.donut.rpc.push.org/`            |
 | Explorer       | `https://donut.push.network`                 |
-| PUSD           | `0x488d080e16386379561a47A4955D22001d8A9D89` |
-| PUSDManager    | `0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46` |
-| PUSDPlusVault  | `0xb55a5B36d82D3B7f18Afe42F390De565080A49a1` |
-| InsuranceFund  | `0xFF7E741621ad5d39015759E3d606A631Fa319a62` |
+| PUSD           | `0x774c799646bB60103e38Fd65b18D81bbDD1Aa760` |
+| PUSDManager    | `0x775A23E81fCd1f9C2997663b45401bEe80e4242A` |
+| PUSDPlusVault  | `0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16` |
+| InsuranceFund  | `0x995348eABc39ecdF591b8A93B3568Dc3C1c0BBAD` |
 
 Always interact with the **proxy** addresses. Implementations change
 on upgrade; the proxies do not.

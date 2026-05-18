@@ -18,12 +18,11 @@ import "../src/PUSDPlusVault.sol";
  *         Exits with revert + descriptive message on any drift.
  */
 contract V21Smoke is Script {
-    address constant MANAGER_PROXY = 0x7A24Eea43a1095e9Dc652AB9Cba156a93Ed5Ed46;
-    address constant VAULT_PROXY = 0xb55a5B36d82D3B7f18Afe42F390De565080A49a1;
-
     function run() external view {
-        PUSDManager m = PUSDManager(MANAGER_PROXY);
-        PUSDPlusVault v = PUSDPlusVault(VAULT_PROXY);
+        address managerProxy = vm.envAddress("PUSD_MANAGER_PROXY");
+        address vaultProxy = vm.envAddress("PUSD_PLUS_VAULT_ADDRESS");
+        PUSDManager m = PUSDManager(managerProxy);
+        PUSDPlusVault v = PUSDPlusVault(vaultProxy);
 
         // ---- 1. Wiring intact ----
         require(m.plusVault() == address(v), "V21Smoke: plusVault drift");
@@ -45,8 +44,8 @@ contract V21Smoke is Script {
 
         console.log("");
         console.log("=== V21Smoke: PASS ===");
-        console.log("  PUSDManager proxy:    ", MANAGER_PROXY);
-        console.log("  PUSDPlusVault proxy:  ", VAULT_PROXY);
+        console.log("  PUSDManager proxy:    ", managerProxy);
+        console.log("  PUSDPlusVault proxy:  ", vaultProxy);
         console.log("  Supported tokens:     ", n);
         console.log("  Vault basket length:  ", v.basketLength());
         console.log("  publicRebalanceCooldown:", v.publicRebalanceCooldown());
