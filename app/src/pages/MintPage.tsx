@@ -48,7 +48,7 @@ const FAUCET_OVERRIDES: Record<string, FaucetOverride> = {
   // chainKey|symbol
   'ETHEREUM_SEPOLIA|USDC': { hash: '#writeContract#F4' },
   'BASE_SEPOLIA|USDC': { hash: '#writeContract#F4' },
-  'ARBITRUM_SEPOLIA|USDC': { hash: '#F4' },
+  'ARBITRUM_SEPOLIA|USDC': { hash: '#writeContract#F4' },
   'BNB_TESTNET|USDC': { hash: '#writeProxyContract#F4' },
   'SOLANA_DEVNET|USDC': { url: 'https://faucet.circle.com/' },
   'SOLANA_DEVNET|USDT': { url: 'https://discord.com/invite/pushchain', label: 'ASK IN DISCORD ↗' },
