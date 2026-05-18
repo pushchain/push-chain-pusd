@@ -657,31 +657,31 @@ export default function HomePage() {
             <span>THREE PRINCIPLES · NOT FOUR</span>
           </div>
           <div className="manifesto">
+
             <div className="manifesto__col">
               <div className="manifesto__numeral">I.</div>
-              <h3 className="manifesto__title">Boring is the feature.</h3>
-              <p className="manifesto__body">
-                PUSD doesn't rehypothecate, the risk is contained to you getting a stablecoin on a different chain in times of emergency.<br /><br />Your coins are always backed by either USDT or USDC.
-
-              </p>
-            </div>
-            <div className="manifesto__col">
-              <div className="manifesto__numeral">II.</div>
-              <h3 className="manifesto__title">Universal by construction.</h3>
-              <p className="manifesto__body">
-                A user on Ethereum doesn't bridge, then approve, then deposit.
-                They sign once. The Push Chain SDK handles the route. The chain of origin is a
-                routing detail, not a user concern.<br /><br />
-                Similarly, choose a destination chain and the SDK will handle the rest in a single transaction.
-              </p>
-            </div>
-            <div className="manifesto__col">
-              <div className="manifesto__numeral">III.</div>
               <h3 className="manifesto__title">
                 Safest yield generation.
               </h3>
               <p className="manifesto__body">
-                <b>PUSD v2</b> introduces PUSD+, an opt-in feature that lends a portion of its reserves to Internal AMMs (Uniswap v3) of Push Chain. Swapping exclusively between stablecoins of different chains.<br /><br /><b>The Risk</b> remains the same, PUSD promise of 1:1 backing is not compromised.<br /><br /><b>The Yield</b> is distributed to PUSD+ holders.
+                <b>Introducing PUSD+</b>, that uses Internal AMMs (Uniswap v3) of Push Chain to generate yield. Swapping exclusively between stablecoins of different chains.<br /><br /><b>The Risk</b> remains the same, PUSD promise of 1:1 backing is not compromised.<br /><br /><b>The Yield</b> is distributed to PUSD+ holders.
+              </p>
+            </div>
+            <div className="manifesto__col">
+              <div className="manifesto__numeral">II.</div>
+              <h3 className="manifesto__title">Boring is the feature.</h3>
+              <p className="manifesto__body">
+                PUSD doesn't rehypothecate, the risk is contained to you getting a stablecoin on a different chain in times of emergency.<br /><br />Your coins are always backed by either USDT or USDC.
+              </p>
+            </div>
+            <div className="manifesto__col">
+              <div className="manifesto__numeral">III.</div>
+              <h3 className="manifesto__title">Universal by construction.</h3>
+              <p className="manifesto__body">
+                A user on Ethereum doesn't bridge, then approve, then deposit.
+                They sign once and done. The chain of origin is a
+                routing detail, not a user concern.<br /><br />
+                Similarly, choose a destination chain and the protocol will handle the rest in a single transaction.
               </p>
             </div>
           </div>
