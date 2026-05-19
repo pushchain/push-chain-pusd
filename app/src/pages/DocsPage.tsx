@@ -16,6 +16,7 @@
 
 import { useState, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
+import { analytics } from "../lib/analytics";
 
 /* =========================================================================
    PART 1 — Editorial index data
@@ -330,6 +331,7 @@ export default function DocsPage() {
   const initialView: DocsView = searchParams.get('view') === 'plus' ? 'plus' : 'pusd';
   const [view, setViewState] = useState<DocsView>(initialView);
   const setView = (next: DocsView) => {
+    if (next !== view) analytics.event('docs_view_switch', { to: next });
     setViewState(next);
     const sp = new URLSearchParams(searchParams);
     if (next === 'plus') sp.set('view', 'plus');
@@ -425,6 +427,13 @@ export default function DocsPage() {
               <a
                 key={href}
                 href={href}
+                onClick={() =>
+                  analytics.event('docs_anchor_click', {
+                    view,
+                    anchor: href,
+                    label,
+                  })
+                }
                 style={{
                   fontFamily: "var(--f-mono)",
                   fontSize: 11,

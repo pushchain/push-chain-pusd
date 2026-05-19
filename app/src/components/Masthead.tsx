@@ -14,6 +14,7 @@
 import { PushUniversalAccountButton } from '@pushchain/ui-kit';
 import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
+import { analytics } from '../lib/analytics';
 
 type NavItem = { to: string; label: string; end?: boolean };
 
@@ -59,7 +60,12 @@ export function Masthead() {
   return (
     <header className="masthead">
       <div className="container masthead__inner">
-        <NavLink to="/" className="masthead__logo" aria-label="Push USD — home">
+        <NavLink
+          to="/"
+          className="masthead__logo"
+          aria-label="Push USD — home"
+          onClick={() => analytics.event('masthead_logo_click')}
+        >
           Push<em>USD</em>
         </NavLink>
 
@@ -70,6 +76,13 @@ export function Masthead() {
               to={item.to}
               end={item.end}
               className={({ isActive }) => (isActive ? 'active' : undefined)}
+              onClick={() =>
+                analytics.event('nav_click', {
+                  to: item.to,
+                  label: item.label,
+                  surface: 'desktop',
+                })
+              }
             >
               {item.label}
             </NavLink>
@@ -90,7 +103,11 @@ export function Masthead() {
             aria-label={menuOpen ? 'Close menu' : 'Open menu'}
             aria-expanded={menuOpen}
             aria-controls="masthead-drawer"
-            onClick={() => setMenuOpen((v) => !v)}
+            onClick={() => {
+              const next = !menuOpen;
+              analytics.event('masthead_menu_toggle', { open: next });
+              setMenuOpen(next);
+            }}
           >
             <span className={`masthead__hamburger-icon${menuOpen ? ' is-open' : ''}`} aria-hidden="true">
               <span />
@@ -135,6 +152,13 @@ export function Masthead() {
                 `masthead__drawer-link${isActive ? ' active' : ''}`
               }
               style={{ transitionDelay: menuOpen ? `${60 + i * 40}ms` : '0ms' }}
+              onClick={() =>
+                analytics.event('nav_click', {
+                  to: item.to,
+                  label: item.label,
+                  surface: 'drawer',
+                })
+              }
             >
               <span className="masthead__drawer-num">{String(i + 1).padStart(2, '0')}</span>
               <span className="masthead__drawer-label">{item.label}</span>

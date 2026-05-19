@@ -28,6 +28,7 @@ import { useRoles } from '../hooks/useRoles';
 import { useNAV } from '../hooks/useNAV';
 import { useVaultBook } from '../hooks/useVaultBook';
 import { useVaultPoolMeta } from '../hooks/useVaultPoolMeta';
+import { analytics } from '../lib/analytics';
 import { formatAmount } from '../lib/format';
 
 // Selectors / function fragments — minimal so we don't pull a full ABI here.
@@ -102,6 +103,7 @@ export default function AdminPage() {
 
   async function send(label: string, to: string, data: string) {
     if (!pushChainClient) return;
+    analytics.event('admin_action_submit', { label });
     try {
       setStage({ kind: 'signing', label });
       const tx = await pushChainClient.universal.sendTransaction({
@@ -112,9 +114,11 @@ export default function AdminPage() {
       const hash = tx.hash as `0x${string}`;
       setStage({ kind: 'broadcasting', hash, label });
       await tx.wait();
+      analytics.event('admin_action_confirmed', { label });
       setStage({ kind: 'confirmed', hash, label });
     } catch (e) {
       const message = e instanceof Error ? e.message : 'Transaction failed';
+      analytics.event('admin_action_failed', { label, reason: message.slice(0, 96) });
       setStage({ kind: 'error', message: message.slice(0, 240) });
     }
   }

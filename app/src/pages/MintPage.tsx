@@ -15,6 +15,7 @@ import { usePushChain } from '@pushchain/ui-kit';
 import { useMemo } from 'react';
 import { TokenPill } from '../components/TokenPill';
 import { TOKENS, type ReserveToken } from '../contracts/tokens';
+import { analytics } from '../lib/analytics';
 import { explorerAddressForChain } from '../lib/externalRpc';
 import { resolveMoveableToken } from '../lib/wallet';
 
@@ -91,7 +92,17 @@ export default function MintPage() {
               <code>faucet()</code> with no arguments. The mint lands on the
               wallet you connect, on the source chain. To use the token on Push
               Chain afterwards, bridge it through the{' '}
-              <a className="link-mono" href="/convert/mint">
+              <a
+                className="link-mono"
+                href="/convert/mint"
+                onClick={() =>
+                  analytics.event('nav_click', {
+                    to: '/convert/mint',
+                    label: 'CONVERT',
+                    surface: 'mint_page_lede',
+                  })
+                }
+              >
                 convert page
               </a>
               .
@@ -164,6 +175,14 @@ function FaucetRow({
             target="_blank"
             rel="noreferrer"
             title={sourceAddress}
+            onClick={() =>
+              analytics.event('explorer_link_clicked', {
+                contract: 'faucet_source_token',
+                surface: 'mint_page',
+                symbol: token.symbol,
+                chain: token.chainShort,
+              })
+            }
           >
             {truncAddress(sourceAddress)} ↗
           </a>
@@ -180,6 +199,18 @@ function FaucetRow({
             href={faucetUrl(chainKey, token.symbol, sourceAddress)}
             target="_blank"
             rel="noreferrer"
+            onClick={() =>
+              analytics.event('faucet_link_clicked', {
+                symbol: token.symbol,
+                chain: token.chainShort,
+                chain_key: chainKey,
+                kind: override?.url
+                  ? 'override_url'
+                  : isExplorerOnly
+                    ? 'explorer_only'
+                    : 'write_contract',
+              })
+            }
           >
             {override?.label ?? (isExplorerOnly ? 'VIEW MINT ↗' : 'OPEN FAUCET ↗')}
           </a>

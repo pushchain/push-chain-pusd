@@ -16,6 +16,7 @@
 import { NavLink } from 'react-router-dom';
 import { PushUI, usePushWalletContext } from '@pushchain/ui-kit';
 import type { ReactNode } from 'react';
+import { analytics } from '../lib/analytics';
 
 type ConnectedGateProps = {
   title?: string;
@@ -45,13 +46,27 @@ export function ConnectedGate({
         <button
           type="button"
           className="btn btn--primary"
-          onClick={handleConnectToPushWallet}
+          onClick={() => {
+            analytics.event('connect_gate_connect_clicked', { title });
+            handleConnectToPushWallet();
+          }}
           disabled={connecting}
         >
           {connecting ? 'CONNECTING…' : 'CONNECT WALLET →'}
         </button>
         {links?.map((l) => (
-          <NavLink key={l.to} to={l.to} className="btn btn--ghost">
+          <NavLink
+            key={l.to}
+            to={l.to}
+            className="btn btn--ghost"
+            onClick={() =>
+              analytics.event('nav_click', {
+                to: l.to,
+                label: l.label,
+                surface: 'connected_gate',
+              })
+            }
+          >
             {l.label}
           </NavLink>
         ))}

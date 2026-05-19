@@ -6,6 +6,7 @@
  */
 
 import type { HistoryRow } from '../hooks/useUserHistory';
+import { analytics } from '../lib/analytics';
 import { explorerTx, formatAmount, formatTimestamp, truncHash } from '../lib/format';
 import { TokenPill } from './TokenPill';
 
@@ -26,8 +27,23 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
         <div className="empty__glyph">∅</div>
         <div className="empty__title">NO ACTIVITY YET</div>
         <div className="empty__sub">
-          Head to <a className="link-mono" href="/mint">/mint</a> or{' '}
-          <a className="link-mono" href="/redeem">/redeem</a> to get started.
+          Head to{' '}
+          <a
+            className="link-mono"
+            href="/mint"
+            onClick={() => analytics.event('nav_click', { to: '/mint', label: 'MINT', surface: 'dashboard_empty' })}
+          >
+            /mint
+          </a>{' '}
+          or{' '}
+          <a
+            className="link-mono"
+            href="/redeem"
+            onClick={() => analytics.event('nav_click', { to: '/redeem', label: 'REDEEM', surface: 'dashboard_empty' })}
+          >
+            /redeem
+          </a>{' '}
+          to get started.
         </div>
       </div>
     );
@@ -97,7 +113,19 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
                 <TokenPill symbol={r.asset.symbol} chainShort={r.asset.chainShort} size="sm" />
               </td>
               <td className="addr">
-                <a className="link-mono" href={explorerTx(r.txHash)} target="_blank" rel="noreferrer">
+                <a
+                  className="link-mono"
+                  href={explorerTx(r.txHash)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() =>
+                    analytics.event('explorer_link_clicked', {
+                      contract: 'tx',
+                      surface: 'dashboard_history_row',
+                      activity_type: r.type,
+                    })
+                  }
+                >
                   {truncHash(r.txHash)} ↗
                 </a>
               </td>

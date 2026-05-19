@@ -15,6 +15,7 @@ import {
   PUSD_MANAGER_ADDRESS,
   PUSD_PLUS_ADDRESS,
 } from '../contracts/config';
+import { analytics } from '../lib/analytics';
 import { explorerAddress, truncAddr } from '../lib/format';
 import { AsciiWave } from './AsciiWave';
 
@@ -39,9 +40,30 @@ export function Footer() {
             <div>
               <div className="footer__col-label">Protocol</div>
               <ul className="footer__links">
-                <li><a href="/reserves">Reserves</a></li>
-                <li><a href="/activity">Activity</a></li>
-                <li><a href="/docs">Docs</a></li>
+                <li>
+                  <a
+                    href="/reserves"
+                    onClick={() => analytics.event('footer_link_clicked', { group: 'protocol', target: 'reserves' })}
+                  >
+                    Reserves
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/activity"
+                    onClick={() => analytics.event('footer_link_clicked', { group: 'protocol', target: 'activity' })}
+                  >
+                    Activity
+                  </a>
+                </li>
+                <li>
+                  <a
+                    href="/docs"
+                    onClick={() => analytics.event('footer_link_clicked', { group: 'protocol', target: 'docs' })}
+                  >
+                    Docs
+                  </a>
+                </li>
               </ul>
             </div>
 
@@ -49,17 +71,32 @@ export function Footer() {
               <div className="footer__col-label">Elsewhere</div>
               <ul className="footer__links">
                 <li>
-                  <a href="https://github.com/pushchain/push-chain-pusd" target="_blank" rel="noreferrer">
+                  <a
+                    href="https://github.com/pushchain/push-chain-pusd"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => analytics.event('footer_link_clicked', { group: 'elsewhere', target: 'github' })}
+                  >
                     GitHub ↗
                   </a>
                 </li>
                 <li>
-                  <a href="https://donut.push.network" target="_blank" rel="noreferrer">
+                  <a
+                    href="https://donut.push.network"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => analytics.event('footer_link_clicked', { group: 'elsewhere', target: 'explorer' })}
+                  >
                     Explorer ↗
                   </a>
                 </li>
                 <li>
-                  <a href="https://push.org" target="_blank" rel="noreferrer">
+                  <a
+                    href="https://push.org"
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() => analytics.event('footer_link_clicked', { group: 'elsewhere', target: 'push' })}
+                  >
                     Push ↗
                   </a>
                 </li>
@@ -80,6 +117,7 @@ export function Footer() {
                 href={explorerAddress(PUSD_ADDRESS)}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => analytics.event('explorer_link_clicked', { contract: 'pusd', surface: 'footer' })}
               >
                 {truncAddr(PUSD_ADDRESS)}
               </a>
@@ -90,6 +128,7 @@ export function Footer() {
                 href={explorerAddress(PUSD_MANAGER_ADDRESS)}
                 target="_blank"
                 rel="noreferrer"
+                onClick={() => analytics.event('explorer_link_clicked', { contract: 'pusd_manager', surface: 'footer' })}
               >
                 {truncAddr(PUSD_MANAGER_ADDRESS)}
               </a>
@@ -104,6 +143,7 @@ export function Footer() {
                       href={explorerAddress(PUSD_PLUS_ADDRESS)}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={() => analytics.event('explorer_link_clicked', { contract: 'pusd_plus', surface: 'footer' })}
                     >
                       {truncAddr(PUSD_PLUS_ADDRESS)}
                     </a>
@@ -118,6 +158,7 @@ export function Footer() {
                       href={explorerAddress(INSURANCE_FUND_ADDRESS)}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={() => analytics.event('explorer_link_clicked', { contract: 'insurance_fund', surface: 'footer' })}
                     >
                       {truncAddr(INSURANCE_FUND_ADDRESS)}
                     </a>

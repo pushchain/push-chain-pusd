@@ -17,6 +17,7 @@ import { ConnectedGate } from '../components/ConnectedGate';
 import { HistoryTable } from '../components/HistoryTable';
 import { useIsConnected } from '../hooks/useIsConnected';
 import { useUserHistory } from '../hooks/useUserHistory';
+import { analytics } from '../lib/analytics';
 import { explorerAddressForChain } from '../lib/externalRpc';
 import { explorerAddress, formatRelative, truncAddr } from '../lib/format';
 import { chainLabelFromKey, isPushChainKey, resolveOriginChainKey } from '../lib/wallet';
@@ -75,18 +76,46 @@ export default function DashboardPage() {
                   href={explorerAddressForChain(origin.address, originChainKey)}
                   target="_blank"
                   rel="noreferrer"
+                  onClick={() =>
+                    analytics.event('explorer_link_clicked', {
+                      contract: 'origin_wallet',
+                      surface: 'dashboard_header',
+                    })
+                  }
                 >
                   {truncAddr(origin.address)}
                 </a>
                 {' '}on {originChainLabel}
                 {' · On Push '}
-                <a className="link-mono" href={explorerAddress(account)} target="_blank" rel="noreferrer">
+                <a
+                  className="link-mono"
+                  href={explorerAddress(account)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() =>
+                    analytics.event('explorer_link_clicked', {
+                      contract: 'push_wallet',
+                      surface: 'dashboard_header',
+                    })
+                  }
+                >
                   {truncAddr(account)}
                 </a>
               </>
             ) : account ? (
               <>
-                <a className="link-mono" href={explorerAddress(account)} target="_blank" rel="noreferrer">
+                <a
+                  className="link-mono"
+                  href={explorerAddress(account)}
+                  target="_blank"
+                  rel="noreferrer"
+                  onClick={() =>
+                    analytics.event('explorer_link_clicked', {
+                      contract: 'push_wallet',
+                      surface: 'dashboard_header',
+                    })
+                  }
+                >
                   {truncAddr(account)}
                 </a>
                 {originChainLabel ? ` on ${originChainLabel}` : ''}

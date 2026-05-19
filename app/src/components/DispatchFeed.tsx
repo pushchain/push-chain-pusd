@@ -13,6 +13,7 @@
 import type { ReactNode } from 'react';
 import { useControllerAddress } from '../hooks/useControllerAddress';
 import { useProtocolDispatch, type DispatchRow } from '../hooks/useProtocolDispatch';
+import { analytics } from '../lib/analytics';
 import { explorerTx, formatAmount, formatRelative, truncAddr } from '../lib/format';
 
 function dotClass(type: DispatchRow['type']): string {
@@ -87,7 +88,18 @@ function DispatchFoot({
   return (
     <div className="dispatch__foot">
       {prefix}{' '}
-      <a className="link-mono" href={explorerTx(txHash)} target="_blank" rel="noreferrer">
+      <a
+        className="link-mono"
+        href={explorerTx(txHash)}
+        target="_blank"
+        rel="noreferrer"
+        onClick={() =>
+          analytics.event('explorer_link_clicked', {
+            contract: 'tx',
+            surface: 'dispatch_card',
+          })
+        }
+      >
         {truncAddr(displayAddr)}
       </a>
       {chainLabel}

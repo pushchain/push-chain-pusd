@@ -19,6 +19,7 @@ import { useCountUp } from '../hooks/useCountUp';
 import { useNAVHistory } from '../hooks/useNAVHistory';
 import { useQueueStats } from '../hooks/useQueueStats';
 import { useVaultBook } from '../hooks/useVaultBook';
+import { analytics } from '../lib/analytics';
 import { explorerAddress, formatAmount, truncAddr } from '../lib/format';
 import { Sparkline } from './Sparkline';
 
@@ -289,6 +290,12 @@ export function VaultBook() {
                     href={explorerAddress(book.insuranceFund.address)}
                     target="_blank"
                     rel="noreferrer"
+                    onClick={() =>
+                      analytics.event('explorer_link_clicked', {
+                        contract: 'insurance_fund',
+                        surface: 'vault_book',
+                      })
+                    }
                   >
                     {truncAddr(book.insuranceFund.address)} ↗
                   </a>

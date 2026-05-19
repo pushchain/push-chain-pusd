@@ -26,6 +26,8 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { EditorialBand } from './components/EditorialBand';
 import { Footer } from './components/Footer';
 import { Masthead } from './components/Masthead';
+import { usePageView } from './hooks/usePageView';
+import { useTrackWallet } from './hooks/useTrackWallet';
 import ActivityPage from './pages/ActivityPage';
 import AdminPage from './pages/AdminPage';
 import AnimationPreviewPage from './pages/AnimationPreviewPage';
@@ -36,9 +38,19 @@ import HomePage from './pages/HomePage';
 import MintPage from './pages/MintPage';
 import ReservesDetailPage from './pages/ReservesDetailPage';
 
+// Analytics tracking lives inside the router so usePageView can read the
+// current location, and inside the Push wallet provider so useTrackWallet
+// can react to universal-account transitions.
+function AnalyticsTracker() {
+  usePageView();
+  useTrackWallet();
+  return null;
+}
+
 function App() {
   return (
     <BrowserRouter>
+      <AnalyticsTracker />
       <div className="app-shell">
         <EditorialBand />
         <Masthead />

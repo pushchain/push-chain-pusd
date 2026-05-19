@@ -14,6 +14,7 @@ import { useNAV } from '../hooks/useNAV';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { usePUSDPlusBalance } from '../hooks/usePUSDPlusBalance';
 import { useUserQueueClaims, type QueueClaim } from '../hooks/useUserQueueClaims';
+import { analytics } from '../lib/analytics';
 import { buildFulfillQueueClaimLeg, type HelpersLike } from '../lib/cascade';
 import { formatAmount } from '../lib/format';
 
@@ -29,6 +30,9 @@ export function BalanceStrip() {
 
   const onClaim = async (claim: QueueClaim) => {
     if (!pushChainClient || !PushChain || !PUSD_PLUS_ADDRESS) return;
+    analytics.event('dashboard_queue_claim_clicked', {
+      queue_id: claim.queueId.toString(),
+    });
     setClaiming(claim.queueId);
     setClaimError(null);
     try {
@@ -41,8 +45,16 @@ export function BalanceStrip() {
         data: [leg],
       } as any);
       await tx.wait();
+      analytics.event('dashboard_queue_claim_confirmed', {
+        queue_id: claim.queueId.toString(),
+      });
     } catch (err) {
-      setClaimError(err instanceof Error ? err.message : 'Claim failed');
+      const message = err instanceof Error ? err.message : 'Claim failed';
+      analytics.event('dashboard_queue_claim_failed', {
+        queue_id: claim.queueId.toString(),
+        reason: message.slice(0, 96),
+      });
+      setClaimError(message);
     } finally {
       setClaiming(null);
     }
@@ -61,9 +73,25 @@ export function BalanceStrip() {
               {pusdPlusLoading ? '…' : formatAmount(pusdPlusBalance, 6, { maxFractionDigits: 6 })}
             </div>
             <div className="balance-card__actions">
-              <Link to="/convert/mint" className="balance-card__action">MINT PUSD+ →</Link>
-              <Link to="/convert/redeem" className="balance-card__action">REDEEM →</Link>
-              <Link to="/convert/redeem?wrap=1" className="balance-card__action">
+              <Link
+                to="/convert/mint"
+                className="balance-card__action"
+                onClick={() => analytics.event('dashboard_balance_action', { card: 'pusd-plus', action: 'mint' })}
+              >
+                MINT PUSD+ →
+              </Link>
+              <Link
+                to="/convert/redeem"
+                className="balance-card__action"
+                onClick={() => analytics.event('dashboard_balance_action', { card: 'pusd-plus', action: 'redeem' })}
+              >
+                REDEEM →
+              </Link>
+              <Link
+                to="/convert/redeem?wrap=1"
+                className="balance-card__action"
+                onClick={() => analytics.event('dashboard_balance_action', { card: 'pusd-plus', action: 'unwrap_to_pusd' })}
+              >
                 CONVERT TO PUSD →
               </Link>
             </div>
@@ -79,10 +107,26 @@ export function BalanceStrip() {
             {pusdLoading ? '…' : formatAmount(pusdBalance, 6, { maxFractionDigits: 6 })}
           </div>
           <div className="balance-card__actions">
-            <Link to="/convert/mint" className="balance-card__action">MINT PUSD →</Link>
-            <Link to="/convert/redeem" className="balance-card__action">REDEEM →</Link>
+            <Link
+              to="/convert/mint"
+              className="balance-card__action"
+              onClick={() => analytics.event('dashboard_balance_action', { card: 'pusd', action: 'mint' })}
+            >
+              MINT PUSD →
+            </Link>
+            <Link
+              to="/convert/redeem"
+              className="balance-card__action"
+              onClick={() => analytics.event('dashboard_balance_action', { card: 'pusd', action: 'redeem' })}
+            >
+              REDEEM →
+            </Link>
             {!unconfigured && (
-              <Link to="/convert/mint?wrap=1" className="balance-card__action balance-card__action--accent">
+              <Link
+                to="/convert/mint?wrap=1"
+                className="balance-card__action balance-card__action--accent"
+                onClick={() => analytics.event('dashboard_balance_action', { card: 'pusd', action: 'wrap_to_plus' })}
+              >
                 CONVERT TO PUSD+ →
               </Link>
             )}

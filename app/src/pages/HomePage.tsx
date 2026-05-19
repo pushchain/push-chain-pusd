@@ -18,7 +18,7 @@
  * container; editorial prose sections sit inside `.container`.
  */
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ChestTrigger } from "../components/ChestTrigger";
 import { ConvertPanel } from "../components/ConvertPanel";
@@ -36,6 +36,7 @@ import { usePUSDBalance } from "../hooks/usePUSDBalance";
 import { useProtocolStats } from "../hooks/useProtocolStats";
 import { useReserves } from "../hooks/useReserves";
 import { useVaultBook } from "../hooks/useVaultBook";
+import { analytics } from "../lib/analytics";
 import {
   explorerAddress,
   formatAmount,
@@ -73,6 +74,7 @@ export default function HomePage() {
   const initialView: HomeView = searchParams.get('view') === 'pusd' ? 'pusd' : 'plus';
   const [view, setViewState] = useState<HomeView>(initialView);
   const setView = (next: HomeView) => {
+    if (next !== view) analytics.event('home_view_switch', { to: next });
     setViewState(next);
     const sp = new URLSearchParams(searchParams);
     if (next === 'pusd') sp.set('view', 'pusd');
@@ -84,6 +86,15 @@ export default function HomePage() {
   // opacity of the §01 header tagline so it fades in lock-step with the
   // sliding curtain content.
   const [promiseOpen, setPromiseOpen] = useState(0);
+  const promiseStateRef = useRef<'closed' | 'open'>('closed');
+  const onPromiseProgress = useCallback((open: number) => {
+    setPromiseOpen(open);
+    const next = open > 0.5 ? 'open' : 'closed';
+    if (next !== promiseStateRef.current) {
+      promiseStateRef.current = next;
+      analytics.event(next === 'open' ? 'home_promise_curtain_open' : 'home_promise_curtain_close');
+    }
+  }, []);
 
   // §02 swap state. The Book (proof of reserves) and The Yield (PUSD+ peek)
   // share the same slot — clicking the piggy bank or the chest fires the
@@ -121,10 +132,12 @@ export default function HomePage() {
   // Piggy → 'out' (coins burst from broken piggy). Chest → 'in' (coins
   // collected back into the open chest).
   const triggerToYield = useCallback((origin: { x: number; y: number }) => {
+    analytics.event('home_proof_switch', { to: 'yield' });
     setSplash({ origin, direction: 'out' });
     setProofFaded(true);
   }, []);
   const triggerToBook = useCallback((origin: { x: number; y: number }) => {
+    analytics.event('home_proof_switch', { to: 'book' });
     setSplash({ origin, direction: 'in' });
     setProofFaded(true);
   }, []);
@@ -362,7 +375,7 @@ export default function HomePage() {
             </span>
           </div>
           <PromiseCurtain
-            onProgress={setPromiseOpen}
+            onProgress={onPromiseProgress}
             front={
               <div className="promise-grid">
                 <p className="promise-grid__quote">
@@ -582,6 +595,14 @@ export default function HomePage() {
                             href={explorerAddress(r.address)}
                             target="_blank"
                             rel="noreferrer"
+                            onClick={() =>
+                              analytics.event('explorer_link_clicked', {
+                                contract: 'reserve_token',
+                                surface: 'home_book',
+                                symbol: r.symbol,
+                                chain: r.chainShort,
+                              })
+                            }
                           >
                             {truncAddr(r.address)}
                           </a>

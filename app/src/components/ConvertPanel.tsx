@@ -34,6 +34,7 @@ import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { usePUSDPlusBalance } from '../hooks/usePUSDPlusBalance';
 import { useRedeemRecipient } from '../hooks/useRedeemRecipient';
 import { useTokenBalance } from '../hooks/useTokenBalance';
+import { analytics, toAmountNumber } from '../lib/analytics';
 import {
   buildApproveLeg,
   buildDepositLeg,
@@ -282,6 +283,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     if (!amountValid || isPlus) return;
     const feeBps = allowBasket ? baseFeeBps : baseFeeBps + preferredFeeBps;
     if (feeBps === 0) return;
+    analytics.event('convert_exact_out_clicked', {
+      basket: allowBasket,
+      fee_bps: feeBps,
+    });
     const divisor = 10_000n - BigInt(feeBps);
     const invertedBurn = (parsedAmount * 10_000n + divisor - 1n) / divisor; // ceiling div
     const base = 10n ** BigInt(decimals);
@@ -446,6 +451,21 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     // async closure).
     let submittedHash: `0x${string}` | null = null;
 
+    const analyticsCommon = {
+      mode,
+      product,
+      route: isExternalRoute ? 'external' : 'push',
+      token: selected.symbol,
+      token_chain: selected.chainShort,
+      origin_chain: origin?.chain ?? 'unknown',
+      amount_pusd: toAmountNumber(mode === 'mint' ? receiveAmount : parsedAmount, 6),
+      amount_token: toAmountNumber(parsedAmount, decimals),
+      basket: allowBasket,
+      wrap: wrapMode && isPlus,
+    };
+
+    analytics.event('convert_submit', analyticsCommon);
+
     try {
       if (mode === 'mint') {
         const mintLeg = isPlus
@@ -482,8 +502,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         const tx = await pushChainClient.universal.sendTransaction(txOptions);
         const hash = tx.hash as `0x${string}`;
         submittedHash = hash;
+        analytics.event('convert_signed', analyticsCommon);
         setStage({ kind: 'broadcasting', hash });
         await tx.wait();
+        analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: false });
         setStage({ kind: 'confirmed', hash });
         setAmount('');
         await fireQuestEvent(hash);
@@ -575,6 +597,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       const cascade = await pushChainClient.universal.executeTransactions(preparedTxs);
       const initialHash = cascade.initialTxHash as `0x${string}`;
       submittedHash = initialHash;
+      analytics.event('convert_signed', analyticsCommon);
       setStage({ kind: 'broadcasting', hash: initialHash });
       setProgressNote('Waiting for Push Chain confirmation…');
 
@@ -620,14 +643,25 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       if (needsExternalRecipient) {
         const hop1 = cascade.hops[1];
         const outHash = (hop1?.outboundDetails?.externalTxHash ?? hop1?.txHash ?? initialHash) as `0x${string}`;
+        analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: true });
+        analytics.event('convert_step2_confirmed', {
+          ...analyticsCommon,
+          dest_chain: destChainKey ?? 'unknown',
+        });
         setStage({ kind: 'step2-confirmed', prevHash: initialHash, hash: outHash });
       } else {
+        analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: false });
         setStage({ kind: 'confirmed', hash: initialHash });
       }
       setAmount('');
       await fireQuestEvent(initialHash);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Transaction failed';
+      analytics.event('convert_failed', {
+        ...analyticsCommon,
+        reason: message.slice(0, 96),
+        broadcasted: !!submittedHash,
+      });
       setStage({ kind: 'error', message });
       // Only report FAILED when the tx reached the chain (we have a hash).
       // Pre-broadcast failures (user rejection, gas estimation, etc.) have no
@@ -651,6 +685,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   }, [account, handleConnectToPushWallet]);
 
   const handleSwitchAccount = () => {
+    analytics.event('wallet_switch_clicked', {
+      surface: 'convert_source_header',
+      had_account: !!account,
+    });
     setRouteTouched(false);
     if (account) {
       pendingConnectRef.current = true;
@@ -748,6 +786,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   // --- tab switcher navigates the URL -----------------------------------
   const goMode = (next: Mode) => {
     if (next === mode) return;
+    analytics.event('convert_tab_switch', { to: next, product, advanced });
     setMode(next);
     setAmount('');
     setStage({ kind: 'idle' });
@@ -767,6 +806,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               className={`convert__product-btn ${isPlus ? 'convert__product-btn--active' : ''}`}
               onClick={() => {
                 if (!isPlus) {
+                  analytics.event('convert_product_switch', { to: 'pusd-plus' });
                   setProduct('pusd-plus');
                   setAmount('');
                   setStage({ kind: 'idle' });
@@ -784,6 +824,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               className={`convert__product-btn ${!isPlus ? 'convert__product-btn--active' : ''}`}
               onClick={() => {
                 if (isPlus) {
+                  analytics.event('convert_product_switch', { to: 'pusd' });
                   setProduct('pusd');
                   setAmount('');
                   setStage({ kind: 'idle' });
@@ -834,6 +875,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               className="convert__wrap-banner-x"
               aria-label="Exit wrap mode"
               onClick={() => {
+                analytics.event('convert_wrap_mode_exit', { mode });
                 const next = new URLSearchParams(searchParams);
                 next.delete('wrap');
                 setSearchParams(next, { replace: true });
@@ -873,7 +915,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             className="src-header__aside"
             onClick={() => {
               setRouteTouched(true);
-              setRoute((r) => (r === 'external' ? 'push' : 'external'));
+              setRoute((r) => {
+                const next = r === 'external' ? 'push' : 'external';
+                analytics.event('convert_route_toggle', { mode: 'mint', to: next });
+                return next;
+              });
             }}
             disabled={submitting}
           >
@@ -891,6 +937,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               type="button"
               disabled={!balanceKnown || balance === 0n}
               onClick={() => {
+                analytics.event('convert_amount_max_clicked', {
+                  mode,
+                  product,
+                  token: mode === 'mint' ? selected.symbol : productLabel,
+                });
                 const base = 10n ** BigInt(decimals);
                 const whole = balance / base;
                 const frac = balance % base;
@@ -917,7 +968,13 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               <button
                 type="button"
                 className="selector-btn"
-                onClick={() => setShowSelector((s) => !s)}
+                onClick={() => {
+                  setShowSelector((s) => {
+                    const next = !s;
+                    if (next) analytics.event('convert_token_selector_open', { mode });
+                    return next;
+                  });
+                }}
                 disabled={submitting}
               >
                 <TokenPill symbol={selected.symbol} chainShort={mintSourceChainShort} size="sm" />
@@ -932,7 +989,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               <button
                 type="button"
                 className="src-header__action"
-                onClick={() => navigate('/mint')}
+                onClick={() => {
+                  analytics.event('convert_faucet_link_clicked_inline');
+                  navigate('/mint');
+                }}
                 disabled={submitting}
               >
                 Don&apos;t have USDC/USDT?{' '}
@@ -954,6 +1014,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     role="option"
                     aria-selected={active}
                     onClick={() => {
+                      analytics.event('convert_token_select', {
+                        mode: 'mint',
+                        symbol: t.symbol,
+                        chain: t.chainShort,
+                      });
                       setSelected(t);
                       setShowSelector(false);
                     }}
@@ -971,7 +1036,15 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                       href={explorerAddressForChain(t.address, 'PUSH_TESTNET_DONUT')}
                       target="_blank"
                       rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        analytics.event('explorer_link_clicked', {
+                          contract: 'reserve_token',
+                          surface: 'convert_mint_token_row',
+                          symbol: t.symbol,
+                          chain: t.chainShort,
+                        });
+                      }}
                     >
                       {t.address.slice(0, 6)}…{t.address.slice(-4)} ↗
                     </a>
@@ -1019,7 +1092,13 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               <button
                 type="button"
                 className="selector-btn"
-                onClick={() => setShowSelector((s) => !s)}
+                onClick={() => {
+                  setShowSelector((s) => {
+                    const next = !s;
+                    if (next) analytics.event('convert_token_selector_open', { mode });
+                    return next;
+                  });
+                }}
                 disabled={submitting}
               >
                 <TokenPill
@@ -1054,6 +1133,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     aria-selected={active}
                     style={{ position: 'relative' }}
                     onClick={() => {
+                      analytics.event('convert_token_select', {
+                        mode: 'redeem',
+                        symbol: t.symbol,
+                        chain: t.chainShort,
+                      });
                       setSelected(t);
                       setShowSelector(false);
                     }}
@@ -1081,7 +1165,15 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                       href={explorerAddressForChain(t.address, 'PUSH_TESTNET_DONUT')}
                       target="_blank"
                       rel="noreferrer"
-                      onClick={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        analytics.event('explorer_link_clicked', {
+                          contract: 'reserve_token',
+                          surface: 'convert_redeem_token_row',
+                          symbol: t.symbol,
+                          chain: t.chainShort,
+                        });
+                      }}
                     >
                       {t.address.slice(0, 6)}…{t.address.slice(-4)} ↗
                     </a>
@@ -1103,6 +1195,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                 <button
                   type="button"
                   onClick={() => {
+                    analytics.event('convert_recipient_reset', { mode: 'mint' });
                     setMintRecipientTouched(false);
                     setMintRecipient(account);
                   }}
@@ -1118,6 +1211,9 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                 placeholder="0x…"
                 value={mintRecipient}
                 onChange={(e) => {
+                  if (!mintRecipientTouched) {
+                    analytics.event('convert_recipient_overridden', { mode: 'mint' });
+                  }
                   setMintRecipientTouched(true);
                   setMintRecipient(e.target.value.trim());
                 }}
@@ -1162,7 +1258,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               <button
                 type="button"
                 className="src-header__action"
-                onClick={handleConnectToPushWallet}
+                onClick={() => {
+                  analytics.event('wallet_connect_clicked', { surface: 'convert_destination_header' });
+                  handleConnectToPushWallet();
+                }}
               >
                 <span className="src-header__action-link">Connect wallet ↗</span>
               </button>
@@ -1189,7 +1288,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                   className="src-header__action"
                   onClick={() => {
                     setRouteTouched(true);
-                    setRoute((r) => (r === 'external' ? 'push' : 'external'));
+                    setRoute((r) => {
+                      const next = r === 'external' ? 'push' : 'external';
+                      analytics.event('convert_route_toggle', { mode: 'redeem', to: next });
+                      return next;
+                    });
                   }}
                   disabled={submitting}
                 >
@@ -1211,6 +1314,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                 <button
                   type="button"
                   onClick={() => {
+                    analytics.event('convert_recipient_reset', { mode: 'redeem' });
                     setRecipientTouched(false);
                     setExternalRecipient(autoRecipient.address);
                   }}
@@ -1226,6 +1330,13 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                 placeholder={autoRecipient.loading ? 'Deriving address…' : selected.moveableKey[0].startsWith('SOLANA') ? 'Solana address…' : '0x…'}
                 value={externalRecipient}
                 onChange={(e) => {
+                  if (!recipientTouched) {
+                    analytics.event('convert_recipient_overridden', {
+                      mode: 'redeem',
+                      external_route: isExternalRoute,
+                      dest_chain: selected.moveableKey[0],
+                    });
+                  }
                   setRecipientTouched(true);
                   setExternalRecipient(e.target.value.trim());
                 }}
@@ -1262,6 +1373,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             tabIndex={0}
             onClick={() => {
               const next = !allowBasket;
+              analytics.event('convert_basket_toggle', { on: next });
               setAllowBasket(next);
               if (next) { setRoute('push'); setRouteTouched(true); }
             }}
@@ -1269,6 +1381,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               if (e.key === 'Enter' || e.key === ' ') {
                 e.preventDefault();
                 const next = !allowBasket;
+                analytics.event('convert_basket_toggle', { on: next });
                 setAllowBasket(next);
                 if (next) { setRoute('push'); setRouteTouched(true); }
               }
@@ -1340,7 +1453,14 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         <button
           type="button"
           className={`btn ${solventHalt ? 'btn--danger' : 'btn--accent'} btn--block convert__cta`}
-          onClick={account ? handleConvert : handleConnectToPushWallet}
+          onClick={() => {
+            if (account) {
+              handleConvert();
+            } else {
+              analytics.event('wallet_connect_clicked', { surface: 'convert_cta', mode });
+              handleConnectToPushWallet();
+            }
+          }}
           disabled={ctaDisabled && !!account}
         >
           {ctaLabel}
@@ -1356,6 +1476,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               href={explorerAddressForChain(originAddress, originChainKey)}
               target="_blank"
               rel="noreferrer"
+              onClick={() =>
+                analytics.event('explorer_link_clicked', {
+                  contract: 'origin_wallet',
+                  surface: 'convert_fineprint',
+                })
+              }
             >
               {originAddress.slice(0, 6)}…{originAddress.slice(-4)} ↗
             </a>
@@ -1403,6 +1529,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               href={explorerTx('prevHash' in stage ? stage.prevHash : stage.hash)}
               target="_blank"
               rel="noreferrer"
+              onClick={() =>
+                analytics.event('explorer_link_clicked', {
+                  contract: 'tx',
+                  surface: 'convert_feedback_step1',
+                })
+              }
             >
               {truncHash('prevHash' in stage ? stage.prevHash : stage.hash)} ↗
             </a>
@@ -1421,7 +1553,19 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                 {stage.kind === 'step2-broadcasting' && stage.hash === '0x' ? (
                   <span className="link-mono">PENDING…</span>
                 ) : (stage.kind === 'step2-broadcasting' || stage.kind === 'step2-confirmed') && (
-                  <a className="link-mono" href={explorerTxForChain(stage.hash, destChainKey)} target="_blank" rel="noreferrer">
+                  <a
+                    className="link-mono"
+                    href={explorerTxForChain(stage.hash, destChainKey)}
+                    target="_blank"
+                    rel="noreferrer"
+                    onClick={() =>
+                      analytics.event('explorer_link_clicked', {
+                        contract: 'tx',
+                        surface: 'convert_feedback_step2',
+                        dest_chain: destChainKey,
+                      })
+                    }
+                  >
                     {truncHash(stage.hash)} ↗
                   </a>
                 )}

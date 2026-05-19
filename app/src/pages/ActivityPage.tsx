@@ -14,6 +14,7 @@
 import { useMemo, useState } from 'react';
 import { useProtocolDispatch, type DispatchRow } from '../hooks/useProtocolDispatch';
 import { useControllerAddress } from '../hooks/useControllerAddress';
+import { analytics } from '../lib/analytics';
 import {
   explorerAddress,
   explorerTx,
@@ -171,7 +172,10 @@ export default function ActivityPage() {
             >
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                onClick={() => {
+                  analytics.event('activity_page_changed', { direction: 'newer', from: safePage });
+                  setPage((p) => Math.max(0, p - 1));
+                }}
                 disabled={safePage === 0}
                 className="admin-card__btn"
                 style={{ opacity: safePage === 0 ? 0.4 : 1 }}
@@ -184,7 +188,10 @@ export default function ActivityPage() {
               </div>
               <button
                 type="button"
-                onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                onClick={() => {
+                  analytics.event('activity_page_changed', { direction: 'older', from: safePage });
+                  setPage((p) => Math.min(pageCount - 1, p + 1));
+                }}
                 disabled={safePage >= pageCount - 1}
                 className="admin-card__btn"
                 style={{ opacity: safePage >= pageCount - 1 ? 0.4 : 1 }}
@@ -258,13 +265,32 @@ function Row({ row }: { row: DispatchRow }) {
           href={explorerAddress(displayAddr)}
           target="_blank"
           rel="noreferrer"
+          onClick={() =>
+            analytics.event('explorer_link_clicked', {
+              contract: 'account',
+              surface: 'activity_row',
+              activity_type: row.type,
+            })
+          }
         >
           {truncAddr(displayAddr)}
         </a>
         {chainLabel}
       </td>
       <td className="addr">
-        <a className="link-mono" href={explorerTx(row.txHash)} target="_blank" rel="noreferrer">
+        <a
+          className="link-mono"
+          href={explorerTx(row.txHash)}
+          target="_blank"
+          rel="noreferrer"
+          onClick={() =>
+            analytics.event('explorer_link_clicked', {
+              contract: 'tx',
+              surface: 'activity_row',
+              activity_type: row.type,
+            })
+          }
+        >
           {row.txHash.slice(0, 8)}… ↗
         </a>
       </td>

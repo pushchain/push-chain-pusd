@@ -23,6 +23,7 @@ import { useCountUp } from '../hooks/useCountUp';
 import { usePUSDBalance } from '../hooks/usePUSDBalance';
 import { useProtocolStats } from '../hooks/useProtocolStats';
 import { useReserves, type ReserveRow } from '../hooks/useReserves';
+import { analytics } from '../lib/analytics';
 import {
   explorerAddress,
   formatAmount,
@@ -81,6 +82,7 @@ export default function ReservesDetailPage() {
     : 'pusd';
   const [view, setViewState] = useState<View>(initialView);
   const setView = (next: View) => {
+    if (next !== view) analytics.event('reserves_view_switch', { to: next });
     setViewState(next);
     const sp = new URLSearchParams(searchParams);
     if (next === 'pusd') sp.set('view', 'pusd');
@@ -359,6 +361,14 @@ export default function ReservesDetailPage() {
                           href={explorerAddress(r.address)}
                           target="_blank"
                           rel="noreferrer"
+                          onClick={() =>
+                            analytics.event('explorer_link_clicked', {
+                              contract: 'reserve_token',
+                              surface: 'reserves_book',
+                              symbol: r.symbol,
+                              chain: r.chainShort,
+                            })
+                          }
                         >
                           {truncAddr(r.address)}
                         </a>
