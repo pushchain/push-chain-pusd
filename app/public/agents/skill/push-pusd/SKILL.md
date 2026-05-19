@@ -19,6 +19,7 @@ resources:
   - https://pusd.push.org/agents/skill/push-pusd/SKILL.md
   - https://pusd.push.org/llms.txt
   - https://pusd.push.org/docs
+  - https://push.org/llms.txt
 ---
 
 # Skill: PUSD + PUSD+ Integration
@@ -31,6 +32,8 @@ Integration choices:
 
 - **Off-chain SDK** — `@pushchain/ui-kit` (React) or `@pushchain/core` (Node). Goes through Push Chain's universal transaction layer. Handles cross-chain wallet identity, payload encoding, and optional bridging. Recommended for new integrations.
 - **On-chain Solidity** — Another contract on Donut imports the PUSD / PUSDManager / PUSDPlusVault interfaces and calls them directly. Used when your protocol holds PUSD/PUSD+ or mints / burns on behalf of users.
+
+> **Push Chain agent layer.** PUSD rides on Push Chain's universal transaction primitives. For the broader SDK surface (signer wrapping, route detection, progress hooks, cascades, error recovery, constants), see [push.org/llms.txt](https://push.org/llms.txt) — it indexes the `push-frontend`, `push-backend`, and `push-contracts` skills plus workflows and examples. Pull it when something here points outside PUSD's domain (e.g. unknown progress-hook IDs, generic universal-transaction routing, or wallet provider setup beyond the snippet below).
 
 ---
 
@@ -170,9 +173,9 @@ import { PushUniversalWalletProvider, PushUI } from '@pushchain/ui-kit';
 <PushUniversalWalletProvider
   config={{
     network: PushUI.CONSTANTS.PUSH_NETWORK.TESTNET,
-    app: { title: 'My PUSD App' },
-    login: { email: true, google: true, wallet: true },
+    login: { email: true, google: true, wallet: { enabled: true } },
   }}
+  app={{ title: 'My PUSD App' }}
 >
   <App />
 </PushUniversalWalletProvider>;
@@ -196,7 +199,7 @@ function MintButton() {
   const mint = async () => {
     const h = PushChain.utils.helpers;
     const amount = h.parseUnits('100', 6);
-    const recipient = pushChainClient.universal.account.address as `0x${string}`;
+    const recipient = pushChainClient.universal.account;
     const TOKEN = '0x0f97A213207703923F5f0C613C9827f7C9A0f96B' as const; // USDT.eth on Donut
     const MANAGER = '0x775A23E81fCd1f9C2997663b45401bEe80e4242A' as const;
 
@@ -239,7 +242,7 @@ await tx.wait();
 const mintFromPushEoa = async () => {
   const h = PushChain.utils.helpers;
   const amount = h.parseUnits('100', 6);
-  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+  const recipient = pushChainClient.universal.account;
 
   // Tx 1 (signature 1 of 2): approve PUSDManager to spend the reserve token.
   await (await pushChainClient.universal.sendTransaction({
@@ -273,7 +276,7 @@ const wallet = new ethers.Wallet(
   process.env.PRIVATE_KEY!,
   new ethers.JsonRpcProvider('https://sepolia.infura.io/v3/<KEY>'),
 );
-const signer = PushChain.utils.signer.toUniversalFromEthersSigner(wallet);
+const signer = await PushChain.utils.signer.toUniversal(wallet);
 const pc = await PushChain.initialize(signer, {
   network: PushChain.CONSTANTS.PUSH_NETWORK.TESTNET,
 });
@@ -281,7 +284,7 @@ const pc = await PushChain.initialize(signer, {
 const ZERO = '0x0000000000000000000000000000000000000000';
 const h = pc.utils.helpers;
 const amount = h.parseUnits('100', 6);
-const owner = pc.universal.account.address;
+const owner = pc.universal.account;
 
 await (await pc.universal.sendTransaction({
   to: ZERO,
@@ -300,7 +303,7 @@ const wallet = new ethers.Wallet(
   process.env.PRIVATE_KEY!,
   new ethers.JsonRpcProvider('https://evm.donut.rpc.push.org/'),
 );
-const signer = PushChain.utils.signer.toUniversalFromEthersSigner(wallet);
+const signer = await PushChain.utils.signer.toUniversal(wallet);
 const pc = await PushChain.initialize(signer, {
   network: PushChain.CONSTANTS.PUSH_NETWORK.TESTNET,
 });
@@ -339,7 +342,7 @@ const TOKEN = '0x0f97A213207703923F5f0C613C9827f7C9A0f96B' as const; // the asse
 const redeem = async () => {
   const h = PushChain.utils.helpers;
   const pusdAmount = h.parseUnits('99', 6);
-  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+  const recipient = pushChainClient.universal.account;
 
   const tx = await pushChainClient.universal.sendTransaction({
     to: MANAGER,
@@ -362,7 +365,7 @@ Two real top-level transactions. `prepareTransaction` + `executeTransactions`. T
 const redeemAndPayout = async () => {
   const h = PushChain.utils.helpers;
   const pusdAmount = h.parseUnits('99', 6);
-  const pushAccount = pushChainClient.universal.account.address as `0x${string}`;
+  const pushAccount = pushChainClient.universal.account;
   const externalWallet = '0xUserOnSepolia' as const;
 
   // Hop 1: burn PUSD on Push Chain. Single call, no approve.
@@ -397,7 +400,7 @@ const redeemAndPayout = async () => {
 ```ts
 // Works for both path A and path B -- same RPC, same call.
 const pusdAmount = h.parseUnits('99', 6);
-const owner = pc.universal.account.address;
+const owner = pc.universal.account;
 
 await (await pc.universal.sendTransaction({
   to: MANAGER,
@@ -426,7 +429,7 @@ const VAULT = '0x9C7A8Bae46d4dd0496bD3016d1D8FB9e83E68F16' as const;
 const mintPlus = async () => {
   const h = PushChain.utils.helpers;
   const amount = h.parseUnits('100', 6);
-  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+  const recipient = pushChainClient.universal.account;
 
   const multicall = [
     { to: TOKEN, value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
@@ -445,7 +448,7 @@ const mintPlus = async () => {
 const wrapPusd = async () => {
   const h = PushChain.utils.helpers;
   const amount = h.parseUnits('100', 6);
-  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+  const recipient = pushChainClient.universal.account;
   const PUSD = '0x774c799646bB60103e38Fd65b18D81bbDD1Aa760' as const;
 
   const multicall = [
@@ -471,7 +474,7 @@ const wrapPusd = async () => {
 const redeemPlus = async () => {
   const h = PushChain.utils.helpers;
   const plusAmount = h.parseUnits('99', 6);
-  const recipient = pushChainClient.universal.account.address as `0x${string}`;
+  const recipient = pushChainClient.universal.account;
   // Pass PUSD address as preferredAsset to receive PUSD directly (unwrap path).
   const PUSD = '0x774c799646bB60103e38Fd65b18D81bbDD1Aa760' as const;
 
