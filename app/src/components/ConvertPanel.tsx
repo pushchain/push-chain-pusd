@@ -700,6 +700,25 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   };
 
   // --- derived labels ----------------------------------------------------
+  // Per-row address shown in the token dropdown. When the user already holds
+  // reserves on Push Chain (push route), the PRC-20 wrapper address is the
+  // relevant one. When they're paying from a source chain (external route),
+  // show that chain's ERC-20 contract address instead so the explorer link
+  // jumps to Etherscan / Basescan / Arbiscan / BscScan / Solscan rather than
+  // the Donut explorer.
+  const rowAddressInfo = (t: ReserveToken): { addr: string; chainKey: string } => {
+    if (!isExternalRoute) return { addr: t.address, chainKey: 'PUSH_TESTNET_DONUT' };
+    const [chainKey, symbolKey] = t.moveableKey;
+    if (!chainKey || !PushChain) return { addr: t.address, chainKey: 'PUSH_TESTNET_DONUT' };
+    const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey) as
+      | { address?: string }
+      | undefined;
+    const sourceAddr = moveable?.address ?? '';
+    return sourceAddr
+      ? { addr: sourceAddr, chainKey }
+      : { addr: t.address, chainKey: 'PUSH_TESTNET_DONUT' };
+  };
+
   const effectiveFeeBps = mode === 'redeem' && !isPlus && !allowBasket
     ? baseFeeBps + preferredFeeBps
     : baseFeeBps;
@@ -1005,6 +1024,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             <div className="selector-panel" role="listbox" style={{ marginTop: 6 }}>
               {eligibleTokens.map((t) => {
                 const active = t.address === selected.address;
+                const info = rowAddressInfo(t);
                 return (
                   <button
                     key={t.address}
@@ -1032,7 +1052,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     </div>
                     <a
                       className="addr"
-                      href={explorerAddressForChain(t.address, 'PUSH_TESTNET_DONUT')}
+                      href={explorerAddressForChain(info.addr, info.chainKey)}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => {
@@ -1042,10 +1062,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                           surface: 'convert_mint_token_row',
                           symbol: t.symbol,
                           chain: t.chainShort,
+                          shown_chain: info.chainKey,
                         });
                       }}
                     >
-                      {t.address.slice(0, 6)}…{t.address.slice(-4)} ↗
+                      {info.addr.slice(0, 6)}…{info.addr.slice(-4)} ↗
                     </a>
                   </button>
                 );
@@ -1123,6 +1144,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     : parsedAmount > 0n && resRow.balance < parsedAmount
                       ? '#eab308'
                       : '#22c55e';
+                const info = rowAddressInfo(t);
                 return (
                   <button
                     key={t.address}
@@ -1161,7 +1183,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                     </div>
                     <a
                       className="addr"
-                      href={explorerAddressForChain(t.address, 'PUSH_TESTNET_DONUT')}
+                      href={explorerAddressForChain(info.addr, info.chainKey)}
                       target="_blank"
                       rel="noreferrer"
                       onClick={(e) => {
@@ -1171,10 +1193,11 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
                           surface: 'convert_redeem_token_row',
                           symbol: t.symbol,
                           chain: t.chainShort,
+                          shown_chain: info.chainKey,
                         });
                       }}
                     >
-                      {t.address.slice(0, 6)}…{t.address.slice(-4)} ↗
+                      {info.addr.slice(0, 6)}…{info.addr.slice(-4)} ↗
                     </a>
                   </button>
                 );
