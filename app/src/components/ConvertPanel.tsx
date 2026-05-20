@@ -397,6 +397,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         toToken = selected.symbol;
       }
     }
+    console.log('made backend call');
 
     await reportQuestEvent({
       eventId: txHash,
@@ -792,8 +793,6 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     setStage({ kind: 'idle' });
     if (advanced) navigate(`/convert/${next}`);
   };
-
-  console.log(plusEnabled, 'plus', PUSD_PLUS_ADDRESS)
 
   return (
     <div className="convert">

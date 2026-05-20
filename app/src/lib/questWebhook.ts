@@ -8,8 +8,10 @@
  * the user so a webhook outage never blocks the UI.
  */
 
-const WEBHOOK_URL =
-  'https://us-east1-push-dev-apps.cloudfunctions.net/helloWorld/api/v3/pusd/events';
+const API_BASE = (import.meta.env.VITE_PUSHCHAIN_API_ENDPOINT as string | undefined)
+  ?? 'https://us-east1-push-dev-apps.cloudfunctions.net/helloWorld';
+
+const WEBHOOK_URL = `${API_BASE}/api/v3/pusd/events`;
 
 const SECRET = import.meta.env.VITE_PUSD_WEBHOOK_SECRET as string | undefined;
 
