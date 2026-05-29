@@ -514,11 +514,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       }
 
       // --- REDEEM -------------------------------------------------------
-      // Shared cascade legs for step 1.
-      // PUSD redeem  → approve PUSD + manager.redeem.
-      // PUSD+ redeem → manager.redeemFromPlus pulls PUSD+ via vault.burnPlus
-      //                (MANAGER_ROLE-gated _burn). No allowance needed; we
-      //                still approve defensively in case future paths need it.
+      // Redeem burns the caller's PUSD / PUSD+ directly: PUSDManager holds
+      // BURNER_ROLE on PUSD (and MANAGER_ROLE on the vault for PUSD+), so it
+      // burns msg.sender with no allowance. Redeem is therefore a single
+      // contract call — no approve leg required.
       const burnTokenAddress = (isPlus
         ? (PUSD_PLUS_ADDRESS as `0x${string}`)
         : (PUSD_ADDRESS as `0x${string}`));
@@ -539,63 +538,72 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             allowBasket,
             target,
           );
+
+      // Push route (deliver on Push Chain) — a single direct call to the
+      // manager. prepareTransaction()/executeTransactions() are reserved for
+      // the cross-chain cascade below, and native Push EOAs are rejected by
+      // prepareTransaction outright ("Push native accounts cannot use
+      // prepareTransaction… Use sendTransaction() instead for direct Push
+      // Chain calls"). A plain sendTransaction works for both native Push
+      // EOAs and external-chain wallets.
+      if (!needsExternalRecipient) {
+        setStage({ kind: 'signing' });
+        const tx = await pushChainClient.universal.sendTransaction({
+          to: redeemLeg.to,
+          value: redeemLeg.value,
+          data: redeemLeg.data,
+        });
+        const hash = tx.hash as `0x${string}`;
+        submittedHash = hash;
+        analytics.event('convert_signed', analyticsCommon);
+        setStage({ kind: 'broadcasting', hash });
+        await tx.wait();
+        analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: false });
+        setStage({ kind: 'confirmed', hash });
+        setAmount('');
+        await fireQuestEvent(hash);
+        return;
+      }
+
+      // External route (cross-chain payout) — two real top-level hops, run as
+      // a single-signature cascade via prepareTransaction + executeTransactions.
+      // Hop 1 burns on Push Chain (the UEA holds the reserve between hops);
+      // hop 2 bridges it out to the recipient on the destination chain. We
+      // still approve defensively in hop 1 in case a future manager path needs
+      // the allowance.
       const legs: CascadeLeg[] = [
         buildApproveLeg(helpers, burnTokenAddress, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
         redeemLeg,
       ];
-
-      // Resolve the outbound leg token & destination up front so both paths below can share them.
-      let moveable: ReturnType<typeof resolveMoveableToken> = undefined;
-      let destChain: string | undefined;
-      if (needsExternalRecipient) {
-        const [chainKey, symbolKey] = selected.moveableKey;
-        moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
-        if (!moveable) {
-          throw new Error(
-            `MOVEABLE token for ${symbolKey} on ${chainKey} not available — pick a different asset or keep the payout on Push Chain.`,
-          );
-        }
-        // CAIP-2 value (`eip155:…` / `solana:…`) — the SDK route validator
-        // rejects the friendly key (throws `ChainNotSupportedError`).
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        destChain = (PushChain.CONSTANTS.CHAIN as any)[chainKey];
+      const [chainKey, symbolKey] = selected.moveableKey;
+      const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
+      if (!moveable) {
+        throw new Error(
+          `MOVEABLE token for ${symbolKey} on ${chainKey} not available — pick a different asset or keep the payout on Push Chain.`,
+        );
       }
+      // CAIP-2 value (`eip155:…` / `solana:…`) — the SDK route validator
+      // rejects the friendly key (throws `ChainNotSupportedError`).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const destChain = (PushChain.CONSTANTS.CHAIN as any)[chainKey];
 
-      // Single-signature cascade: prepare both legs, compose them into one
-      // Push Chain tx, and let universal.executeTransactions() handle it.
-      const params1 = {
-        to: '0x0000000000000000000000000000000000000000',
-        value: 0n,
-        data: legs,
-      };
-      console.log('[prepareTransaction] leg 1 params:', params1);
+      // Hop 1: burn on Push Chain (outer `to` = zero sentinel → multicall).
       const prepared1 = await pushChainClient.universal.prepareTransaction({
         to: '0x0000000000000000000000000000000000000000',
         value: 0n,
         data: legs,
       } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
-      const preparedTxs = [prepared1];
-
-      if (needsExternalRecipient) {
-        const params2 = {
-          to: { address: externalRecipient, chain: destChain },
-          value: 0n,
-          data: '0x',
-          funds: { amount: receiveAmount, token: moveable },
-        };
-        console.log('[prepareTransaction] leg 2 params:', params2);
-        const prepared2 = await pushChainClient.universal.prepareTransaction({
-          to: { address: externalRecipient as `0x${string}`, chain: destChain },
-          value: 0n,
-          data: '0x',
-          funds: { amount: receiveAmount, token: moveable },
-        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
-        preparedTxs.push(prepared2);
-      }
+      // Hop 2: forward the reserve to the recipient on the external chain.
+      const prepared2 = await pushChainClient.universal.prepareTransaction({
+        to: { address: externalRecipient as `0x${string}`, chain: destChain },
+        value: 0n,
+        data: '0x',
+        funds: { amount: receiveAmount, token: moveable },
+      } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
 
       setStage({ kind: 'signing' });
-      const cascade = await pushChainClient.universal.executeTransactions(preparedTxs);
+      const cascade = await pushChainClient.universal.executeTransactions([prepared1, prepared2]);
       const initialHash = cascade.initialTxHash as `0x${string}`;
       submittedHash = initialHash;
       analytics.event('convert_signed', analyticsCommon);
@@ -641,19 +649,16 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         },
       });
 
-      if (needsExternalRecipient) {
-        const hop1 = cascade.hops[1];
-        const outHash = (hop1?.outboundDetails?.externalTxHash ?? hop1?.txHash ?? initialHash) as `0x${string}`;
-        analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: true });
-        analytics.event('convert_step2_confirmed', {
-          ...analyticsCommon,
-          dest_chain: destChainKey ?? 'unknown',
-        });
-        setStage({ kind: 'step2-confirmed', prevHash: initialHash, hash: outHash });
-      } else {
-        analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: false });
-        setStage({ kind: 'confirmed', hash: initialHash });
-      }
+      // Only the external (cross-chain) route reaches here — the push route
+      // returns above after its single sendTransaction.
+      const hop1 = cascade.hops[1];
+      const outHash = (hop1?.outboundDetails?.externalTxHash ?? hop1?.txHash ?? initialHash) as `0x${string}`;
+      analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: true });
+      analytics.event('convert_step2_confirmed', {
+        ...analyticsCommon,
+        dest_chain: destChainKey ?? 'unknown',
+      });
+      setStage({ kind: 'step2-confirmed', prevHash: initialHash, hash: outHash });
       setAmount('');
       await fireQuestEvent(initialHash);
     } catch (err) {
