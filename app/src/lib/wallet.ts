@@ -55,6 +55,10 @@ export function isValidAddress(value: string): value is `0x${string}` {
 const CHAIN_LABELS: Record<string, string> = {
   PUSH_TESTNET_DONUT: 'PUSH CHAIN',
   PUSH_MAINNET: 'PUSH CHAIN',
+  // PUSH_TESTNET shares its CAIP-2 with PUSH_TESTNET_DONUT; resolveOriginChainKey
+  // can surface either. PUSH_LOCALNET for completeness with the SDK's set.
+  PUSH_TESTNET: 'PUSH CHAIN',
+  PUSH_LOCALNET: 'PUSH CHAIN',
   ETHEREUM_SEPOLIA: 'ETHEREUM SEPOLIA',
   ETHEREUM_MAINNET: 'ETHEREUM',
   SOLANA_DEVNET: 'SOLANA DEVNET',
@@ -112,10 +116,25 @@ export function normalizeChainKey(chain?: string | null): string {
   return (chain ?? '').toUpperCase();
 }
 
-/** Is a resolved chain key one of the Push Chain variants? */
+/**
+ * Is a resolved chain key one of the Push Chain variants?
+ *
+ * Must match the SDK's full `PUSH_CHAINS` set, not just the two we display.
+ * `PUSH_TESTNET` and `PUSH_TESTNET_DONUT` share one CAIP-2 ("eip155:42101"),
+ * and the SDK lists `PUSH_TESTNET` first — so `resolveOriginChainKey()`
+ * reverse-maps a native Push wallet's origin to `PUSH_TESTNET`, not
+ * `PUSH_TESTNET_DONUT`. Matching only the Donut/Mainnet keys made native Push
+ * wallets read as external, which routed their redeem into the cross-chain
+ * cascade and threw "Push native accounts cannot use prepareTransaction".
+ */
 export function isPushChainKey(chainKey?: string | null): boolean {
   const key = (chainKey ?? '').toUpperCase();
-  return key === 'PUSH_TESTNET_DONUT' || key === 'PUSH_MAINNET';
+  return (
+    key === 'PUSH_TESTNET_DONUT' ||
+    key === 'PUSH_MAINNET' ||
+    key === 'PUSH_TESTNET' ||
+    key === 'PUSH_LOCALNET'
+  );
 }
 
 /**

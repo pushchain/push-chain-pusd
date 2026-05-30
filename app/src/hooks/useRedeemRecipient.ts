@@ -7,6 +7,11 @@
  *    → account (the user's Push Chain UEA address, already known from the SDK)
  *    → hint: { kind: 'push-chain' }
  *
+ * 1b. External route from a Push-native wallet (origin === Push Chain)
+ *    → '' (no auto-default — the user pastes their own address on the
+ *      destination chain; a Push-native account has no wallet there)
+ *    → hint: null
+ *
  * 2. External route, destination == origin chain (deliver on the chain the wallet
  *    is already on, i.e. the user's own external wallet)
  *    → originAddress (the user's actual origin-chain wallet address)
@@ -26,6 +31,7 @@
 
 import { usePushChain } from '@pushchain/ui-kit';
 import { useEffect, useState } from 'react';
+import { isPushChainKey } from '../lib/wallet';
 
 const SOLANA_CHAIN_PREFIXES = ['SOLANA_'];
 const isSolanaChainKey = (key: string) =>
@@ -94,6 +100,16 @@ export function useRedeemRecipient(
     // Branch 1 — Push Chain route: pre-fill with the UEA (account)
     if (!isExternalRoute) {
       setState({ address: account, hint: { kind: 'push-chain' }, loading: false });
+      return;
+    }
+
+    // Branch 1b — Push-native wallet cashing OUT to an external chain.
+    // A Push-origin account has no "home" wallet on the destination chain, and
+    // the CEA it would derive there is retrievable only through the universal
+    // protocol — not what someone withdrawing to their own external wallet
+    // wants. Leave the field empty so they paste their destination address.
+    if (isPushChainKey(originChainKey)) {
+      setState({ address: '', hint: null, loading: false });
       return;
     }
 

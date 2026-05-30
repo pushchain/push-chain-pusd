@@ -565,16 +565,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         return;
       }
 
-      // External route (cross-chain payout) — two real top-level hops, run as
-      // a single-signature cascade via prepareTransaction + executeTransactions.
-      // Hop 1 burns on Push Chain (the UEA holds the reserve between hops);
-      // hop 2 bridges it out to the recipient on the destination chain. We
-      // still approve defensively in hop 1 in case a future manager path needs
-      // the allowance.
-      const legs: CascadeLeg[] = [
-        buildApproveLeg(helpers, burnTokenAddress, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
-        redeemLeg,
-      ];
+      // External route (cross-chain payout) — burn PUSD/PUSD+ on Push Chain,
+      // then bridge the reserve token out to the recipient on the destination
+      // chain. Resolve the outbound token + CAIP-2 destination first; both
+      // wallet paths below share them.
       const [chainKey, symbolKey] = selected.moveableKey;
       const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
       if (!moveable) {
@@ -586,6 +580,79 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       // rejects the friendly key (throws `ChainNotSupportedError`).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const destChain = (PushChain.CONSTANTS.CHAIN as any)[chainKey];
+
+      if (originIsPush) {
+        // Native Push EOA: prepareTransaction()/executeTransactions() reject the
+        // Push-execution (burn) hop ("Push native accounts cannot use
+        // prepareTransaction… Use sendTransaction() instead"), so the
+        // single-signature cascade is off-limits. Run the burn and the outbound
+        // bridge as two independent sendTransaction() calls instead.
+        //
+        // Note on signatures: the SDK has no multicall for a native EOA, so the
+        // outbound (Route-2) call itself fans out into sequential signed sub-txs
+        // (approve PRC-20 → sendUniversalTxOutbound — see sendPushTx). Expect up
+        // to ~3 wallet prompts total: 1 for the burn, 2 for the outbound.
+
+        // Tx 1 — burn on Push Chain. The reserve token lands in this account
+        // (redeem recipient = target = account), so the outbound below can spend
+        // it. Redeem needs no approve (PUSDManager holds BURNER_ROLE).
+        setStage({ kind: 'signing' });
+        const burnTx = await pushChainClient.universal.sendTransaction({
+          to: redeemLeg.to,
+          value: redeemLeg.value,
+          data: redeemLeg.data,
+        });
+        const burnHash = burnTx.hash as `0x${string}`;
+        submittedHash = burnHash;
+        analytics.event('convert_signed', analyticsCommon);
+        setStage({ kind: 'broadcasting', hash: burnHash });
+        setProgressNote('Waiting for Push Chain confirmation…');
+        await burnTx.wait();
+        setProgressNote(`Confirmed on Push Chain · Sending to ${selected.chainLabel}…`);
+
+        // Tx 2 — Route 2 outbound: burn the PRC-20 reserve on Push Chain and
+        // release the real token to the recipient on the destination chain.
+        setStage({ kind: 'step2-signing', prevHash: burnHash });
+        const payoutTx = await pushChainClient.universal.sendTransaction({
+          to: { address: externalRecipient as `0x${string}`, chain: destChain },
+          value: 0n,
+          data: '0x',
+          funds: { amount: receiveAmount, token: moveable },
+        } as any); // eslint-disable-line @typescript-eslint/no-explicit-any
+        const payoutHash = payoutTx.hash as `0x${string}`;
+        setStage({ kind: 'step2-broadcasting', prevHash: burnHash, hash: payoutHash });
+        setProgressNote(`Submitted to ${selected.chainLabel} · Waiting for confirmation…`);
+        await payoutTx.wait();
+        // Best-effort: wait for the external-chain landing when the SDK exposes
+        // it; never let a missing/throwing hook block confirmation.
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          await (payoutTx as any).waitForExternalExecution?.();
+        } catch {
+          /* external confirmation is best-effort */
+        }
+
+        analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: true });
+        analytics.event('convert_step2_confirmed', {
+          ...analyticsCommon,
+          dest_chain: destChainKey ?? 'unknown',
+        });
+        setStage({ kind: 'step2-confirmed', prevHash: burnHash, hash: payoutHash });
+        setProgressNote(`Confirmed on ${selected.chainLabel}`);
+        setAmount('');
+        await fireQuestEvent(burnHash);
+        return;
+      }
+
+      // External-chain wallet (MetaMask / Phantom / etc.) → relay-managed
+      // account that supports the single-signature cascade. Hop 1 burns on
+      // Push Chain (the UEA holds the reserve between hops); hop 2 bridges it
+      // out. We still approve defensively in hop 1 in case a future manager
+      // path needs the allowance.
+      const legs: CascadeLeg[] = [
+        buildApproveLeg(helpers, burnTokenAddress, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
+        redeemLeg,
+      ];
 
       // Hop 1: burn on Push Chain (outer `to` = zero sentinel → multicall).
       const prepared1 = await pushChainClient.universal.prepareTransaction({
@@ -614,14 +681,10 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       // → confirmed) still works with a single signature.
       await cascade.wait({
         progressHook: (ev) => {
-          console.log('[progressHook] ev:', ev);
-          // Always update the progress note regardless of route.
           if (ev.hopIndex === 0) {
             setProgressNote(
               ev.status === 'confirmed'
-                ? needsExternalRecipient
-                  ? `Confirmed on Push Chain · Sending to ${selected.chainLabel}…`
-                  : 'Confirmed on Push Chain'
+                ? `Confirmed on Push Chain · Sending to ${selected.chainLabel}…`
                 : 'Waiting for Push Chain confirmation…',
             );
           } else if (ev.hopIndex === 1) {
@@ -634,7 +697,6 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
             );
           }
 
-          if (!needsExternalRecipient) return;
           if (ev.hopIndex === 0 && ev.status === 'confirmed') {
             setStage({ kind: 'step2-broadcasting', prevHash: initialHash, hash: '0x' as `0x${string}` });
             return;
@@ -649,8 +711,6 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         },
       });
 
-      // Only the external (cross-chain) route reaches here — the push route
-      // returns above after its single sendTransaction.
       const hop1 = cascade.hops[1];
       const outHash = (hop1?.outboundDetails?.externalTxHash ?? hop1?.txHash ?? initialHash) as `0x${string}`;
       analytics.event('convert_confirmed', { ...analyticsCommon, two_leg: true });
@@ -1292,7 +1352,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               >
                 <span className="src-header__action-link">Connect wallet ↗</span>
               </button>
-            ) : !originIsPush && (
+            ) : (
               allowBasket ? (
                 <span
                   data-tooltip={`Basket mode distributes across all reserves on Push Chain only.`}
