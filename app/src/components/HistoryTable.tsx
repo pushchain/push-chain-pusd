@@ -7,8 +7,17 @@
 
 import type { HistoryRow } from '../hooks/useUserHistory';
 import { analytics } from '../lib/analytics';
-import { explorerTx, formatAmount, formatTimestamp, truncHash } from '../lib/format';
+import { explorerTx, formatAmount, formatRelative, truncHash } from '../lib/format';
 import { TokenPill } from './TokenPill';
+
+// Shared with ActivityPage / DispatchFeed so every activity surface labels
+// the four event types identically.
+const TYPE_LABEL: Record<HistoryRow['type'], string> = {
+  MINT: 'MINT',
+  REDEEM: 'REDEEM',
+  MINT_PLUS: 'MINT PUSD+',
+  REDEEM_PLUS: 'REDEEM PUSD+',
+};
 
 export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: boolean }) {
   if (loading && rows.length === 0) {
@@ -30,16 +39,16 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
           Head to{' '}
           <a
             className="link-mono"
-            href="/mint"
-            onClick={() => analytics.event('nav_click', { to: '/mint', label: 'MINT', surface: 'dashboard_empty' })}
+            href="/convert/mint"
+            onClick={() => analytics.event('nav_click', { to: '/convert/mint', label: 'MINT', surface: 'dashboard_empty' })}
           >
             /mint
           </a>{' '}
           or{' '}
           <a
             className="link-mono"
-            href="/redeem"
-            onClick={() => analytics.event('nav_click', { to: '/redeem', label: 'REDEEM', surface: 'dashboard_empty' })}
+            href="/convert/redeem"
+            onClick={() => analytics.event('nav_click', { to: '/convert/redeem', label: 'REDEEM', surface: 'dashboard_empty' })}
           >
             /redeem
           </a>{' '}
@@ -72,7 +81,7 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
               ? 'var(--c-jade)'
               : 'var(--c-oxblood)';
           const tokenLabel = isPlus ? 'PUSD+' : 'PUSD';
-          const typeLabel = r.type.replace('_', ' ');
+          const typeLabel = TYPE_LABEL[r.type];
           const pusdStr = formatAmount(r.pusdAmount, 6);
           const pusdHasEpsilon = pusdStr.startsWith('<') || pusdStr.startsWith('>');
 
@@ -83,7 +92,9 @@ export function HistoryTable({ rows, loading }: { rows: HistoryRow[]; loading: b
                   {typeLabel}
                 </span>
               </td>
-              <td className="mono cell-sm-up">{formatTimestamp(r.timestamp)}</td>
+              <td className="mono cell-sm-up">
+                {r.timestamp > 0 ? formatRelative(r.timestamp * 1000) : '—'}
+              </td>
               <td className="num">
                 <div>
                   {pusdHasEpsilon ? pusdStr : `${pusdSign}${pusdStr}`} {tokenLabel}

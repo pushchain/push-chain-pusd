@@ -16,7 +16,7 @@ import { useEffect, useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { analytics } from '../lib/analytics';
 
-type NavItem = { to: string; label: string; end?: boolean };
+type NavItem = { to: string; label: string; end?: boolean; hash?: string };
 
 const NAV: readonly NavItem[] = [
   { to: '/',          label: 'HOME',      end: true },
@@ -24,17 +24,31 @@ const NAV: readonly NavItem[] = [
   { to: '/reserves',  label: 'RESERVES' },
   { to: '/dashboard', label: 'DASHBOARD' },
   { to: '/docs',      label: 'DOCS' },
+  // Permalink to the FAQ section on the homepage. ScrollToHash (mounted in
+  // App) handles the scroll; navActive() below keeps its highlight distinct
+  // from HOME so only one lights up at a time.
+  { to: '/#faq',      label: 'FAQ',       end: true, hash: '#faq' },
 ];
 
 export function Masthead() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
 
-  // Close the drawer whenever the route changes — handles cases where the
-  // user navigates via a link inside the drawer or via browser back.
+  // Whether a nav item should render as active. Hash items (e.g. /#faq) light
+  // up only when that section is the current hash; HOME drops its highlight
+  // when a homepage section hash is active so the two never light up together.
+  const navActive = (item: NavItem, navIsActive: boolean) => {
+    if (item.hash) return location.pathname === '/' && location.hash === item.hash;
+    if (item.end) return navIsActive && !location.hash;
+    return navIsActive;
+  };
+
+  // Close the drawer whenever the route changes — keyed on location.key so it
+  // also fires for hash-only navigations (e.g. /#faq from the homepage, where
+  // pathname is unchanged) as well as path changes and browser back.
   useEffect(() => {
     setMenuOpen(false);
-  }, [location.pathname]);
+  }, [location.key]);
 
   // Lock body scroll while the drawer is open so the page underneath
   // doesn't scroll when the user pans across the menu.
@@ -75,7 +89,7 @@ export function Masthead() {
               key={item.to}
               to={item.to}
               end={item.end}
-              className={({ isActive }) => (isActive ? 'active' : undefined)}
+              className={({ isActive }) => (navActive(item, isActive) ? 'active' : undefined)}
               onClick={() =>
                 analytics.event('nav_click', {
                   to: item.to,
@@ -149,7 +163,7 @@ export function Masthead() {
               to={item.to}
               end={item.end}
               className={({ isActive }) =>
-                `masthead__drawer-link${isActive ? ' active' : ''}`
+                `masthead__drawer-link${navActive(item, isActive) ? ' active' : ''}`
               }
               style={{ transitionDelay: menuOpen ? `${60 + i * 40}ms` : '0ms' }}
               onClick={() =>

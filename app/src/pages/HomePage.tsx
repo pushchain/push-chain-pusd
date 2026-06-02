@@ -23,6 +23,7 @@ import { useSearchParams } from "react-router-dom";
 import { ChestTrigger } from "../components/ChestTrigger";
 import { ConvertPanel } from "../components/ConvertPanel";
 import { DispatchFeed } from "../components/DispatchFeed";
+import { FaqSection } from "../components/FaqSection";
 import { PiggyTrigger } from "../components/PiggyTrigger";
 import { PromiseCurtain } from "../components/PromiseCurtain";
 import { ProofTypewriter } from "../components/ProofTypewriter";
@@ -715,6 +716,23 @@ export default function HomePage() {
             <span>LIVE</span>
           </div>
           <DispatchFeed />
+        </section>
+
+        {/* ============================================ §05 · FAQ ========== */}
+        <section className="section" id="faq">
+          <div className="section__header">
+            <span>§ 05 · FAQ</span>
+            <span>PUSD · PUSD+</span>
+          </div>
+
+          <div className="faq__intro">
+            <h2 className="faq__intro-title">Questions, <em>answered.</em></h2>
+            <div className="faq__intro-sub">
+              What PUSD and PUSD+ are, how they stay backed, and how to use them.
+            </div>
+          </div>
+
+          <FaqSection />
         </section>
       </div>
 

@@ -1742,6 +1742,124 @@ button:focus-visible, a:focus-visible { outline-offset: 3px; }
 }
 
 /* ==========================================================================
+   13.5 FAQ — grouped <details> accordions (PUSD / PUSD+)
+   ========================================================================== */
+/* Permalink target (/#faq from the masthead) — leave breathing room above. */
+#faq { scroll-margin-top: 24px; }
+
+/* Section intro — mirrors the editorial title treatment used by §02 (.book__title
+   / .book__sub): big Fraunces display with a magenta <em> accent, then a sub. */
+.faq__intro { margin: 0 0 28px; }
+
+.faq__intro-title {
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: clamp(32px, 4vw, 52px);
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  color: var(--c-ink);
+  margin: 0 0 8px;
+}
+
+.faq__intro-title em { font-style: italic; color: var(--c-magenta); }
+
+.faq__intro-sub {
+  font-family: var(--f-body);
+  font-size: 14px;
+  color: var(--c-ink-dim);
+  max-width: 52ch;
+  line-height: 1.6;
+}
+
+.faq {
+  display: grid;
+  gap: 44px;
+}
+
+.faq__group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  border-bottom: var(--rule-med);
+  padding-bottom: 10px;
+  margin-bottom: 2px;
+}
+
+.faq__group-tag {
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: 26px;
+  letter-spacing: -0.015em;
+  color: var(--c-ink);
+  line-height: 1;
+}
+
+.faq__group-sub {
+  font-family: var(--f-mono);
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--c-ink-mute);
+}
+
+.faq__item {
+  border-bottom: var(--rule-thin);
+}
+
+.faq__q {
+  font-family: var(--f-display);
+  font-weight: 500;
+  font-size: 18px;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  color: var(--c-ink);
+  padding: 18px 40px 18px 0;
+  cursor: pointer;
+  list-style: none;
+  position: relative;
+  transition: color 120ms ease;
+}
+
+/* Hide the native disclosure triangle (Safari/Chrome + Firefox). */
+.faq__q::-webkit-details-marker { display: none; }
+
+.faq__q::after {
+  content: '+';
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--f-mono);
+  font-size: 22px;
+  line-height: 1;
+  color: var(--c-magenta);
+}
+
+.faq__item[open] > .faq__q::after { content: '–'; }
+
+.faq__q:hover { color: var(--c-magenta); }
+
+.faq__a {
+  font-family: var(--f-body);
+  font-size: 15px;
+  line-height: 1.72;
+  color: var(--c-ink-dim);
+  padding: 0 40px 20px 0;
+  max-width: 72ch;
+}
+
+.faq__a strong { color: var(--c-ink); font-weight: 600; }
+.faq__a em { font-style: italic; }
+.faq__a a { color: var(--c-magenta); text-decoration: underline; text-underline-offset: 2px; }
+
+@media (max-width: 720px) {
+  .faq { gap: 32px; }
+  .faq__group-tag { font-size: 22px; }
+  .faq__q { font-size: 16px; padding-right: 32px; }
+  .faq__a { font-size: 14px; }
+}
+
+/* ==========================================================================
    14. DISPATCH — activity feed (2x4 grid)
    ========================================================================== */
 .dispatch {

@@ -15,6 +15,7 @@ import { ethers } from 'ethers';
 import PUSDManagerArtifact from '../contracts/PUSDManager.json';
 import PUSDPlusVaultArtifact from '../contracts/PUSDPlusVault.json';
 import { PUSD_MANAGER_ADDRESS, PUSD_PLUS_ADDRESS } from '../contracts/config';
+import { getReadProvider } from './provider';
 import {
   BURNED_PLUS_TOPIC,
   DEPOSITED_TOPIC,
@@ -337,6 +338,129 @@ export async function fetchManagerLogs(options: {
     }
     return { log, event, timestamp };
   });
+}
+
+// ---------------------------------------------------------------------------
+// RPC fallback — for when Blockscout's address-logs index lags behind the chain
+// head (observed on Donut: a multi-thousand-block gap that swallowed recent
+// events). eth_getLogs is capped at 10k blocks/call on Donut and slow
+// (~9s/call), so callers chunk, cap, and cache. Mirrors the NAV-history fallback.
+// ---------------------------------------------------------------------------
+
+const RPC_LOG_RANGE = 10_000;
+
+const MANAGER_EVENT_TOPICS = [
+  DEPOSITED_TOPIC,
+  REDEEMED_TOPIC,
+  DEPOSITED_TO_PLUS_TOPIC,
+  REDEEMED_FROM_PLUS_TOPIC,
+];
+
+/** Current chain head block via RPC (Blockscout-independent). null on error. */
+export async function getChainHead(): Promise<number | null> {
+  try {
+    return await getReadProvider().getBlockNumber();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Newest PUSDManager log block Blockscout has indexed (page 1 is newest-first,
+ * any event). Used to gauge how far Blockscout's manager-log index trails the
+ * chain head before deciding to fall back to RPC.
+ */
+export async function fetchManagerIndexHead(): Promise<number | null> {
+  try {
+    const res = await fetch(buildLogsUrl(), { signal: AbortSignal.timeout(12_000) });
+    if (!res.ok) return null;
+    const data: LogsResponse = await res.json();
+    return data.items?.[0]?.block_number ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * RPC fallback for a user's PUSDManager activity over `(afterBlock, head]`.
+ * Chunks newest → oldest in 10k-block windows (the Donut eth_getLogs cap),
+ * hard-capped at `maxChunks`. The manager emits hundreds of events per 1k
+ * blocks, so we filter server-side by indexed topic — account as user (topic1)
+ * or recipient (topic3), two queries per chunk since eth_getLogs can't OR
+ * across topic positions — keeping the payload to just the user's events.
+ * Block timestamps are resolved per unique block (manager events carry none
+ * inline). Returns the same FetchedLog shape so callers map it identically.
+ */
+export async function fetchManagerLogsViaRpc(options: {
+  account: `0x${string}`;
+  afterBlock: number;
+  maxChunks?: number;
+}): Promise<FetchedLog[]> {
+  const { account, afterBlock, maxChunks = 4 } = options;
+  const provider = getReadProvider();
+  let head: number;
+  try {
+    head = await provider.getBlockNumber();
+  } catch {
+    return [];
+  }
+  const paddedAccount = `0x${'0'.repeat(24)}${account.slice(2).toLowerCase()}`;
+  const lowerBound = Math.max(0, afterBlock + 1, head - RPC_LOG_RANGE * maxChunks + 1);
+
+  const ranges: Array<{ from: number; to: number }> = [];
+  for (let to = head; to >= lowerBound && ranges.length < maxChunks; ) {
+    const from = Math.max(lowerBound, to - RPC_LOG_RANGE + 1);
+    ranges.push({ from, to });
+    to = from - 1;
+  }
+
+  // Two topic-filtered queries per chunk: account as user (topic1) or as
+  // recipient (topic3). De-duped by key (a self-mint/redeem matches both).
+  const queries = ranges.flatMap(({ from, to }) => [
+    provider
+      .getLogs({ address: PUSD_MANAGER_ADDRESS, topics: [MANAGER_EVENT_TOPICS, paddedAccount], fromBlock: from, toBlock: to })
+      .catch(() => [] as ethers.Log[]),
+    provider
+      .getLogs({ address: PUSD_MANAGER_ADDRESS, topics: [MANAGER_EVENT_TOPICS, null, null, paddedAccount], fromBlock: from, toBlock: to })
+      .catch(() => [] as ethers.Log[]),
+  ]);
+  const byKey = new Map<string, ethers.Log>();
+  for (const l of (await Promise.all(queries)).flat()) {
+    byKey.set(`${l.transactionHash.toLowerCase()}:${l.index}`, l);
+  }
+  const uniq = [...byKey.values()];
+  if (uniq.length === 0) return [];
+
+  // Resolve block timestamps (one read per unique block).
+  const tsByBlock = new Map<number, number>();
+  await Promise.all(
+    [...new Set(uniq.map((l) => l.blockNumber))].map(async (bn) => {
+      try {
+        const b = await provider.getBlock(bn);
+        if (b) tsByBlock.set(bn, Number(b.timestamp));
+      } catch {
+        /* leave unset → timestamp 0 */
+      }
+    }),
+  );
+
+  const out: FetchedLog[] = [];
+  for (const l of uniq) {
+    const blog: BlockscoutLog = {
+      address: { hash: PUSD_MANAGER_ADDRESS },
+      block_hash: l.blockHash ?? '',
+      block_number: l.blockNumber,
+      data: l.data,
+      index: l.index,
+      topics: [...l.topics],
+      transaction_hash: l.transactionHash,
+      transaction_index: l.transactionIndex ?? 0,
+    };
+    const event = parseBlockscoutLog(blog);
+    if (!event) continue;
+    out.push({ log: blog, event, timestamp: tsByBlock.get(l.blockNumber) ?? 0 });
+  }
+  return out;
 }
 
 export type FetchedVaultLog = {

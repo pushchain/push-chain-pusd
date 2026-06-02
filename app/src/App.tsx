@@ -26,6 +26,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { EditorialBand } from './components/EditorialBand';
 import { Footer } from './components/Footer';
 import { Masthead } from './components/Masthead';
+import { ScrollToHash } from './components/ScrollToHash';
 import { usePageView } from './hooks/usePageView';
 import { useTrackWallet } from './hooks/useTrackWallet';
 import ActivityPage from './pages/ActivityPage';
@@ -51,6 +52,7 @@ function App() {
   return (
     <BrowserRouter>
       <AnalyticsTracker />
+      <ScrollToHash />
       <div className="app-shell">
         <EditorialBand />
         <Masthead />
