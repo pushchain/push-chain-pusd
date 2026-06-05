@@ -484,20 +484,32 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
               parsedAmount,
               target,
             );
-        const legs: CascadeLeg[] = [
-          buildApproveLeg(helpers, selected.address, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
-          mintLeg,
-        ];
+        // Wrap path (depositToPlus with tokenIn = PUSD) burns the caller's PUSD
+        // via BURNER_ROLE — no allowance is consumed, so it needs no approve and
+        // no multicall: a single direct call to the manager, exactly like redeem.
+        // PUSD can't bridge, so wrap is always the push route (no funds param).
+        // Reserve deposits (deposit / direct depositToPlus) pull via transferFrom,
+        // so they keep approve + the entrypoint batched as a multicall.
+        const isPusdWrap = selected.address.toLowerCase() === PUSD_ADDRESS.toLowerCase();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const txOptions: any = {
-          to: '0x0000000000000000000000000000000000000000',
-          value: 0n,
-          data: legs,
-        };
-        if (isExternalRoute) {
-          const [chainKey, symbolKey] = selected.moveableKey;
-          const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
-          if (moveable) txOptions.funds = { amount: parsedAmount, token: moveable };
+        let txOptions: any;
+        if (isPusdWrap) {
+          txOptions = { to: mintLeg.to, value: mintLeg.value, data: mintLeg.data };
+        } else {
+          const legs: CascadeLeg[] = [
+            buildApproveLeg(helpers, selected.address, PUSD_MANAGER_ADDRESS as `0x${string}`, parsedAmount),
+            mintLeg,
+          ];
+          txOptions = {
+            to: '0x0000000000000000000000000000000000000000',
+            value: 0n,
+            data: legs,
+          };
+          if (isExternalRoute) {
+            const [chainKey, symbolKey] = selected.moveableKey;
+            const moveable = resolveMoveableToken(PushChain.CONSTANTS, chainKey, symbolKey);
+            if (moveable) txOptions.funds = { amount: parsedAmount, token: moveable };
+          }
         }
         setStage({ kind: 'signing' });
         const tx = await pushChainClient.universal.sendTransaction(txOptions);
