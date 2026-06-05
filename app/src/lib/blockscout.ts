@@ -14,7 +14,7 @@
 import { ethers } from 'ethers';
 import PUSDManagerArtifact from '../contracts/PUSDManager.json';
 import PUSDPlusVaultArtifact from '../contracts/PUSDPlusVault.json';
-import { PUSD_MANAGER_ADDRESS, PUSD_PLUS_ADDRESS } from '../contracts/config';
+import { PUSD_ADDRESS, PUSD_MANAGER_ADDRESS, PUSD_PLUS_ADDRESS } from '../contracts/config';
 import { getReadProvider } from './provider';
 import {
   BURNED_PLUS_TOPIC,
@@ -461,6 +461,201 @@ export async function fetchManagerLogsViaRpc(options: {
     out.push({ log: blog, event, timestamp: tsByBlock.get(l.blockNumber) ?? 0 });
   }
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// Per-address history — the reliable path for a *user's own* activity.
+//
+// /addresses/{manager}/logs is a GLOBAL, newest-first stream. The manager emits
+// hundreds of events per 1k blocks, so any sane page budget only reaches back a
+// few hundred blocks — a user whose last mint/redeem is older than that vanishes
+// from the feed entirely. Blockscout's per-address token-transfers index has no
+// such depth cap: every mint/redeem moves PUSD or PUSD+ to or from the user, so
+// paging their PUSD + PUSD+ transfers surfaces every relevant tx at any age. We
+// then read each tx's receipt (RPC — source of truth, independent of the laggy
+// address-logs index) and keep the manager events where the user is `user`
+// (topic1) or `recipient` (topic3): the same filter as the global path, just
+// sourced per-tx instead of by scanning the whole stream.
+// ---------------------------------------------------------------------------
+
+type TokenTransferItem = {
+  transaction_hash: string;
+  block_number?: number;
+  timestamp?: string | null;
+};
+
+type TokenTransfersResponse = {
+  items: TokenTransferItem[];
+  next_page_params: NextPageParams;
+};
+
+type TransferRef = { txHash: string; blockNumber: number; timestamp: number };
+
+/**
+ * Parsed PUSDManager events for one tx, keyed by txHash. Mined logs are
+ * immutable, so this never goes stale — steady-state polls reuse it and only
+ * fetch receipts for transactions that newly appeared in the transfer index.
+ */
+const txManagerEventsCache = new Map<string, FetchedLog[]>();
+
+function isoToEpoch(iso?: string | null): number {
+  if (!iso) return 0;
+  const ms = Date.parse(iso);
+  return isNaN(ms) ? 0 : Math.floor(ms / 1000);
+}
+
+/** Resolve `items` through `fn`, at most `concurrency` in flight at once. */
+async function mapPool<T, R>(
+  items: T[],
+  concurrency: number,
+  fn: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let cursor = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (cursor < items.length) {
+      const idx = cursor++;
+      out[idx] = await fn(items[idx]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/** Page a user's transfers of one token (server-side `?token=` filter), newest-first. */
+async function fetchUserTokenTransferTxs(
+  account: `0x${string}`,
+  token: `0x${string}`,
+  maxPages: number,
+): Promise<TransferRef[]> {
+  const refs: TransferRef[] = [];
+  let nextPage: NextPageParams = null;
+  let page = 0;
+
+  while (page < maxPages) {
+    const params = new URLSearchParams({ token });
+    if (nextPage) {
+      for (const [k, v] of Object.entries(nextPage)) params.set(k, String(v));
+    }
+    const res = await fetch(
+      `${BLOCKSCOUT_BASE}/addresses/${account}/token-transfers?${params.toString()}`,
+      { signal: AbortSignal.timeout(12_000) },
+    );
+    if (!res.ok) throw new Error(`Blockscout API error ${res.status}`);
+    const data: TokenTransfersResponse = await res.json();
+    page++;
+
+    for (const it of data.items ?? []) {
+      if (!it.transaction_hash) continue;
+      refs.push({
+        txHash: it.transaction_hash,
+        blockNumber: Number(it.block_number ?? 0),
+        timestamp: isoToEpoch(it.timestamp),
+      });
+    }
+
+    if (!data.next_page_params) break;
+    nextPage = data.next_page_params;
+  }
+  return refs;
+}
+
+/**
+ * All PUSDManager events in a single tx, parsed from its receipt. Cached by
+ * txHash. Account-agnostic (no topic filter here) so the cache is reusable; the
+ * caller applies the user/recipient filter. Returns [] — without caching — on a
+ * transient RPC error or a not-yet-available receipt, so it can retry next poll.
+ */
+async function fetchManagerEventsForTx(txHash: string, timestamp: number): Promise<FetchedLog[]> {
+  const key = txHash.toLowerCase();
+  const cached = txManagerEventsCache.get(key);
+  if (cached) return cached;
+
+  let receipt: ethers.TransactionReceipt | null;
+  try {
+    receipt = await getReadProvider().getTransactionReceipt(txHash);
+  } catch {
+    return [];
+  }
+  if (!receipt) return [];
+
+  const manager = PUSD_MANAGER_ADDRESS.toLowerCase();
+  const out: FetchedLog[] = [];
+  for (const l of receipt.logs) {
+    if (l.address.toLowerCase() !== manager) continue;
+    const topic0 = l.topics[0]?.toLowerCase();
+    if (!topic0 || !KNOWN_TOPICS.has(topic0)) continue;
+    const blog: BlockscoutLog = {
+      address: { hash: l.address },
+      block_hash: l.blockHash ?? '',
+      block_number: l.blockNumber,
+      data: l.data,
+      index: l.index,
+      topics: [...l.topics],
+      transaction_hash: l.transactionHash,
+      transaction_index: l.transactionIndex ?? 0,
+    };
+    const event = parseBlockscoutLog(blog);
+    if (!event) continue;
+    out.push({ log: blog, event, timestamp });
+  }
+  txManagerEventsCache.set(key, out);
+  return out;
+}
+
+/**
+ * A user's full PUSDManager activity, sourced from the per-address token-transfers
+ * index (no block-range cap) rather than the depth-limited global manager log
+ * stream. Returns the same FetchedLog shape as fetchManagerLogs, so callers map
+ * it identically.
+ *
+ * @param options.account           Connected user address.
+ * @param options.maxPagesPerToken  Cap on transfer pages fetched per token (PUSD, PUSD+).
+ * @param options.maxTx             Cap on transactions resolved (most-recent first).
+ */
+export async function fetchUserManagerEvents(options: {
+  account: `0x${string}`;
+  maxPagesPerToken?: number;
+  maxTx?: number;
+}): Promise<FetchedLog[]> {
+  const { account, maxPagesPerToken = 10, maxTx = 300 } = options;
+  const paddedAccount = `0x${'0'.repeat(24)}${account.slice(2).toLowerCase()}`;
+
+  // 1) Enumerate the user's PUSD + PUSD+ transfer txs (per-address index, no depth cap).
+  const tokens = [PUSD_ADDRESS, PUSD_PLUS_ADDRESS].filter(Boolean) as `0x${string}`[];
+  const refLists = await Promise.all(
+    tokens.map((t) =>
+      fetchUserTokenTransferTxs(account, t, maxPagesPerToken).catch(() => [] as TransferRef[]),
+    ),
+  );
+
+  // De-dupe to one ref per tx (newest-first), keeping the transfer timestamp.
+  const byTx = new Map<string, TransferRef>();
+  for (const ref of refLists.flat()) {
+    const k = ref.txHash.toLowerCase();
+    const prev = byTx.get(k);
+    if (!prev || ref.blockNumber > prev.blockNumber) byTx.set(k, ref);
+  }
+  const refs = [...byTx.values()]
+    .sort((a, b) => b.blockNumber - a.blockNumber)
+    .slice(0, maxTx);
+
+  // 2) Resolve each tx's manager events from its receipt (cached per tx).
+  const perTx = await mapPool(refs, 8, (ref) => fetchManagerEventsForTx(ref.txHash, ref.timestamp));
+
+  // 3) Keep events where the account is user (topic1) or recipient (topic3); de-dupe.
+  const seen = new Set<string>();
+  const result: FetchedLog[] = [];
+  for (const ev of perTx.flat()) {
+    const t1 = ev.log.topics[1]?.toLowerCase();
+    const t3 = ev.log.topics[3]?.toLowerCase();
+    if (t1 !== paddedAccount && t3 !== paddedAccount) continue;
+    const k = `${ev.log.transaction_hash.toLowerCase()}:${ev.log.index}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    result.push(ev);
+  }
+  return result;
 }
 
 export type FetchedVaultLog = {

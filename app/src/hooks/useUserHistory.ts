@@ -1,40 +1,26 @@
 /**
  * useUserHistory — connected account's Deposited / Redeemed / PUSD+ events.
  *
- * Reads from Blockscout (no block-range cap) and filters to logs where the
- * account is `user` (topic1) or `recipient` (topic3). When Blockscout's
- * address-logs index lags the chain head (it has gapped tens of thousands of
- * blocks on Donut), it falls back to a bounded, cached RPC scan of the gap so
- * recent activity still shows. Mirrors useNAVHistory's resilience pattern:
+ * Sourced from Blockscout's PER-ADDRESS token-transfers index, not the global
+ * PUSDManager log stream. The manager emits hundreds of events per 1k blocks,
+ * so a newest-first scan of its logs only reaches back a few hundred blocks
+ * within any sane page budget — any user whose last mint/redeem is older than
+ * that fell off the feed entirely (the bug this replaces). Every mint/redeem
+ * moves PUSD or PUSD+ to or from the user, so paging the user's PUSD + PUSD+
+ * transfers surfaces every relevant tx at any age; each tx's manager events are
+ * then read from its receipt. See lib/blockscout.ts → fetchUserManagerEvents.
  *
- *   1. Fast first paint from Blockscout (+ any cached RPC backfill).
- *   2. If the index is stale, a background RPC gap-fill repaints with the
- *      missing events. eth_getLogs is slow on Donut (~9s/10k blocks), so the
- *      scan is capped and cached (TTL) instead of run every poll.
- *
- * Re-polls on a 30s cadence.
+ * Re-polls on a 30s cadence. Resolved per-tx receipts are cached (mined logs are
+ * immutable), so steady-state polls only fetch receipts for newly-appeared txs.
  */
 
 import { usePushChainClient } from '@pushchain/ui-kit';
 import { useEffect, useState } from 'react';
 import { TOKENS, tokenByAddress, type ReserveToken } from '../contracts/tokens';
 import { PUSD_ADDRESS } from '../contracts/config';
-import {
-  fetchManagerIndexHead,
-  fetchManagerLogs,
-  fetchManagerLogsViaRpc,
-  getChainHead,
-  type FetchedLog,
-} from '../lib/blockscout';
+import { fetchUserManagerEvents, type FetchedLog } from '../lib/blockscout';
 
 const POLL_MS = 30_000;
-// If Blockscout's manager-log index trails the chain head by more than this,
-// treat it as stale and backfill the gap from RPC. The manager is busy, so a
-// healthy index sits within a handful of blocks of head; the gaps observed are
-// tens of thousands of blocks.
-const STALE_THRESHOLD_BLOCKS = 1_000;
-// Don't repeat the slow RPC scan more often than this while the index stays behind.
-const BACKFILL_TTL_MS = 5 * 60 * 1000;
 
 export type HistoryRow = {
   type: 'MINT' | 'REDEEM' | 'MINT_PLUS' | 'REDEEM_PLUS';
@@ -62,10 +48,6 @@ export type UserHistoryState = {
   updatedAt: number;
 };
 
-// Module-level backfill cache (per account) — survives remounts so navigating
-// away and back doesn't re-run the slow scan.
-let backfillCache: { account: string; logs: FetchedLog[]; at: number } | null = null;
-
 function unknownAssetFromAddress(address: `0x${string}`): HistoryRow['asset'] {
   // The wrap path of depositToPlus uses PUSD itself as tokenIn — it's not a
   // reserve token but it's not "unknown" either. Surface it as PUSD so the
@@ -88,16 +70,6 @@ function unknownAssetFromAddress(address: `0x${string}`): HistoryRow['asset'] {
     address,
     decimals: 6,
   };
-}
-
-/** Stable de-dupe key for a fetched log. */
-const logKey = (l: FetchedLog) => `${l.log.transaction_hash.toLowerCase()}:${l.log.index}`;
-
-/** Merge two fetched-log sets, de-duped by txHash:logIndex. */
-function dedupeMerge(base: FetchedLog[], extra: FetchedLog[]): FetchedLog[] {
-  if (extra.length === 0) return base;
-  const seen = new Set(base.map(logKey));
-  return [...base, ...extra.filter((l) => !seen.has(logKey(l)))];
 }
 
 /** Map fetched manager logs into display rows, newest first. */
@@ -189,38 +161,9 @@ export function useUserHistory(): UserHistoryState {
     const read = async () => {
       setState((prev) => ({ ...prev, loading: prev.rows.length === 0 }));
       try {
-        const [items, bsHead, chainHead] = await Promise.all([
-          fetchManagerLogs({ account, maxPages: 5 }),
-          fetchManagerIndexHead(),
-          getChainHead(),
-        ]);
+        const items = await fetchUserManagerEvents({ account });
         if (cancelled) return;
-
-        // First paint — Blockscout events + any cached RPC backfill for this
-        // account. Fast, and covers the common (healthy-index) case fully.
-        const cached = backfillCache?.account === account ? backfillCache.logs : [];
-        const firstMerged = dedupeMerge(items, cached);
-        setState({ rows: toRows(firstMerged), loading: false, error: null, updatedAt: Date.now() });
-
-        // Staleness: Blockscout's manager-log index trailing the chain head.
-        const stale =
-          bsHead != null && chainHead != null && chainHead - bsHead > STALE_THRESHOLD_BLOCKS;
-        const cacheFresh =
-          backfillCache?.account === account && Date.now() - backfillCache.at <= BACKFILL_TTL_MS;
-
-        // Background RPC gap-fill — only the range after Blockscout's index head
-        // needs scanning (dedupe handles overlap). Cached so the slow scan
-        // doesn't repeat every poll while the index stays behind.
-        if (stale && !cacheFresh) {
-          const afterBlock = bsHead ?? 0;
-          const rpc = await fetchManagerLogsViaRpc({ account, afterBlock });
-          if (cancelled) return;
-          backfillCache = { account, logs: rpc, at: Date.now() };
-          const merged = dedupeMerge(items, rpc);
-          if (merged.length > firstMerged.length) {
-            setState({ rows: toRows(merged), loading: false, error: null, updatedAt: Date.now() });
-          }
-        }
+        setState({ rows: toRows(items), loading: false, error: null, updatedAt: Date.now() });
       } catch (err) {
         if (cancelled) return;
         setState((prev) => ({
