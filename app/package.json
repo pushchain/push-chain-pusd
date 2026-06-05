@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "tsc && vite build",
     "lint": "eslint .",
+    "check:agent-docs": "node scripts/check-agent-docs-drift.mjs",
     "preview": "vite preview",
     "deploy": "yarn build && echo 'pusd.push.org' > ./dist/CNAME && cd dist && git init -b gh-pages && git add -A && git commit -m \"Deploy $(date '+%Y-%m-%d %H:%M')\" && git push --force git@github.com:pushchain/push-chain-pusd-prod-deployment.git gh-pages && cd .. && rm -rf dist/.git"
   },

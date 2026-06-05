@@ -65,6 +65,8 @@ InsuranceFund.sol     ─ passive sidecar; receives the LP-fee haircut
 
 > PUSD+ is a **custom 6-decimal ERC-20 with NAV-per-share**, not ERC-4626. Use `previewMintPlus` / `previewBurnPlus` to quote.
 
+> **Pausability (PUSD+ only).** The vault's `mintPlus` / `burnPlus` / `fulfillQueueClaim` / `rebalance` are `whenNotPaused` — `GUARDIAN_ROLE` can pause, only `DEFAULT_ADMIN_ROLE` can unpause. So **PUSD+ mint/redeem can revert while the vault is paused**. `PUSDManager` (PUSD `deposit` / `redeem`) is **not** pausable. Handle a paused-vault revert on PUSD+ flows; PUSD flows have no pause.
+
 ### Live addresses — Donut Testnet (chain 42101)
 
 | Contract       | Proxy                                        |
@@ -95,9 +97,9 @@ Always interact with the **proxy** addresses. Implementations change on upgrade;
 
 > Source of truth: this list ≡ on-chain enumeration via `PUSDManager.getSupportedTokenAt(i)` ≡ [`app/src/contracts/tokens.ts`](https://github.com/pushchain/push-chain-pusd/blob/main/app/src/contracts/tokens.ts). On-chain `chainNamespace` strings are `Ethereum_Sepolia`, `Solana_Devnet`, `Base_Testnet`, `Arbitrum_Sepolia`, `BNB_Testnet`.
 
-> **BNB pair naming (v3.2.0):** the canonical accessor for the BNB-side pair migrated from `.bnb` to `.bsc` — both `USDT.bsc` and `USDC.bsc` are tracked under this suffix on-chain. The MOVEABLE SDK still uses `BNB_TESTNET` as the chain-namespace key (e.g. `PushChain.CONSTANTS.MOVEABLE.TOKEN.PUSH_TESTNET_DONUT.USDC.bsc`). Legacy `USDT.bnb` from Deployment 5 is no longer registered.
+> **BNB pair naming (v3.2.0):** the on-chain token **names** migrated from `.bnb` to `.bsc` — both `USDT.bsc` and `USDC.bsc` are tracked under this suffix on-chain. This suffix is naming only; for cross-chain `funds` bridging the MOVEABLE key uses the **origin-chain** namespace `BNB_TESTNET` with a bare symbol — `PushChain.CONSTANTS.MOVEABLE.TOKEN.BNB_TESTNET.USDC` (there is no `.bsc` accessor on `MOVEABLE`, and it is not the Donut `PUSH_TESTNET_DONUT` namespace). Legacy `USDT.bnb` from Deployment 5 is no longer registered.
 
-> `setPlusVault`, `setFeeExempt`, `depositForVault` on PUSDManager are **vault-only** — gated by a two-key check (`msg.sender == plusVault && feeExempt[plusVault]`). Don't call them from integrator code.
+> Admin / vault-only entrypoints on PUSDManager — never call from integrator code. They are gated **differently**: `setPlusVault` is `DEFAULT_ADMIN_ROLE` (timelock), `setFeeExempt` is `ADMIN_ROLE`, and `depositForVault` is the only one behind the two-key vault check (`msg.sender == plusVault && feeExempt[plusVault]`).
 
 ---
 
@@ -444,6 +446,8 @@ const mintPlus = async () => {
 
 **Wrap path — already hold PUSD, want PUSD+:**
 
+> Like `redeem`, the wrap path needs **no PUSD approval** — `depositToPlus(PUSD, …)` burns the caller's PUSD via `BURNER_ROLE`, it does not `transferFrom`. So it's a **single call** on either path (no multicall, no approve leg). Only the **direct** path above — `depositToPlus(reserve, …)` — pulls via `transferFrom` and therefore needs the reserve `approve`.
+
 ```tsx
 const wrapPusd = async () => {
   const h = PushChain.utils.helpers;
@@ -451,13 +455,10 @@ const wrapPusd = async () => {
   const recipient = pushChainClient.universal.account;
   const PUSD = '0x774c799646bB60103e38Fd65b18D81bbDD1Aa760' as const;
 
-  const multicall = [
-    { to: PUSD, value: 0n, data: h.encodeTxData({ abi: APPROVE_ABI, functionName: 'approve', args: [MANAGER, amount] }) },
-    { to: MANAGER, value: 0n, data: h.encodeTxData({ abi: DEPOSIT_TO_PLUS_ABI, functionName: 'depositToPlus', args: [PUSD, amount, recipient] }) },
-  ];
-
   await (await pushChainClient.universal.sendTransaction({
-    to: ZERO, value: 0n, data: multicall,
+    to: MANAGER,
+    value: 0n,
+    data: h.encodeTxData({ abi: DEPOSIT_TO_PLUS_ABI, functionName: 'depositToPlus', args: [PUSD, amount, recipient] }),
   })).wait();
 };
 ```
@@ -704,7 +705,7 @@ const REDEEM_FROM_PLUS_ABI = [{
 | Mistake                                          | Fix                                                                                  |
 | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
 | `sendTransaction([leg1, leg2])` — bare array     | Cascade rides in `data`: `sendTransaction({ to: ZERO, value: 0n, data: legs })`      |
-| Adding an approve before redeem / redeemFromPlus | Neither needs it — `PUSDManager` burns `msg.sender` directly via `BURNER_ROLE`/vault-`MANAGER_ROLE` |
+| Adding an approve before redeem / redeemFromPlus / `depositToPlus(PUSD,…)` wrap | None need it — `PUSDManager` burns `msg.sender` directly via `BURNER_ROLE`/vault-`MANAGER_ROLE`. The **direct** `depositToPlus(reserve,…)` path DOES need a reserve approve (it `transferFrom`s) |
 | `parseUnits(value, 18)`                          | PUSD, PUSD+, and every reserve use 6 decimals — `parseUnits(value, 6)`               |
 | `recipient = address(0)`                         | Every entrypoint reverts on zero address                                             |
 | Treating PUSD+ as ERC-4626                       | PUSD+ is a custom ERC-20 with `nav() / totalAssets() / previewMint/Burn`, no `convertToShares` |

@@ -48,6 +48,12 @@ Both products go through the same `PUSDManager` entrypoint contract.
 PUSDPlusVault is the NAV-bearing token; InsuranceFund is a passive
 sidecar that receives a haircut on harvested LP fees.
 
+> **Pause asymmetry.** PUSD+ operations (`mintPlus` / `burnPlus` /
+> queue fulfilment / `rebalance` on the vault) can be paused by
+> `GUARDIAN_ROLE`; PUSD `deposit` / `redeem` on PUSDManager cannot be
+> paused. Integrators should expect a paused-vault revert on PUSD+
+> flows only.
+
 > **v2.1 (2026-05-06)** — `depositToPlus` direct path now sends reserves
 > directly to the vault (no PUSD round-trip). Wrap path basket-redeems
 > caller's PUSD into vault inventory. User-facing API unchanged. The
