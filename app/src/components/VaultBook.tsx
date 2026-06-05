@@ -152,7 +152,7 @@ export function VaultBook() {
             ariaLabel={`NAV over ${sparkPoints.length} samples`}
           />
           <div className="meta-sm" style={{ marginTop: 10 }}>
-            {nav.loading
+            {nav.loading || book.loading
               ? 'reading rebalance events…'
               : sparkPoints.length <= 1
                 ? 'Genesis 1.000000 · awaiting first keeper rebalance.'
