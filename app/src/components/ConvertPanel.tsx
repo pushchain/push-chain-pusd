@@ -404,8 +404,6 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       }
     }
 
-    console.log('show 2', eventType, fromToken, toToken);
-
     await reportQuestEvent({
       eventId: txHash,
       eventType,
