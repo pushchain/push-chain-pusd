@@ -48,6 +48,7 @@ import { explorerAddressForChain, explorerTxForChain } from '../lib/externalRpc'
 import { explorerTx, formatAmount, truncHash } from '../lib/format';
 import { normalizeToPUSD } from '../lib/invariants';
 import { reportQuestEvent, type QuestEventType } from '../lib/questWebhook';
+import { useSignMessage } from '../hooks/useSignMessage';
 import {
   chainLabelFromKey,
   filterTokensByChainKey,
@@ -91,6 +92,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
   const { pushChainClient } = usePushChainClient();
   const { PushChain } = usePushChain();
   const { handleConnectToPushWallet, handleUserLogOutEvent } = usePushWalletContext();
+  const questSigner = useSignMessage();
   const invariants = useInvariants();
   const { baseFeeBps, preferredFeeMinBps, preferredFeeMaxBps } = useProtocolStats();
 
@@ -369,9 +371,13 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
     return row.balance < parsedAmount;
   }, [mode, allowBasket, parsedAmount, invariants.perToken, selected.address]);
 
-  // --- quest webhook -----------------------------------------------------
+  const userCaip10 = origin
+    ? `${origin.chain}:${originAddress}`
+    : `eip155:42101:${account}`;
+
   const fireQuestEvent = async (txHash: `0x${string}`, failureReason?: string) => {
-    if (!account) return;
+    if (!questSigner) return;
+
     let eventType: QuestEventType;
     let fromToken: string;
     let toToken: string;
@@ -397,13 +403,12 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
         toToken = selected.symbol;
       }
     }
-    console.log('made backend call');
 
     await reportQuestEvent({
       eventId: txHash,
       eventType,
       status: failureReason ? 'FAILED' : 'COMPLETED',
-      userAddress: originAddress ?? account,
+      userAddress: userCaip10,
       fromToken,
       fromAmount: parsedAmount.toString(),
       toToken,
@@ -412,7 +417,7 @@ export function ConvertPanel({ initialMode = 'mint', advanced = false }: Props) 
       chainId: CHAIN_ID.toString(),
       eventTimestamp: new Date().toISOString(),
       ...(failureReason ? { failureReason } : {}),
-    });
+    }, questSigner);
   };
 
   // --- execution ---------------------------------------------------------
